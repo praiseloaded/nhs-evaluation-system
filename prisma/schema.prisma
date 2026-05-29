@@ -1,0 +1,28 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Analysis {
+  id                String   @id @default(uuid())
+
+  jobTitle          String
+  jobDescription    String
+  personSpec        String
+  essentialCriteria String
+  desirableCriteria String
+  skills            String
+  values            String
+  sourceUrl         String?
+
+  cv                String?
+  statement         String?
+
+  result            Json
+
+  createdAt         DateTime @default(now())
+}
