@@ -26,15 +26,17 @@ const dimensionIcons = {
 
 async function getAnalysis(id: string) {
   const baseUrl =
-    process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+    process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000"
 
   const res = await fetch(`${baseUrl}/api/analysis/${id}`, {
-    cache: 'no-store',
+    cache: "no-store",
   })
 
   if (!res.ok) return null
 
-  return res.json()
+  const data = await res.json()
+
+  return data.analysis
 }
 
 // -------------------- helpers --------------------
@@ -65,16 +67,6 @@ export default async function AnalysisPage({ params }: Params) {
 
   // FIX: API uses organizationalValues, not values
   const values = toCommaList(analysis.organizationalValues)
-
-  // ---------------- safe dimension fallback ----------------
-
-  const dimensions = {
-    criteria: analysis.criteria ?? {},
-    star: analysis.star ?? {},
-    valuesAlignment: analysis.valuesAlignment ?? {},
-    language: analysis.language ?? {},
-    specificity: analysis.specificity ?? {},
-  }
 
   return (
     <div className="min-h-screen bg-background">

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma"
 import { getValidatedAIResult } from "@/modules/ai/retry"
 import { calculateScore } from "@/lib/scoring/scoring-engine"
 import { calculateShortlistProbability } from "@/lib/scoring/probability"
+import { getExplanation } from "@/modules/ai/run-explanation"
 
 function normalize(value?: string) {
   return value?.trim() || ""
@@ -24,7 +25,7 @@ export async function POST(req: Request) {
     const values = normalize(body.values)
     const sourceUrl = normalize(body.sourceUrl)
 
-    // ─── 2. AI EXTRACTION (NO SCORING) ────────────────────────────────────────
+    // ─── 2. AI EXTRACTION (FACT LAYER ONLY) ───────────────────────────────────
     const aiResult = await getValidatedAIResult({
       jobTitle,
       jobSpec,
@@ -32,7 +33,7 @@ export async function POST(req: Request) {
       statement,
     })
 
-    // ─── 3. BACKEND SCORING ENGINE (V4 CORE) ─────────────────────────────────
+    // ─── 3. BACKEND SCORING ENGINE (TRUTH LAYER) ─────────────────────────────
     const totalScore = calculateScore(aiResult.breakdown)
 
     const shortlistProbability = calculateShortlistProbability(totalScore)
@@ -46,15 +47,24 @@ export async function POST(req: Request) {
         ? "moderate"
         : "weak"
 
-    // ─── 4. FINAL RESULT COMPOSITION ──────────────────────────────────────────
-    const finalResult = {
+    // ─── 4. FINAL ANALYSIS OBJECT (SOURCE OF TRUTH) ──────────────────────────
+    const analysis = {
       ...aiResult,
       totalScore,
       shortlistProbability,
       verdict,
     }
 
-    // ─── 5. DATABASE SAVE ─────────────────────────────────────────────────────
+    // ─── 5. EXPLANATION ENGINE (SEPARATE LAYER) ──────────────────────────────
+    const explanation = await getExplanation({
+      jobTitle,
+      jobSpec,
+      cv,
+      statement,
+      analysis,
+    })
+
+    // ─── 6. DATABASE SAVE ─────────────────────────────────────────────────────
     const saved = await prisma.analysis.create({
       data: {
         jobTitle,
@@ -67,18 +77,22 @@ export async function POST(req: Request) {
         sourceUrl,
         cv,
         statement,
-        result: finalResult,
+
+        // store ONLY factual analysis
+        result: analysis,
       },
       select: {
         id: true,
       },
     })
 
-    // ─── 6. RESPONSE ──────────────────────────────────────────────────────────
+    // ─── 7. RESPONSE (CLEAN SEPARATION) ───────────────────────────────────────
     return Response.json({
       success: true,
       id: saved.id,
-      result: finalResult,
+
+      analysis,
+      explanation,
     })
 
   } catch (error: any) {
