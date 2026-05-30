@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import { getValidatedAIResult } from "@/modules/ai/retry"
+import { calculateScore } from "@/lib/scoring/scoring-engine"
+import { calculateShortlistProbability } from "@/lib/scoring/probability"
 
 function normalize(value?: string) {
   return value?.trim() || ""
@@ -9,7 +11,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json()
 
-    // 1. Normalize input (prevents undefined Prisma crashes)
+    // ─── 1. INPUT NORMALIZATION ───────────────────────────────────────────────
     const jobTitle = normalize(body.jobTitle)
     const jobSpec = normalize(body.jobSpec)
     const cv = normalize(body.cv)
@@ -22,40 +24,63 @@ export async function POST(req: Request) {
     const values = normalize(body.values)
     const sourceUrl = normalize(body.sourceUrl)
 
-    // 2. AI analysis (uses ONLY core inputs)
-    const result = await getValidatedAIResult({
+    // ─── 2. AI EXTRACTION (NO SCORING) ────────────────────────────────────────
+    const aiResult = await getValidatedAIResult({
       jobTitle,
       jobSpec,
       cv,
       statement,
     })
 
-    // 3. Save to DB (Prisma-safe)
+    // ─── 3. BACKEND SCORING ENGINE (V4 CORE) ─────────────────────────────────
+    const totalScore = calculateScore(aiResult.breakdown)
+
+    const shortlistProbability = calculateShortlistProbability(totalScore)
+
+    const verdict =
+      totalScore >= 85
+        ? "strong"
+        : totalScore >= 70
+        ? "competitive"
+        : totalScore >= 55
+        ? "moderate"
+        : "weak"
+
+    // ─── 4. FINAL RESULT COMPOSITION ──────────────────────────────────────────
+    const finalResult = {
+      ...aiResult,
+      totalScore,
+      shortlistProbability,
+      verdict,
+    }
+
+    // ─── 5. DATABASE SAVE ─────────────────────────────────────────────────────
     const saved = await prisma.analysis.create({
       data: {
         jobTitle,
         jobDescription: jobSpec,
-
         personSpec,
         essentialCriteria,
         desirableCriteria,
         skills,
         values,
         sourceUrl,
-
         cv,
         statement,
-
-        result, // MUST be Json type in Prisma schema
+        result: finalResult,
+      },
+      select: {
+        id: true,
       },
     })
 
-    // 4. Response
+    // ─── 6. RESPONSE ──────────────────────────────────────────────────────────
     return Response.json({
       success: true,
       id: saved.id,
-      result,
+      result: finalResult,
     })
+
   } catch (error: any) {
     console.error("ANALYSIS_ERROR:", error)
 
