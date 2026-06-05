@@ -15,15 +15,17 @@ model User {
   emailVerified DateTime?
   image         String?
 
-  tier          String    @default("free")
+  // SaaS billing fields
+  tier          String    @default("free") // free | pro | elite
   analysisUsed  Int       @default(0)
   analysisLimit Int       @default(1)
 
+  // relations
   accounts      Account[]
   sessions      Session[]
   analyses      Analysis[]
   interviews    Interview[]
-  applications  Application[]
+  applications  Application[] // ← ADD THIS LINE ONLY
 
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -73,16 +75,16 @@ model Analysis {
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   jobTitle          String
-  jobDescription    String
-  personSpec        String
-  essentialCriteria String
-  desirableCriteria String
-  skills            String
-  values            String
+  jobDescription    String   @db.LongText
+  personSpec        String   @db.LongText
+  essentialCriteria String   @db.LongText
+  desirableCriteria String   @db.LongText
+  skills            String   @db.LongText
+  values            String   @db.LongText
   sourceUrl         String?
 
-  cv                String?
-  statement         String?
+  cv                String?  @db.LongText
+  statement         String?  @db.LongText
 
   result            Json
 
@@ -93,6 +95,8 @@ model Analysis {
   @@index([userId])
   @@index([createdAt])
 }
+
+// ─── Interview Simulator ────────────────────────────────────────────────────
 
 model Interview {
   id          String   @id @default(uuid())
@@ -106,12 +110,18 @@ model Interview {
   jobTitle    String
   band        String?
 
+  // Panel config — stored as JSON
+  // [{ id, name, role, avatar, specialty }]
   panellists  Json
+
+  // Generated questions — stored as JSON
+  // [{ id, panellistId, question, category, followUp? }]
   questions   Json
 
-  status      String   @default("pending")
+  // Overall status
+  status      String   @default("pending") // pending | in_progress | completed
   totalScore  Int?
-  feedback    Json?
+  feedback    Json?    // overall interview feedback from AI
 
   answers     InterviewAnswer[]
 
@@ -130,14 +140,16 @@ model InterviewAnswer {
   interviewId   String
   interview     Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
 
-  questionId    String
-  panellistId   String
+  questionId    String    // references question.id from Interview.questions JSON
+  panellistId   String    // which panellist asked this
 
-  audioUrl      String?
-  transcript    String?
+  // User's response
+  audioUrl      String?   // optional: stored audio URL
+  transcript    String?   @db.LongText  // transcribed text
 
-  score         Int?
-  evaluation    Json?
+  // AI evaluation
+  score         Int?      // 0-100
+  evaluation    Json?     // { score, strengths, gaps, starRating, panellistNotes }
 
   answeredAt    DateTime  @default(now())
 
@@ -145,42 +157,56 @@ model InterviewAnswer {
   @@index([questionId])
 }
 
+
+// ─── ADD THESE MODELS to your existing schema.prisma ───
+// (Keep all existing models — User, Account, Session, Analysis, Interview, etc.)
+// Add these new models at the bottom:
+
+// ─── Application Builder ────────────────────────────────────────────────────
+
 model Application {
   id              String   @id @default(uuid())
 
   userId          String
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // Job details
   jobTitle        String
   band            String?
   employer        String?
   sourceUrl       String?
-  jobDescription  String
-  personSpec      String?
+  jobDescription  String   @db.LongText
+  personSpec      String?  @db.LongText
 
+  // Parsed specification (JSON output from parser)
+  // { essentialCriteria: [...], desirableCriteria: [...], nhsValues: [...] }
   parsedSpec      Json?
 
-  cvText          String?
+  // User's background context
+  cvText          String?  @db.LongText
   yearsExperience Int?
   currentBand     Int?
   currentRole     String?
 
-  introduction    String?
-  closing         String?
-  fullStatement   String?
+  // Generated outputs
+  introduction    String?  @db.LongText
+  closing         String?  @db.LongText
+  fullStatement   String?  @db.LongText
   wordCount       Int?
 
-  notes           String?
+ notes           String?  @db.LongText
   submittedAt     DateTime?
   interviewDate   DateTime?
   deadlineDate    DateTime?
   cvScore         Json?
-  shortlistAssessment Json?
+  shortlistAssessment  Json?
 
-  liveScore       Json?
-  completeness    Float    @default(0)
+  // Scoring
+  liveScore       Json?    // { overall, criteria, evidence, values, realism, language }
+  completeness    Float    @default(0) // 0-100 percentage of criteria addressed
 
-  status          String   @default("draft")
+  // Status
+  status          String   @default("draft") // draft | in_progress | complete | exported
 
   criteria        ApplicationCriterion[]
   drafts          ApplicationDraft[]
@@ -198,25 +224,30 @@ model ApplicationCriterion {
   applicationId   String
   application     Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
-  criterionText   String
-  type            String
-  category        String?
+  // Criterion details (from parsed spec)
+  criterionText   String   @db.LongText
+  type            String   // essential | desirable
+  category        String?  // clinical | leadership | values | qualification | experience
   order           Int      @default(0)
 
-  situation       String?
-  task            String?
-  action          String?
-  result          String?
+  // User's STAR evidence
+  situation       String?  @db.LongText
+  task            String?  @db.LongText
+  action          String?  @db.LongText
+  result          String?  @db.LongText
 
-  metrics         String?
-  mdtContext      String?
-  reflection      String?
-  nhsValues       String?
+  // Optional enhancements
+  metrics         String?  // quantifiable outcomes
+  mdtContext      String?  // multidisciplinary team context
+  reflection      String?  @db.LongText // what you learned
+  nhsValues       String?  // which NHS values this demonstrates
 
-  generatedParagraph String?
-  paragraphScore     Int?
+  // AI-generated output
+  generatedParagraph String? @db.LongText
+  paragraphScore     Int?   // 0-100
 
-  status          String   @default("pending")
+  // Status
+  status          String   @default("pending") // pending | drafted | reviewed | approved
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -232,10 +263,10 @@ model ApplicationDraft {
   application     Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
   version         Int      @default(1)
-  content         String
+  content         String   @db.LongText
   wordCount       Int?
   score           Json?
-  feedback        String?
+  feedback        String?  @db.LongText
 
   createdAt       DateTime @default(now())
 

@@ -1,5 +1,5 @@
 import { stripe } from "@/lib/stripe"
-import { db } from "@/lib/db"
+import { prisma } from "@/lib/prisma"
 import { NextRequest } from "next/server"
 
 export async function POST(req: NextRequest) {
@@ -25,10 +25,11 @@ export async function POST(req: NextRequest) {
     const email = session.customer_email
 
     if (email) {
-      await db.user.update({
+      await prisma.user.update({
         where: { email },
         data: { tier: "pro" },
       })
+
       console.log(`✅ User ${email} upgraded to pro`)
     }
   }
