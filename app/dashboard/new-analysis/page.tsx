@@ -184,47 +184,48 @@ ${formData.sourceUrl}
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+ const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault()
 
-    // Hard guard — never submit unless on the final step and submit button is ready
-    if (step !== 4 || !submitReady) return
+  if (step !== 4 || !submitReady) return
 
-    setLoading(true)
-    setError(null)
+  setLoading(true)
+  setError(null)
 
-    if (!formData.jobTitle || !formData.jobDescription) {
-      setError('Job title and job description are required')
-      setLoading(false)
-      return
-    }
-
-    try {
-      const res = await fetch('/api/analysis', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildPayload()),
-      })
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.error ?? 'Analysis failed')
-      }
-
-      const data = await res.json()
-
-      if (!data.success) {
-        throw new Error(data.error || 'Analysis failed')
-      }
-
-      localStorage.setItem('analysis', JSON.stringify(data))
-      router.push(`/dashboard/analysis/${data.id}`)
-    } catch (err: any) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
+  if (!formData.jobTitle || !formData.jobDescription) {
+    setError('Job title and job description are required')
+    setLoading(false)
+    return
   }
+
+  try {
+   const res = await fetch('/api/analysis', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(buildPayload()),
+})
+
+const data = await res.json()
+
+// 🔴 HANDLE UPGRADE BLOCK FIRST
+if (data.blocked && data.upgradeRequired) {
+  router.push(`/upgrade?reason=${data.reason}`)
+  return
+}
+
+if (!res.ok || !data.success) {
+  throw new Error(data.error ?? 'Analysis failed')
+}
+
+    localStorage.setItem('analysis', JSON.stringify(data))
+
+    router.push(`/dashboard/analysis/${data.id}`)
+  } catch (err: any) {
+    setError(err.message)
+  } finally {
+    setLoading(false)
+  }
+}
 
   // ─── Style tokens ──────────────────────────────────────────────────────────
 
@@ -381,6 +382,8 @@ ${formData.sourceUrl}
                 Prefer to fill in manually? Use the <strong>Next</strong> button to skip.
               </p>
             </div>
+
+            
           </div>
         )}
 

@@ -2,14 +2,23 @@ import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { ThemeProvider } from '@/components/theme-provider'
+import { AuthProvider } from '@/components/providers/session-provider'
 import './globals.css'
 
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
+const geist = Geist({
+  subsets: ['latin'],
+  variable: '--font-geist',
+})
+
+const geistMono = Geist_Mono({
+  subsets: ['latin'],
+  variable: '--font-geist-mono',
+})
 
 export const metadata: Metadata = {
   title: 'NHS Evaluation Engine',
-  description: 'Comprehensive evaluation system for job applications and candidate assessment',
+  description:
+    'Comprehensive evaluation system for job applications and candidate assessment',
   generator: 'v0.app',
   icons: {
     icon: [
@@ -37,10 +46,15 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="font-sans antialiased bg-background text-foreground">
-        <ThemeProvider>
-          {children}
-        </ThemeProvider>
+      <body
+        className={`${geist.variable} ${geistMono.variable} font-sans antialiased bg-background text-foreground`}
+      >
+        <AuthProvider>
+          <ThemeProvider>
+            {children}
+          </ThemeProvider>
+        </AuthProvider>
+
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

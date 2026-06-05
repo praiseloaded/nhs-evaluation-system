@@ -5,11 +5,16 @@ import { usePathname } from 'next/navigation'
 import { Menu, X, Home, Plus, Archive, Settings } from 'lucide-react'
 import { useState } from 'react'
 import { ThemeSwitcher } from './theme-switcher'
+import { Sparkles } from 'lucide-react'
+
 
 const navigationItems = [
   { href: '/dashboard', label: 'Dashboard', icon: Home },
   { href: '/dashboard/new-analysis', label: 'New Analysis', icon: Plus },
   { href: '/dashboard/saved-analyses', label: 'Saved Analyses', icon: Archive },
+  { href: '/dashboard/application', label: 'Application Builder', icon: Sparkles },
+  { href: '/dashboard/applications', label: 'Track Application', icon: Sparkles },
+  { href: '/dashboard/interview', label: 'Interview Simulator', icon: Archive },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ]
 
@@ -21,6 +26,7 @@ export function Sidebar() {
 
   return (
     <>
+    
       {/* Mobile Menu Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
