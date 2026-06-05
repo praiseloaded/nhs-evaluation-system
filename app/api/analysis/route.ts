@@ -1,70 +1,159 @@
-import { prisma } from "@/lib/prisma"
-import { getValidatedAIResult } from "@/modules/ai/retry"
+// app/api/analysis/route.ts
+
+import { prisma }                from "@/lib/prisma"
+import { getValidatedAIResult }  from "@/modules/ai/retry"
+import { getUserTier }           from "@/lib/billing/tier"
+import { sanitizeAnalysisForTier } from "@/lib/billing/sanitize-analysis"
+import { auth }                  from "@/auth"
+import { calculateNhsBandScore } from "@/lib/scoring/calculate-overall-score"
 
 function normalize(value?: string) {
   return value?.trim() || ""
 }
 
+function buildJobSpec(parts: {
+  jobSpec: string
+  personSpec: string
+  essentialCriteria: string
+  desirableCriteria: string
+  skills: string
+  values: string
+}): string {
+  const sections: string[] = []
+
+  if (parts.jobSpec)            sections.push(parts.jobSpec)
+  if (parts.personSpec)         sections.push(`PERSON SPECIFICATION:\n${parts.personSpec}`)
+  if (parts.essentialCriteria)  sections.push(`ESSENTIAL CRITERIA:\n${parts.essentialCriteria}`)
+  if (parts.desirableCriteria)  sections.push(`DESIRABLE CRITERIA:\n${parts.desirableCriteria}`)
+  if (parts.skills)             sections.push(`SKILLS REQUIRED:\n${parts.skills}`)
+  if (parts.values)             sections.push(`VALUES REQUIRED:\n${parts.values}`)
+
+  return sections.join("\n\n")
+}
+
 export async function POST(req: Request) {
   try {
-    const body = await req.json()
+    // ───────────────────────────────
+    // 0. AUTH
+    // ───────────────────────────────
+    const session = await auth()
 
-    // 1. Normalize input (prevents undefined Prisma crashes)
-    const jobTitle = normalize(body.jobTitle)
-    const jobSpec = normalize(body.jobSpec)
-    const cv = normalize(body.cv)
-    const statement = normalize(body.statement)
+    if (!session?.user?.id) {
+      return Response.json(
+        { success: false, error: "Unauthorized" },
+        { status: 401 },
+      )
+    }
 
-    const personSpec = normalize(body.personSpec)
-    const essentialCriteria = normalize(body.essentialCriteria)
-    const desirableCriteria = normalize(body.desirableCriteria)
-    const skills = normalize(body.skills)
-    const values = normalize(body.values)
-    const sourceUrl = normalize(body.sourceUrl)
+    const userId = session.user.id as string
+    const body   = await req.json()
 
-    // 2. AI analysis (uses ONLY core inputs)
-    const result = await getValidatedAIResult({
-      jobTitle,
-      jobSpec,
-      cv,
-      statement,
-    })
+    // ───────────────────────────────
+    // 1. TIER CHECK
+    // ───────────────────────────────
+    const userTier = await getUserTier(userId)
 
-    // 3. Save to DB (Prisma-safe)
-    const saved = await prisma.analysis.create({
-      data: {
-        jobTitle,
-        jobDescription: jobSpec,
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
 
-        personSpec,
-        essentialCriteria,
-        desirableCriteria,
-        skills,
-        values,
-        sourceUrl,
-
-        cv,
-        statement,
-
-        result, // MUST be Json type in Prisma schema
+    const usageToday = await prisma.analysis.count({
+      where: {
+        userId,
+        createdAt: { gte: today },
       },
     })
 
-    // 4. Response
+    if (userTier === "free" && usageToday >= 1) {
+      return Response.json(
+        {
+          success: false,
+          blocked: true,
+          reason:  "limit_reached",
+          message: "Free tier limit reached",
+        },
+        { status: 402 },
+      )
+    }
+
+    // ───────────────────────────────
+    // 2. INPUT
+    // ───────────────────────────────
+    const jobTitle  = normalize(body.jobTitle)
+    const jobSpec   = normalize(body.jobSpec)
+    const cv        = normalize(body.cv)
+    const statement = normalize(body.statement)
+
+    const combinedJobSpec = buildJobSpec({
+      jobSpec,
+      personSpec:        normalize(body.personSpec),
+      essentialCriteria: normalize(body.essentialCriteria),
+      desirableCriteria: normalize(body.desirableCriteria),
+      skills:            normalize(body.skills),
+      values:            normalize(body.values),
+    })
+
+    // ───────────────────────────────
+    // 3. AI ANALYSIS (RAW ONLY)
+    // ───────────────────────────────
+    const aiResult = await getValidatedAIResult({
+      jobTitle,
+      jobSpec: combinedJobSpec,
+      cv,
+      statement,
+      tier: userTier,
+    })
+
+    // ───────────────────────────────
+    // 4. ENGINE SCORING
+    // ───────────────────────────────
+    // calculateNhsBandScore returns a ScoredBreakdown object.
+    // Store it as result.scoredBreakdown — this is the key that
+    // both the dashboard page and the [id] detail route read from.
+    const scoredBreakdown = calculateNhsBandScore(aiResult)
+
+    const result = {
+      ...aiResult,
+      scoredBreakdown,
+    }
+
+    // ───────────────────────────────
+    // 5. SAVE
+    // ───────────────────────────────
+    const saved = await prisma.analysis.create({
+      data: {
+        userId,
+        jobTitle,
+        jobDescription:    combinedJobSpec,
+        personSpec:        normalize(body.personSpec),
+        essentialCriteria: normalize(body.essentialCriteria),
+        desirableCriteria: normalize(body.desirableCriteria),
+        skills:            normalize(body.skills),
+        values:            normalize(body.values),
+        sourceUrl:         normalize(body.sourceUrl),
+        cv,
+        statement,
+        result,
+      },
+    })
+
+    // ───────────────────────────────
+    // 6. SANITIZE & RETURN
+    // ───────────────────────────────
+    const filtered = sanitizeAnalysisForTier(result, userTier)
+
     return Response.json({
       success: true,
-      id: saved.id,
-      result,
+      id:      saved.id,
+      result:  filtered,
+      tier:    userTier,
     })
+
   } catch (error: any) {
     console.error("ANALYSIS_ERROR:", error)
 
     return Response.json(
-      {
-        success: false,
-        error: error?.message || "Analysis failed",
-      },
-      { status: 500 }
+      { success: false, error: error?.message || "Analysis failed" },
+      { status: 500 },
     )
   }
 }

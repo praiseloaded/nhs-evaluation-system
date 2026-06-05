@@ -325,32 +325,32 @@ export default function HomePage() {
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
-            {subscriptionPlans.map((plan, idx) => (
+            {subscriptionPlans.map((tier, idx) => (
               <div
                 key={idx}
                 className={`rounded-lg border-2 p-8 transition-all ${
-                  plan.featured
+                  tier.featured
                     ? 'border-blue-600 bg-gradient-to-br from-blue-50 to-slate-50 dark:from-blue-950 dark:to-slate-900 shadow-lg'
                     : 'border-border bg-background'
                 }`}
               >
-                {plan.featured && (
+                {tier.featured && (
                   <div className="mb-4 inline-flex px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 text-sm font-semibold">
                     Most Popular
                   </div>
                 )}
 
-                <h3 className="text-2xl font-bold text-foreground mb-2">{plan.name}</h3>
-                <p className="text-muted-foreground dark:text-slate-400 mb-6">{plan.description}</p>
+                <h3 className="text-2xl font-bold text-foreground mb-2">{tier.name}</h3>
+                <p className="text-muted-foreground dark:text-slate-400 mb-6">{tier.description}</p>
 
                 <div className="mb-6">
-                  <span className="text-4xl font-bold text-foreground">{plan.price}</span>
-                  <span className="text-muted-foreground dark:text-slate-400 ml-2">{plan.period}</span>
+                  <span className="text-4xl font-bold text-foreground">{tier.price}</span>
+                  <span className="text-muted-foreground dark:text-slate-400 ml-2">{tier.period}</span>
                 </div>
 
                 <button
                   className={`w-full py-3 rounded-lg font-semibold mb-8 transition-all ${
-                    plan.featured
+                    tier.featured
                       ? 'bg-blue-600 text-white hover:bg-blue-700'
                       : 'border-2 border-border text-foreground hover:bg-accent dark:hover:bg-slate-800'
                   }`}
@@ -359,7 +359,7 @@ export default function HomePage() {
                 </button>
 
                 <div className="space-y-4">
-                  {plan.features.map((feature, fidx) => (
+                  {tier.features.map((feature, fidx) => (
                     <div key={fidx} className="flex items-start gap-3">
                       <Check className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
                       <span className="text-foreground">{feature}</span>

@@ -1,70 +1,76 @@
-import { prisma } from "@/lib/prisma"
-import { getValidatedAIResult } from "@/modules/ai/retry"
+// app/api/analysis/[id]/route.ts
 
-function normalize(value?: string) {
-  return value?.trim() || ""
-}
+import { prisma }                  from '@/lib/prisma'
+import { auth }                    from '@/auth'
+import { getUserTier }             from '@/lib/billing/tier'
+import { sanitizeAnalysisForTier } from '@/lib/billing/sanitize-analysis'
+import { calculateNhsBandScore }   from '@/lib/scoring/calculate-overall-score'
+import { NextRequest }             from 'next/server'
 
-export async function POST(req: Request) {
+type Params = { params: Promise<{ id: string }> }
+
+export async function GET(_req: NextRequest, { params }: Params) {
   try {
-    const body = await req.json()
+    const { id } = await params
 
-    // 1. Normalize input (prevents undefined Prisma crashes)
-    const jobTitle = normalize(body.jobTitle)
-    const jobSpec = normalize(body.jobSpec)
-    const cv = normalize(body.cv)
-    const statement = normalize(body.statement)
+    // ── Auth ─────────────────────────────────────────────────────────────────
+    const session = await auth()
+    if (!session?.user?.id) {
+      return Response.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+    }
 
-    const personSpec = normalize(body.personSpec)
-    const essentialCriteria = normalize(body.essentialCriteria)
-    const desirableCriteria = normalize(body.desirableCriteria)
-    const skills = normalize(body.skills)
-    const values = normalize(body.values)
-    const sourceUrl = normalize(body.sourceUrl)
+    const userId = session.user.id as string
 
-    // 2. AI analysis (uses ONLY core inputs)
-    const result = await getValidatedAIResult({
-      jobTitle,
-      jobSpec,
-      cv,
-      statement,
-    })
+    // ── Fetch ─────────────────────────────────────────────────────────────────
+    const record = await prisma.analysis.findUnique({ where: { id } })
 
-    // 3. Save to DB (Prisma-safe)
-    const saved = await prisma.analysis.create({
-      data: {
-        jobTitle,
-        jobDescription: jobSpec,
+    if (!record) {
+      return Response.json({ success: false, error: 'Not found' }, { status: 404 })
+    }
 
-        personSpec,
-        essentialCriteria,
-        desirableCriteria,
-        skills,
-        values,
-        sourceUrl,
+    if (record.userId !== userId) {
+      return Response.json({ success: false, error: 'Forbidden' }, { status: 403 })
+    }
 
-        cv,
-        statement,
+    // ── Recompute scoredBreakdown if missing ──────────────────────────────────
+    const raw = (record.result as any) ?? {}
 
-        result, // MUST be Json type in Prisma schema
-      },
-    })
+    if (!raw.scoredBreakdown && raw.breakdown) {
+      try {
+        raw.scoredBreakdown = calculateNhsBandScore(raw)
+      } catch (e) {
+        console.warn(`[GET_ANALYSIS] Failed to score analysis ${id}:`, e)
+      }
+    }
 
-    // 4. Response
-    return Response.json({
-      success: true,
-      id: saved.id,
-      result,
-    })
+    // ── Sanitize for tier ─────────────────────────────────────────────────────
+    const userTier       = await getUserTier(userId)
+    const filteredResult = sanitizeAnalysisForTier(raw, userTier)
+
+    // ── Return clean shape ────────────────────────────────────────────────────
+    const analysis = {
+      id:                 record.id,
+      jobTitle:           record.jobTitle        ?? '',
+      jobDescription:     record.jobDescription  ?? '',
+      personSpec:         record.personSpec       ?? '',
+      essentialCriteria:  record.essentialCriteria ?? '',
+      desirableCriteria:  record.desirableCriteria ?? '',
+      skills:             record.skills            ?? '',
+      values:             record.values            ?? '',
+      sourceUrl:          record.sourceUrl         ?? '',
+      band:               (record as any).band     ?? null,
+      location:           (record as any).location ?? null,
+      createdAt:          record.createdAt,
+      result:             filteredResult,
+    }
+
+    return Response.json({ success: true, analysis })
+
   } catch (error: any) {
-    console.error("ANALYSIS_ERROR:", error)
-
+    console.error('[GET_ANALYSIS_ERROR]', error)
     return Response.json(
-      {
-        success: false,
-        error: error?.message || "Analysis failed",
-      },
-      { status: 500 }
+      { success: false, error: error?.message ?? 'Failed to fetch analysis' },
+      { status: 500 },
     )
   }
 }

@@ -3,12 +3,74 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  password      String?
+  emailVerified DateTime?
+  image         String?
+
+  tier          String    @default("free")
+  analysisUsed  Int       @default(0)
+  analysisLimit Int       @default(1)
+
+  accounts      Account[]
+  sessions      Session[]
+  analyses      Analysis[]
+  interviews    Interview[]
+  applications  Application[]
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
 }
 
 model Analysis {
   id                String   @id @default(uuid())
+
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   jobTitle          String
   jobDescription    String
@@ -24,5 +86,158 @@ model Analysis {
 
   result            Json
 
+  interviews        Interview[]
+
   createdAt         DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Interview {
+  id          String   @id @default(uuid())
+
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  analysisId  String
+  analysis    Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  jobTitle    String
+  band        String?
+
+  panellists  Json
+  questions   Json
+
+  status      String   @default("pending")
+  totalScore  Int?
+  feedback    Json?
+
+  answers     InterviewAnswer[]
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([analysisId])
+  @@index([status])
+}
+
+model InterviewAnswer {
+  id            String   @id @default(uuid())
+
+  interviewId   String
+  interview     Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  questionId    String
+  panellistId   String
+
+  audioUrl      String?
+  transcript    String?
+
+  score         Int?
+  evaluation    Json?
+
+  answeredAt    DateTime  @default(now())
+
+  @@index([interviewId])
+  @@index([questionId])
+}
+
+model Application {
+  id              String   @id @default(uuid())
+
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  jobTitle        String
+  band            String?
+  employer        String?
+  sourceUrl       String?
+  jobDescription  String
+  personSpec      String?
+
+  parsedSpec      Json?
+
+  cvText          String?
+  yearsExperience Int?
+  currentBand     Int?
+  currentRole     String?
+
+  introduction    String?
+  closing         String?
+  fullStatement   String?
+  wordCount       Int?
+
+  notes           String?
+  submittedAt     DateTime?
+  interviewDate   DateTime?
+  deadlineDate    DateTime?
+  cvScore         Json?
+  shortlistAssessment Json?
+
+  liveScore       Json?
+  completeness    Float    @default(0)
+
+  status          String   @default("draft")
+
+  criteria        ApplicationCriterion[]
+  drafts          ApplicationDraft[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model ApplicationCriterion {
+  id              String   @id @default(uuid())
+
+  applicationId   String
+  application     Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  criterionText   String
+  type            String
+  category        String?
+  order           Int      @default(0)
+
+  situation       String?
+  task            String?
+  action          String?
+  result          String?
+
+  metrics         String?
+  mdtContext      String?
+  reflection      String?
+  nhsValues       String?
+
+  generatedParagraph String?
+  paragraphScore     Int?
+
+  status          String   @default("pending")
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([applicationId])
+  @@index([type])
+}
+
+model ApplicationDraft {
+  id              String   @id @default(uuid())
+
+  applicationId   String
+  application     Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  version         Int      @default(1)
+  content         String
+  wordCount       Int?
+  score           Json?
+  feedback        String?
+
+  createdAt       DateTime @default(now())
+
+  @@index([applicationId])
 }

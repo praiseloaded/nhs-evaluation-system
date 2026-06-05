@@ -17,14 +17,27 @@ export function useAnalysis() {
       const res = await fetch("/api/analysis", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify(data)
+        body: JSON.stringify(data),
       });
 
-      if (!res.ok) throw new Error("Analysis failed");
-
       const result = await res.json();
+
+      // 🚨 SaaS BLOCK CHECK (IMPORTANT)
+      if (result.blocked) {
+        return {
+          blocked: true,
+          upgradeRequired: true,
+          message: result.message,
+          upgrade: result.upgrade,
+        };
+      }
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || "Analysis failed");
+      }
+
       return result;
     } catch (err: any) {
       setError(err.message);
@@ -37,6 +50,6 @@ export function useAnalysis() {
   return {
     runAnalysis,
     loading,
-    error
+    error,
   };
 }
