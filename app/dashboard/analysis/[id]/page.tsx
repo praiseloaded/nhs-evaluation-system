@@ -15,6 +15,7 @@ import { prisma }         from '@/lib/prisma'
 import { getUserTier }             from '@/lib/billing/tier'
 import { sanitizeAnalysisForTier } from '@/lib/billing/sanitize-analysis'
 import { calculateNhsBandScore }   from '@/lib/scoring/calculate-overall-score'
+import { ReanalyseButton } from '@/components/reanalyse-button'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -149,20 +150,9 @@ export default async function AnalysisPage({ params }: Params) {
         <ScoreHeader analysis={analysis} isPro={isPro} />
 
         {/* Incomplete data warning */}
-        {isIncomplete && (
-          <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800">
-            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-            <p className="text-xs text-amber-700 dark:text-amber-300 flex-1">
-              This analysis has incomplete data from an earlier run. Re-analyse to see full results.
-            </p>
-            <Link
-              href="/dashboard/new-analysis"
-              className="text-xs font-medium text-amber-700 dark:text-amber-300 underline whitespace-nowrap"
-            >
-              Re-analyse
-            </Link>
-          </div>
-        )}
+       {isIncomplete && (
+  <ReanalyseButton analysisId={analysis.id} />
+)}
 
         {/* ── Job details ──────────────────────────────────────────────── */}
         <section className="rounded-xl border border-border bg-card overflow-hidden">
