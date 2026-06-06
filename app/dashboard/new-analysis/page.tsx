@@ -178,7 +178,7 @@ export default function NewAnalysisPage() {
   useEffect(() => {
     if (step === 4) {
       setSubmitReady(false)
-      const t = setTimeout(() => setSubmitReady(true), 150)
+      const t = setTimeout(() => setSubmitReady(true), 1000)
       return () => clearTimeout(t)
     }
   }, [step])

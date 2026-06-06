@@ -2,10 +2,15 @@ import { AlertTriangle }  from 'lucide-react'
 import { Navbar }         from '@/components/navbar'
 import { ScoreHeader }    from '@/components/score-header'
 import { DimensionPanel } from '@/components/dimension-panel'
-
-import { InsightsPanel } from '@/components/insights-panel'
+import { InsightsPanel }  from '@/components/insights-panel'
 import { PremiumGate }    from '@/components/premium-gate'
-import { BookOpen, Target, Heart, Pen, Zap } from 'lucide-react'
+import { ReanalyseButton } from '@/components/reanalyse-button'
+import {
+  BookOpen, Target, Heart, Pen, Zap,
+  CheckCircle2, XCircle, MinusCircle,
+  ChevronRight, Stethoscope, FileText,
+  Award, Shield
+} from 'lucide-react'
 import Link               from 'next/link'
 import { notFound }       from 'next/navigation'
 import { buildDimensionScores } from '@/lib/types'
@@ -15,11 +20,8 @@ import { prisma }         from '@/lib/prisma'
 import { getUserTier }             from '@/lib/billing/tier'
 import { sanitizeAnalysisForTier } from '@/lib/billing/sanitize-analysis'
 import { calculateNhsBandScore }   from '@/lib/scoring/calculate-overall-score'
-import { ReanalyseButton } from '@/components/reanalyse-button'
 
 type Params = { params: Promise<{ id: string }> }
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Analysis {
   id: string
@@ -31,9 +33,6 @@ interface Analysis {
   result: any
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/** Normalize recommendations: AI may return string[] or {gap,directive}[] */
 function normalizeRecommendations(recs: any[]): string[] {
   if (!Array.isArray(recs)) return []
   return recs.map((r: any) => {
@@ -44,31 +43,24 @@ function normalizeRecommendations(recs: any[]): string[] {
   })
 }
 
-// ─── Data fetching — direct DB, no HTTP round-trip ───────────────────────────
-
 async function getAnalysis(id: string, userId: string): Promise<{ analysis: Analysis; isPro: boolean } | null> {
   try {
     const record = await prisma.analysis.findUnique({ where: { id } })
-
     if (!record) return null
     if (record.userId !== userId) return null
 
     const raw = (record.result as any) ?? {}
 
-    // Recompute scoredBreakdown if missing
     if (!raw.scoredBreakdown && raw.breakdown) {
       raw.scoredBreakdown = calculateNhsBandScore(raw)
     }
 
-    // Normalize recommendations format before sanitization
     if (Array.isArray(raw.recommendations)) {
       raw.recommendations = normalizeRecommendations(raw.recommendations)
     }
 
-    // Get tier — handle all possible return values
     const userTier = await getUserTier(userId)
-  const tier = userTier === 'pro' ? 'pro' : 'free'
-
+    const tier = userTier === 'pro' ? 'pro' : 'free'
     const filteredResult = sanitizeAnalysisForTier(raw, tier)
 
     return {
@@ -89,18 +81,63 @@ async function getAnalysis(id: string, userId: string): Promise<{ analysis: Anal
   }
 }
 
+// ─── Status icon helper ───────────────────────────────────────────────────────
+
+function CriterionStatusIcon({ status }: { status: string }) {
+  if (status === 'met')
+    return <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+  if (status === 'partially met')
+    return <MinusCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+  return <XCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+}
+
+// ─── Section wrapper ──────────────────────────────────────────────────────────
+
+function Section({
+  label,
+  badge,
+  badgeColor = 'blue',
+  children,
+}: {
+  label: string
+  badge?: string
+  badgeColor?: 'blue' | 'green' | 'purple' | 'amber'
+  children: React.ReactNode
+}) {
+  const badgeStyles = {
+    blue:   'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800',
+    green:  'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800',
+    purple: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800',
+    amber:  'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800',
+  }
+
+  return (
+    <section>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-bold uppercase tracking-widest text-foreground/50">
+          {label}
+        </h2>
+        {badge && (
+          <span className={`text-[10px] font-semibold uppercase tracking-wider border px-2.5 py-1 rounded-full ${badgeStyles[badgeColor]}`}>
+            {badge}
+          </span>
+        )}
+      </div>
+      {children}
+    </section>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function AnalysisPage({ params }: Params) {
   const { id } = await params
 
   const session = await auth()
-
   if (!session?.user?.id) notFound()
 
   const userId = session.user.id as string
   const data   = await getAnalysis(id, userId)
-
   if (!data) notFound()
 
   const { analysis, isPro } = data
@@ -111,8 +148,7 @@ export default async function AnalysisPage({ params }: Params) {
     !result.rejectionRisk?.gates?.length ||
     (result.nhsValues?.length ?? 0) < 5
 
-  // Build dimension scores — pass both the raw result AND the scored breakdown
-  const scored = result.scoredBreakdown ?? null
+  const scored     = result.scoredBreakdown ?? null
   const dimensions = buildDimensionScores(result, scored)
 
   const dimCriteria = dimensions.find(d => d.id === 'criteriaCoverage')
@@ -121,144 +157,157 @@ export default async function AnalysisPage({ params }: Params) {
   const dimLanguage = dimensions.find(d => d.id === 'languageMirroring')
   const dimDetail   = dimensions.find(d => d.id === 'specificity')
 
-  const essentialLines = result.criteriaAnalysis
-    ?.filter((c: any) => c.type === "essential")
-    .map((c: any) => c.criterion) ?? []
+  const essentialCriteria = result.criteriaAnalysis?.filter((c: any) => c.type === 'essential') ?? []
+  const desirableCriteria = result.criteriaAnalysis?.filter((c: any) => c.type === 'desirable') ?? []
+  const skillLines        = result.atsMatch?.keywordsFound ?? []
+  const valueLines        = result.nhsValues?.map((v: any) => v.name) ?? []
 
-  const desirableLines = result.criteriaAnalysis
-    ?.filter((c: any) => c.type === "desirable")
-    .map((c: any) => c.criterion) ?? []
-
-  const skillLines = result.atsMatch?.keywordsFound ?? []
-
-  const valueLines = result.nhsValues
-    ?.map((v: any) => v.name) ?? []
+  const createdAt = new Date(analysis.createdAt).toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'long', year: 'numeric',
+  })
 
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
 
-      <main className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-10 space-y-8">
+      <main className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-10 space-y-10">
 
-        <Link
-          href="/dashboard/saved-analyses"
-          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          ← Back to Analyses
-        </Link>
+        {/* ── Breadcrumb ── */}
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Link href="/dashboard/saved-analyses" className="hover:text-foreground transition-colors">
+            Analyses
+          </Link>
+          <ChevronRight className="w-3 h-3" />
+          <span className="text-foreground font-medium truncate max-w-xs">{analysis.jobTitle || 'Untitled'}</span>
+        </div>
 
+        {/* ── Re-analyse banner ── */}
+        {isIncomplete && <ReanalyseButton analysisId={analysis.id} />}
+
+        {/* ── Score header ── */}
         <ScoreHeader analysis={analysis} isPro={isPro} />
 
-        {/* Incomplete data warning */}
-       {isIncomplete && (
-  <ReanalyseButton analysisId={analysis.id} />
-)}
+        {/* ── Meta strip ── */}
+        <div className="flex flex-wrap gap-3">
+          {analysis.band && (
+            <div className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground/70 bg-muted border border-border rounded-full px-3 py-1.5">
+              <Award className="w-3.5 h-3.5" />
+              {analysis.band}
+            </div>
+          )}
+          {analysis.location && (
+            <div className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground/70 bg-muted border border-border rounded-full px-3 py-1.5">
+              <Stethoscope className="w-3.5 h-3.5" />
+              {analysis.location}
+            </div>
+          )}
+          <div className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground/70 bg-muted border border-border rounded-full px-3 py-1.5">
+            <FileText className="w-3.5 h-3.5" />
+            Analysed {createdAt}
+          </div>
+          {result.statementScan?.wordCount > 0 && (
+            <div className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground/70 bg-muted border border-border rounded-full px-3 py-1.5">
+              <Shield className="w-3.5 h-3.5" />
+              {result.statementScan.wordCount} words in statement
+            </div>
+          )}
+        </div>
 
-        {/* ── Job details ──────────────────────────────────────────────── */}
-        <section className="rounded-xl border border-border bg-card overflow-hidden">
-          <div className="px-6 py-4 border-b border-border">
-            <h2 className="font-semibold text-base text-foreground">Analysis Details</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">Job context extracted from your submission</p>
+        {/* ── Criteria analysis ── */}
+        <Section label="Criteria Breakdown" badge="Essential & Desirable" badgeColor="blue">
+          <div className="grid md:grid-cols-2 gap-6">
+
+            {/* Essential */}
+            <div className="rounded-xl border border-border bg-card overflow-hidden">
+              <div className="px-4 py-3 border-b border-border bg-muted/40 flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-foreground/60">Essential</span>
+                <span className="text-xs text-muted-foreground">
+                  {essentialCriteria.filter((c: any) => c.status === 'met').length} of {essentialCriteria.length} met
+                </span>
+              </div>
+              <ul className="divide-y divide-border">
+                {essentialCriteria.length > 0 ? essentialCriteria.map((c: any, i: number) => (
+                  <li key={i} className="flex items-start gap-3 px-4 py-3">
+                    <CriterionStatusIcon status={c.status} />
+                    <span className="text-sm text-foreground/80 leading-snug">{c.criterion}</span>
+                  </li>
+                )) : (
+                  <li className="px-4 py-4 text-sm text-muted-foreground">None recorded</li>
+                )}
+              </ul>
+            </div>
+
+            {/* Desirable */}
+            <div className="rounded-xl border border-border bg-card overflow-hidden">
+              <div className="px-4 py-3 border-b border-border bg-muted/40 flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-foreground/60">Desirable</span>
+                <span className="text-xs text-muted-foreground">
+                  {desirableCriteria.filter((c: any) => c.status === 'met').length} of {desirableCriteria.length} met
+                </span>
+              </div>
+              <ul className="divide-y divide-border">
+                {desirableCriteria.length > 0 ? desirableCriteria.map((c: any, i: number) => (
+                  <li key={i} className="flex items-start gap-3 px-4 py-3">
+                    <CriterionStatusIcon status={c.status} />
+                    <span className="text-sm text-foreground/80 leading-snug">{c.criterion}</span>
+                  </li>
+                )) : (
+                  <li className="px-4 py-4 text-sm text-muted-foreground">None recorded</li>
+                )}
+              </ul>
+            </div>
           </div>
 
-          <div className="p-6 space-y-6">
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Job Description</h3>
-                <p className="whitespace-pre-wrap text-sm text-foreground/80 leading-relaxed">{analysis.jobDescription || 'N/A'}</p>
-              </div>
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                  Person Specification
-                </h3>
-                <p className="whitespace-pre-wrap text-sm text-foreground/80 leading-relaxed">
-                  {result.statementScan
-                    ? `Word count: ${result.statementScan.wordCount}`
-                    : 'N/A'}
-                </p>
-              </div>
+          {/* Legend */}
+          <div className="mt-3 flex items-center gap-5 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> Met</span>
+            <span className="flex items-center gap-1.5"><MinusCircle  className="w-3.5 h-3.5 text-amber-400"   /> Partially met</span>
+            <span className="flex items-center gap-1.5"><XCircle      className="w-3.5 h-3.5 text-red-400"     /> Not met</span>
+          </div>
+        </Section>
+
+        {/* ── Skills & Values ── */}
+        <Section label="Keywords & Values" badgeColor="green">
+          <div className="grid md:grid-cols-2 gap-6">
+
+            <div className="rounded-xl border border-border bg-card p-5 space-y-3">
+              <p className="text-xs font-bold uppercase tracking-wider text-foreground/50">Skills Detected</p>
+              {skillLines.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {skillLines.map((skill: string, i: number) => (
+                    <span key={i} className="px-2.5 py-1 rounded-md bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-xs font-medium">
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              ) : <p className="text-sm text-muted-foreground">None detected</p>}
             </div>
 
-            <hr className="border-border" />
-
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Essential Criteria</h3>
-                {essentialLines.length > 0 ? (
-                  <ul className="space-y-2">
-                    {essentialLines.map((item: string, i: number) => (
-                      <li key={i} className="flex gap-2 text-sm text-foreground/80">
-                        <span className="text-blue-500 shrink-0 mt-0.5">•</span>{item}
-                      </li>
-                    ))}
-                  </ul>
-                ) : <p className="text-sm text-muted-foreground">None recorded</p>}
-              </div>
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Desirable Criteria</h3>
-                {desirableLines.length > 0 ? (
-                  <ul className="space-y-2">
-                    {desirableLines.map((item: string, i: number) => (
-                      <li key={i} className="flex gap-2 text-sm text-foreground/80">
-                        <span className="text-muted-foreground shrink-0 mt-0.5">◇</span>{item}
-                      </li>
-                    ))}
-                  </ul>
-                ) : <p className="text-sm text-muted-foreground">None recorded</p>}
-              </div>
-            </div>
-
-            <hr className="border-border" />
-
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Skills Detected</h3>
-                {skillLines.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {skillLines.map((skill: string, i: number) => (
-                      <span key={i} className="px-2.5 py-1 rounded bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-xs font-medium">{skill}</span>
-                    ))}
-                  </div>
-                ) : <p className="text-sm text-muted-foreground">None recorded</p>}
-              </div>
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Values Detected</h3>
-                {valueLines.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {valueLines.map((v: string, i: number) => (
-                      <span key={i} className="px-2.5 py-1 rounded-full bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 text-xs font-medium">{v}</span>
-                    ))}
-                  </div>
-                ) : <p className="text-sm text-muted-foreground">None recorded</p>}
-              </div>
+            <div className="rounded-xl border border-border bg-card p-5 space-y-3">
+              <p className="text-xs font-bold uppercase tracking-wider text-foreground/50">NHS Values Demonstrated</p>
+              {valueLines.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {valueLines.map((v: string, i: number) => (
+                    <span key={i} className="px-2.5 py-1 rounded-md bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs font-medium">
+                      {v}
+                    </span>
+                  ))}
+                </div>
+              ) : <p className="text-sm text-muted-foreground">None detected</p>}
             </div>
           </div>
-        </section>
+        </Section>
 
-        {/* ── FREE dimensions ───────────────────────────────────────────── */}
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="font-semibold text-base text-foreground">Evaluation Dimensions</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">Click Show details on any card to see evidence and improvement tips</p>
-            </div>
-            <span className="text-xs font-medium bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 px-2.5 py-1 rounded-full">Free</span>
-          </div>
+        {/* ── Free dimensions ── */}
+        <Section label="Evaluation Dimensions" badge="Included" badgeColor="green">
           <div className="grid sm:grid-cols-2 gap-4">
             {dimCriteria && <DimensionPanel dimension={dimCriteria} icon={<Target className="w-4 h-4" />} />}
             {dimValues   && <DimensionPanel dimension={dimValues}   icon={<Heart  className="w-4 h-4" />} />}
           </div>
-        </section>
+        </Section>
 
-        {/* ── PRO dimensions ────────────────────────────────────────────── */}
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="font-semibold text-base text-foreground">Advanced Dimensions</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">Deeper intelligence that separates shortlisted from rejected</p>
-            </div>
-            <span className="text-xs font-medium bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 px-2.5 py-1 rounded-full">Pro</span>
-          </div>
+        {/* ── Pro dimensions ── */}
+        <Section label="Advanced Dimensions" badge="Pro" badgeColor="purple">
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <PremiumGate label="STAR structure analysis" reason="star" isPro={isPro}>
               {dimStar     && <DimensionPanel dimension={dimStar}     icon={<Zap      className="w-4 h-4" />} />}
@@ -270,8 +319,9 @@ export default async function AnalysisPage({ params }: Params) {
               {dimDetail   && <DimensionPanel dimension={dimDetail}   icon={<BookOpen className="w-4 h-4" />} />}
             </PremiumGate>
           </div>
-        </section>
+        </Section>
 
+        {/* ── Insights ── */}
         <InsightsPanel analysis={analysis} isPro={isPro} />
 
       </main>
