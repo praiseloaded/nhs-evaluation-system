@@ -22,19 +22,22 @@ export async function POST(
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  // 2. Rebuild the prompt input from stored fields
-  const stored = (record.result as any) ?? {}
+  // 2. Rebuild combined job spec exactly as the original route does
+  const sections: string[] = []
+  if (record.jobDescription)    sections.push(record.jobDescription)
+  if (record.personSpec)        sections.push(`PERSON SPECIFICATION:\n${record.personSpec}`)
+  if (record.essentialCriteria) sections.push(`ESSENTIAL CRITERIA:\n${record.essentialCriteria}`)
+  if (record.desirableCriteria) sections.push(`DESIRABLE CRITERIA:\n${record.desirableCriteria}`)
+  if (record.skills)            sections.push(`SKILLS REQUIRED:\n${record.skills}`)
+  if (record.values)            sections.push(`VALUES REQUIRED:\n${record.values}`)
+  const combinedJobSpec = sections.join('\n\n')
 
   const input = {
-    jobTitle:          record.jobTitle          ?? '',
-    jobSpec:           record.jobDescription    ?? '',
-    personSpec:        stored.personSpec        ?? '',
-    essentialCriteria: stored.essentialCriteria ?? '',
-    desirableCriteria: stored.desirableCriteria ?? '',
-    skills:            stored.skills            ?? '',
-    values:            stored.values            ?? '',
-    cv:                stored.cv               ?? '',
-    statement:         stored.statement         ?? '',
+    jobTitle:  record.jobTitle  ?? '',
+    jobSpec:   combinedJobSpec,
+    cv:        record.cv        ?? '',   // ← top-level column
+    statement: record.statement ?? '',   // ← top-level column
+    tier:      await import('@/lib/billing/tier').then(m => m.getUserTier(record.userId)),
   }
 
   // 3. Re-run AI
@@ -46,14 +49,13 @@ export async function POST(
   }
 
   // 4. Recompute scored breakdown
-  if (!aiResult.scoredBreakdown && aiResult.breakdown) {
-    aiResult.scoredBreakdown = calculateNhsBandScore(aiResult)
-  }
+  const scoredBreakdown = calculateNhsBandScore(aiResult)
+  const result = { ...aiResult, scoredBreakdown }
 
-  // 5. Update the existing record in DB — same id, new result
+  // 5. Update the existing record — preserve all original fields, only update result
   await prisma.analysis.update({
     where: { id },
-    data:  { result: aiResult },
+    data:  { result },
   })
 
   return NextResponse.json({ success: true })

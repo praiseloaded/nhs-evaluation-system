@@ -1,159 +1,142 @@
-// app/api/analysis/route.ts
+import { NextResponse }          from 'next/server'
+import { auth }                  from '@/auth'
+import { prisma }                from '@/lib/prisma'
+import { getValidatedAIResult }  from '@/modules/ai/retry'
+import { calculateNhsBandScore } from '@/lib/scoring/calculate-overall-score'
+import { getUserTier }           from '@/lib/billing/tier'
 
-import { prisma }                from "@/lib/prisma"
-import { getValidatedAIResult }  from "@/modules/ai/retry"
-import { getUserTier }           from "@/lib/billing/tier"
-import { sanitizeAnalysisForTier } from "@/lib/billing/sanitize-analysis"
-import { auth }                  from "@/auth"
-import { calculateNhsBandScore } from "@/lib/scoring/calculate-overall-score"
+export async function POST(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  // ───────────────────────────────
+  // 1. AUTH
+  // ───────────────────────────────
+  const session = await auth()
 
-function normalize(value?: string) {
-  return value?.trim() || ""
-}
-
-function buildJobSpec(parts: {
-  jobSpec: string
-  personSpec: string
-  essentialCriteria: string
-  desirableCriteria: string
-  skills: string
-  values: string
-}): string {
-  const sections: string[] = []
-
-  if (parts.jobSpec)            sections.push(parts.jobSpec)
-  if (parts.personSpec)         sections.push(`PERSON SPECIFICATION:\n${parts.personSpec}`)
-  if (parts.essentialCriteria)  sections.push(`ESSENTIAL CRITERIA:\n${parts.essentialCriteria}`)
-  if (parts.desirableCriteria)  sections.push(`DESIRABLE CRITERIA:\n${parts.desirableCriteria}`)
-  if (parts.skills)             sections.push(`SKILLS REQUIRED:\n${parts.skills}`)
-  if (parts.values)             sections.push(`VALUES REQUIRED:\n${parts.values}`)
-
-  return sections.join("\n\n")
-}
-
-export async function POST(req: Request) {
-  try {
-    // ───────────────────────────────
-    // 0. AUTH
-    // ───────────────────────────────
-    const session = await auth()
-
-    if (!session?.user?.id) {
-      return Response.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 },
-      )
-    }
-
-    const userId = session.user.id as string
-    const body   = await req.json()
-
-    // ───────────────────────────────
-    // 1. TIER CHECK
-    // ───────────────────────────────
-    const userTier = await getUserTier(userId)
-
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-
-    const usageToday = await prisma.analysis.count({
-      where: {
-        userId,
-        createdAt: { gte: today },
-      },
-    })
-
-    if (userTier === "free" && usageToday >= 1) {
-      return Response.json(
-        {
-          success: false,
-          blocked: true,
-          reason:  "limit_reached",
-          message: "Free tier limit reached",
-        },
-        { status: 402 },
-      )
-    }
-
-    // ───────────────────────────────
-    // 2. INPUT
-    // ───────────────────────────────
-    const jobTitle  = normalize(body.jobTitle)
-    const jobSpec   = normalize(body.jobSpec)
-    const cv        = normalize(body.cv)
-    const statement = normalize(body.statement)
-
-    const combinedJobSpec = buildJobSpec({
-      jobSpec,
-      personSpec:        normalize(body.personSpec),
-      essentialCriteria: normalize(body.essentialCriteria),
-      desirableCriteria: normalize(body.desirableCriteria),
-      skills:            normalize(body.skills),
-      values:            normalize(body.values),
-    })
-
-    // ───────────────────────────────
-    // 3. AI ANALYSIS (RAW ONLY)
-    // ───────────────────────────────
-    const aiResult = await getValidatedAIResult({
-      jobTitle,
-      jobSpec: combinedJobSpec,
-      cv,
-      statement,
-      tier: userTier,
-    })
-
-    // ───────────────────────────────
-    // 4. ENGINE SCORING
-    // ───────────────────────────────
-    // calculateNhsBandScore returns a ScoredBreakdown object.
-    // Store it as result.scoredBreakdown — this is the key that
-    // both the dashboard page and the [id] detail route read from.
-    const scoredBreakdown = calculateNhsBandScore(aiResult)
-
-    const result = {
-      ...aiResult,
-      scoredBreakdown,
-    }
-
-    // ───────────────────────────────
-    // 5. SAVE
-    // ───────────────────────────────
-    const saved = await prisma.analysis.create({
-      data: {
-        userId,
-        jobTitle,
-        jobDescription:    combinedJobSpec,
-        personSpec:        normalize(body.personSpec),
-        essentialCriteria: normalize(body.essentialCriteria),
-        desirableCriteria: normalize(body.desirableCriteria),
-        skills:            normalize(body.skills),
-        values:            normalize(body.values),
-        sourceUrl:         normalize(body.sourceUrl),
-        cv,
-        statement,
-        result,
-      },
-    })
-
-    // ───────────────────────────────
-    // 6. SANITIZE & RETURN
-    // ───────────────────────────────
-    const filtered = sanitizeAnalysisForTier(result, userTier)
-
-    return Response.json({
-      success: true,
-      id:      saved.id,
-      result:  filtered,
-      tier:    userTier,
-    })
-
-  } catch (error: any) {
-    console.error("ANALYSIS_ERROR:", error)
-
-    return Response.json(
-      { success: false, error: error?.message || "Analysis failed" },
-      { status: 500 },
+  if (!session?.user?.id) {
+    return NextResponse.json(
+      { success: false, error: 'Unauthorised' },
+      { status: 401 }
     )
   }
+
+  const userId = session.user.id as string
+  const { id } = await params
+
+  // ───────────────────────────────
+  // 2. LOAD & OWNERSHIP CHECK
+  // ───────────────────────────────
+  let record: Awaited<ReturnType<typeof prisma.analysis.findUnique>>
+
+  try {
+    record = await prisma.analysis.findUnique({ where: { id } })
+  } catch (err: any) {
+    return NextResponse.json(
+      { success: false, error: 'Database error loading record' },
+      { status: 500 }
+    )
+  }
+
+  if (!record) {
+    return NextResponse.json(
+      { success: false, error: 'Analysis not found' },
+      { status: 404 }
+    )
+  }
+
+  if (record.userId !== userId) {
+    return NextResponse.json(
+      { success: false, error: 'Forbidden' },
+      { status: 403 }
+    )
+  }
+
+  // ───────────────────────────────
+  // 3. REBUILD COMBINED JOB SPEC
+  //    (mirrors buildJobSpec in the
+  //     original analysis route)
+  // ───────────────────────────────
+  const sections: string[] = []
+
+  if (record.jobDescription)    sections.push(record.jobDescription)
+  if (record.personSpec)        sections.push(`PERSON SPECIFICATION:\n${record.personSpec}`)
+  if (record.essentialCriteria) sections.push(`ESSENTIAL CRITERIA:\n${record.essentialCriteria}`)
+  if (record.desirableCriteria) sections.push(`DESIRABLE CRITERIA:\n${record.desirableCriteria}`)
+  if (record.skills)            sections.push(`SKILLS REQUIRED:\n${record.skills}`)
+  if (record.values)            sections.push(`VALUES REQUIRED:\n${record.values}`)
+
+  const combinedJobSpec = sections.join('\n\n')
+
+  // ───────────────────────────────
+  // 4. GET USER TIER
+  // ───────────────────────────────
+  let tier: 'free' | 'pro' = 'free'
+
+  try {
+    const userTier = await getUserTier(userId)
+    tier = userTier === 'pro' ? 'pro' : 'free'
+  } catch {
+    // Default to free if tier lookup fails — don't block the re-analysis
+    tier = 'free'
+  }
+
+  // ───────────────────────────────
+  // 5. RE-RUN AI
+  // ───────────────────────────────
+  let aiResult: any
+
+  try {
+    aiResult = await getValidatedAIResult({
+      jobTitle:  record.jobTitle  ?? '',
+      jobSpec:   combinedJobSpec,
+      cv:        record.cv        ?? '',   // top-level DB column
+      statement: record.statement ?? '',   // top-level DB column
+      tier,
+    })
+  } catch (err: any) {
+    console.error('[reanalyse] AI error:', err?.message)
+    return NextResponse.json(
+      { success: false, error: err?.message ?? 'AI analysis failed' },
+      { status: 502 }
+    )
+  }
+
+  // ───────────────────────────────
+  // 6. RECOMPUTE SCORED BREAKDOWN
+  // ───────────────────────────────
+  let scoredBreakdown: any
+
+  try {
+    scoredBreakdown = calculateNhsBandScore(aiResult)
+  } catch (err: any) {
+    console.error('[reanalyse] Scoring error:', err?.message)
+    scoredBreakdown = null
+  }
+
+  const result = {
+    ...aiResult,
+    ...(scoredBreakdown ? { scoredBreakdown } : {}),
+  }
+
+  // ───────────────────────────────
+  // 7. UPDATE EXISTING RECORD
+  //    Only result is updated —
+  //    all original job data, cv,
+  //    and statement are preserved
+  // ───────────────────────────────
+  try {
+    await prisma.analysis.update({
+      where: { id },
+      data:  { result },
+    })
+  } catch (err: any) {
+    console.error('[reanalyse] DB update error:', err?.message)
+    return NextResponse.json(
+      { success: false, error: 'Failed to save updated result' },
+      { status: 500 }
+    )
+  }
+
+  return NextResponse.json({ success: true })
 }
