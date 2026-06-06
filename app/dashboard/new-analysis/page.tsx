@@ -1,13 +1,19 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { ChevronRight, ChevronLeft, Sparkles, CheckCircle2, ArrowLeft } from 'lucide-react'
+import { ChevronRight, ChevronLeft, Sparkles, CheckCircle2, ArrowLeft, Upload, X, FileText } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type ExtractionStatus = 'idle' | 'extracting' | 'success' | 'error'
+
+interface UploadedFile {
+  name: string
+  base64: string
+  mimeType: string
+}
 
 interface FormData {
   sourceUrl: string
@@ -45,6 +51,106 @@ function Field({
   )
 }
 
+// ─── File Upload Zone ─────────────────────────────────────────────────────────
+
+function FileUploadZone({
+  label,
+  hint,
+  file,
+  onFile,
+  onClear,
+}: {
+  label: string
+  hint?: string
+  file: UploadedFile | null
+  onFile: (f: UploadedFile) => void
+  onClear: () => void
+}) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [dragging, setDragging] = useState(false)
+
+  const ACCEPTED = [
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'text/plain',
+  ]
+  const ACCEPT_ATTR = '.pdf,.docx,.txt'
+
+  const readFile = (f: File) => {
+    if (!ACCEPTED.includes(f.type) && !f.name.endsWith('.docx')) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      onFile({
+        name: f.name,
+        base64: result.split(',')[1],
+        mimeType: f.type || 'application/octet-stream',
+      })
+    }
+    reader.readAsDataURL(f)
+  }
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragging(false)
+    const f = e.dataTransfer.files[0]
+    if (f) readFile(f)
+  }
+
+  return (
+    <div>
+      <div className="mb-1.5">
+        <label className="block text-sm font-semibold text-gray-800">{label}</label>
+        {hint && <p className="text-xs text-gray-400 mt-0.5">{hint}</p>}
+      </div>
+
+      {file ? (
+        <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3">
+          <FileText className="w-5 h-5 text-green-600 shrink-0" />
+          <span className="text-sm text-green-800 font-medium truncate flex-1">{file.name}</span>
+          <button
+            type="button"
+            onClick={onClear}
+            className="text-green-500 hover:text-green-700 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      ) : (
+        <div
+          onClick={() => inputRef.current?.click()}
+          onDragOver={e => { e.preventDefault(); setDragging(true) }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={onDrop}
+          className={`cursor-pointer rounded-lg border-2 border-dashed px-4 py-5 text-center transition-all ${
+            dragging
+              ? 'border-blue-400 bg-blue-50'
+              : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
+          }`}
+        >
+          <Upload className="w-5 h-5 mx-auto mb-1.5 text-gray-400" />
+          <p className="text-sm text-gray-500">
+            <span className="font-medium text-blue-600">Click to upload</span> or drag & drop
+          </p>
+          <p className="text-xs text-gray-400 mt-0.5">PDF, DOCX or TXT</p>
+        </div>
+      )}
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept={ACCEPT_ATTR}
+        className="hidden"
+        onChange={e => {
+          const f = e.target.files?.[0]
+          if (f) readFile(f)
+          e.target.value = ''
+        }}
+      />
+    </div>
+  )
+}
+
 // ─── Step Config ──────────────────────────────────────────────────────────────
 
 const STEPS = [
@@ -63,10 +169,11 @@ export default function NewAnalysisPage() {
   const [loading, setLoading] = useState(false)
   const [extractionStatus, setExtractionStatus] = useState<ExtractionStatus>('idle')
   const [error, setError] = useState<string | null>(null)
-
-  // Prevents the submit button from being clickable the instant step 4 renders,
-  // which would catch the tail-end of the "Next" button click event.
   const [submitReady, setSubmitReady] = useState(false)
+
+  // Uploaded files state
+  const [jobDescFile, setJobDescFile] = useState<UploadedFile | null>(null)
+  const [personSpecFile, setPersonSpecFile] = useState<UploadedFile | null>(null)
 
   useEffect(() => {
     if (step === 4) {
@@ -101,15 +208,16 @@ export default function NewAnalysisPage() {
   const handleNext = () => setStep(s => Math.min(s + 1, 4))
   const handlePrev = () => setStep(s => Math.max(s - 1, 1))
 
-  // Prevent Enter key from submitting on steps 1–3
   const handleKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
-    if (e.key === 'Enter' && step < 4) {
-      e.preventDefault()
-    }
+    if (e.key === 'Enter' && step < 4) e.preventDefault()
   }
 
+  // Determines whether we have enough to attempt extraction
+  const canExtract =
+    !!formData.sourceUrl || !!jobDescFile || !!personSpecFile
+
   const extractFromUrl = async () => {
-    if (!formData.sourceUrl) return
+    if (!canExtract) return
 
     setExtractionStatus('extracting')
     setError(null)
@@ -118,7 +226,11 @@ export default function NewAnalysisPage() {
       const res = await fetch('/api/extract-job', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: formData.sourceUrl }),
+        body: JSON.stringify({
+          url: formData.sourceUrl || undefined,
+          jobDescFile: jobDescFile ?? undefined,
+          personSpecFile: personSpecFile ?? undefined,
+        }),
       })
 
       if (!res.ok) {
@@ -184,48 +296,45 @@ ${formData.sourceUrl}
     }
   }
 
- const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault()
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (step !== 4 || !submitReady) return
 
-  if (step !== 4 || !submitReady) return
+    setLoading(true)
+    setError(null)
 
-  setLoading(true)
-  setError(null)
+    if (!formData.jobTitle || !formData.jobDescription) {
+      setError('Job title and job description are required')
+      setLoading(false)
+      return
+    }
 
-  if (!formData.jobTitle || !formData.jobDescription) {
-    setError('Job title and job description are required')
-    setLoading(false)
-    return
+    try {
+      const res = await fetch('/api/analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildPayload()),
+      })
+
+      const data = await res.json()
+
+      if (data.blocked && data.upgradeRequired) {
+        router.push(`/upgrade?reason=${data.reason}`)
+        return
+      }
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error ?? 'Analysis failed')
+      }
+
+      localStorage.setItem('analysis', JSON.stringify(data))
+      router.push(`/dashboard/analysis/${data.id}`)
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
   }
-
-  try {
-   const res = await fetch('/api/analysis', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify(buildPayload()),
-})
-
-const data = await res.json()
-
-// 🔴 HANDLE UPGRADE BLOCK FIRST
-if (data.blocked && data.upgradeRequired) {
-  router.push(`/upgrade?reason=${data.reason}`)
-  return
-}
-
-if (!res.ok || !data.success) {
-  throw new Error(data.error ?? 'Analysis failed')
-}
-
-    localStorage.setItem('analysis', JSON.stringify(data))
-
-    router.push(`/dashboard/analysis/${data.id}`)
-  } catch (err: any) {
-    setError(err.message)
-  } finally {
-    setLoading(false)
-  }
-}
 
   // ─── Style tokens ──────────────────────────────────────────────────────────
 
@@ -239,7 +348,7 @@ if (!res.ok || !data.success) {
   const AutoFilledBadge = () =>
     extractionStatus === 'success' ? (
       <span className="ml-1 inline-flex items-center gap-1 text-green-600 font-medium">
-        <CheckCircle2 className="w-3 h-3" /> Auto-filled from URL
+        <CheckCircle2 className="w-3 h-3" /> Auto-filled
       </span>
     ) : null
 
@@ -261,7 +370,7 @@ if (!res.ok || !data.success) {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900 tracking-tight">New NHS Job Analysis</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Paste a job URL to auto-fill, or complete the steps manually.
+          Paste a job URL, upload documents, or fill in the steps manually.
         </p>
       </div>
 
@@ -312,78 +421,117 @@ if (!res.ok || !data.success) {
 
       <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="space-y-6">
 
-        {/* ── Step 1: URL ── */}
+        {/* ── Step 1: URL + File Upload ── */}
         {step === 1 && (
           <div className={cardClass}>
             <div>
               <h2 className="font-semibold text-gray-900">Job Source</h2>
               <p className="text-xs text-gray-400 mt-0.5">
-                Paste an NHS Jobs URL to auto-extract the job details.
+                Provide a URL, upload documents, or both — then hit Extract.
               </p>
             </div>
 
+            {/* URL field */}
             <Field
               label="NHS Job URL"
-              hint="Paste the full job listing URL. We'll extract the details automatically."
+              hint="Paste the full job listing URL to auto-extract details."
             >
-              <div className="flex gap-2 mt-1">
-                <input
-                  name="sourceUrl"
-                  type="url"
-                  value={formData.sourceUrl}
-                  onChange={handleInputChange}
-                  className={inputBase}
-                  placeholder="https://www.jobs.nhs.uk/..."
-                />
-                <button
-                  type="button"
-                  onClick={extractFromUrl}
-                  disabled={extractionStatus === 'extracting' || !formData.sourceUrl}
-                  className={`shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                    extractionStatus === 'success'
-                      ? 'bg-green-600 hover:bg-green-700 text-white'
-                      : 'bg-blue-600 hover:bg-blue-700 text-white'
-                  }`}
-                >
-                  {extractionStatus === 'extracting' ? (
-                    <>
-                      <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                      </svg>
-                      Extracting…
-                    </>
-                  ) : extractionStatus === 'success' ? (
-                    <>
-                      <CheckCircle2 className="w-4 h-4" />
-                      Extracted!
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      Extract
-                    </>
-                  )}
-                </button>
-              </div>
-
-              {extractionStatus === 'success' && (
-                <div className="mt-3 flex items-center gap-2 rounded-lg bg-green-50 border border-green-200 px-3 py-2 text-sm text-green-700">
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  <span>
-                    Job details extracted successfully. Review and edit them in the next steps.
-                  </span>
-                </div>
-              )}
+              <input
+                name="sourceUrl"
+                type="url"
+                value={formData.sourceUrl}
+                onChange={handleInputChange}
+                className={inputBase}
+                placeholder="https://www.jobs.nhs.uk/..."
+              />
             </Field>
 
-            <div className="border-t border-dashed border-gray-200 pt-4">
-              <p className="text-xs text-gray-400 text-center">
-                Prefer to fill in manually? Use the <strong>Next</strong> button to skip.
-              </p>
+            {/* Divider */}
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-gray-200" />
+              <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">
+                and / or
+              </span>
+              <div className="flex-1 h-px bg-gray-200" />
             </div>
 
-            
+            {/* File uploads */}
+            <div className="space-y-4">
+              <p className="text-sm font-semibold text-gray-800 -mb-1">Upload Documents</p>
+
+              <FileUploadZone
+                label="Job Description"
+                hint="Upload the job description (PDF, DOCX or TXT)."
+                file={jobDescFile}
+                onFile={setJobDescFile}
+                onClear={() => {
+                  setJobDescFile(null)
+                  setExtractionStatus('idle')
+                }}
+              />
+
+              <FileUploadZone
+                label="Person Specification"
+                hint="Upload the person spec — essentials & desirables will be extracted automatically."
+                file={personSpecFile}
+                onFile={setPersonSpecFile}
+                onClear={() => {
+                  setPersonSpecFile(null)
+                  setExtractionStatus('idle')
+                }}
+              />
+            </div>
+
+            {/* Extract button */}
+            <button
+              type="button"
+              onClick={extractFromUrl}
+              disabled={extractionStatus === 'extracting' || !canExtract}
+              className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                extractionStatus === 'success'
+                  ? 'bg-green-600 hover:bg-green-700 text-white'
+                  : 'bg-blue-600 hover:bg-blue-700 text-white'
+              }`}
+            >
+              {extractionStatus === 'extracting' ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                  Extracting…
+                </>
+              ) : extractionStatus === 'success' ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4" />
+                  Extracted! Click Next to review
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  Extract Job Details
+                </>
+              )}
+            </button>
+
+            {extractionStatus === 'success' && (
+              <div className="flex items-center gap-2 rounded-lg bg-green-50 border border-green-200 px-3 py-2 text-sm text-green-700">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>Details extracted. Review and edit them in the next steps.</span>
+              </div>
+            )}
+
+<div className="border-t border-dashed border-gray-200 pt-4 space-y-1">
+  <p className="text-xs text-gray-500 text-center">
+    <span className="font-semibold text-gray-700">URL is optional</span> if you upload documents above.
+  </p>
+  <p className="text-xs text-gray-400 text-center">
+    You need at least one of: a URL, a Job Description file, or a Person Specification file.
+  </p>
+  <p className="text-xs text-gray-400 text-center">
+    Prefer to fill everything in manually? Hit <strong>Next</strong> to skip this step entirely.
+  </p>
+</div>
           </div>
         )}
 

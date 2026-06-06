@@ -4,6 +4,12 @@ import { grokChatCompletion } from "@/lib/xai";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+interface UploadedFile {
+  name: string;
+  base64: string;
+  mimeType: string;
+}
+
 interface ExtractedJob {
   jobTitle: string;
   band: string;
@@ -31,7 +37,7 @@ const FETCH_TIMEOUT_MS = 10_000;
 const ALLOWED_PROTOCOLS = ["https:", "http:"];
 
 const SYSTEM_PROMPT = `
-You are an NHS job extraction engine. Analyse the provided webpage text and extract structured job listing data.
+You are an NHS job extraction engine. Analyse the provided content and extract structured job listing data.
 
 Return ONLY a valid JSON object with these exact keys — no markdown, no explanation, no preamble:
 {
@@ -104,9 +110,7 @@ async function fetchPageText(url: string): Promise<string> {
 
 function sanitiseJob(raw: unknown): ExtractedJob {
   if (typeof raw !== "object" || raw === null) return { ...EMPTY_JOB };
-
   const obj = raw as Record<string, unknown>;
-
   return Object.fromEntries(
     Object.keys(EMPTY_JOB).map((key) => [
       key,
@@ -116,39 +120,152 @@ function sanitiseJob(raw: unknown): ExtractedJob {
 }
 
 function parseJsonFromLLM(raw: string): ExtractedJob {
-  // Strip markdown code fences if the model wraps its output
   const cleaned = raw
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/, "")
     .trim();
+  return sanitiseJob(JSON.parse(cleaned));
+}
 
-  const parsed = JSON.parse(cleaned);
-  return sanitiseJob(parsed);
+// ─── File-based extraction via Gemini ─────────────────────────────────────────
+
+// ─── File-based extraction via Gemini REST ────────────────────────────────────
+
+async function extractFromFiles(
+  jobDescFile?: UploadedFile,
+  personSpecFile?: UploadedFile
+): Promise<ExtractedJob> {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY is not set");
+  }
+
+  const parts: any[] = [
+    { text: SYSTEM_PROMPT + "\n\nExtract from the uploaded document(s) below:" },
+  ];
+
+  if (jobDescFile) {
+    parts.push({
+      inlineData: { mimeType: jobDescFile.mimeType, data: jobDescFile.base64 },
+    });
+    parts.push({ text: "The document above is the Job Description." });
+  }
+
+  if (personSpecFile) {
+    parts.push({
+      inlineData: { mimeType: personSpecFile.mimeType, data: personSpecFile.base64 },
+    });
+    parts.push({ text: "The document above is the Person Specification." });
+  }
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts }],
+        generationConfig: {
+          temperature: 0,
+          maxOutputTokens: 4000,
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+      }),
+    }
+  );
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Gemini file extraction failed: ${err}`);
+  }
+
+  const data = await res.json();
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+  if (!text) throw new Error("Gemini returned empty response for file extraction");
+
+  return parseJsonFromLLM(text);
 }
 
 // ─── Route Handler ────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
-  // 1. Parse & validate request body
-  let url: string;
+  // 1. Parse request body
+  let body: {
+    url?: string;
+    jobDescFile?: UploadedFile;
+    personSpecFile?: UploadedFile;
+  };
+
   try {
-    ({ url } = await req.json());
+    body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  if (!url || typeof url !== "string") {
-    return NextResponse.json({ error: "url field is required" }, { status: 400 });
+  const { url, jobDescFile, personSpecFile } = body;
+
+  // 2. Must have at least one source
+  const hasUrl = !!url && typeof url === "string";
+  const hasFiles = !!jobDescFile || !!personSpecFile;
+
+  if (!hasUrl && !hasFiles) {
+    return NextResponse.json(
+      {
+        error:
+          "Please provide at least one source: a job URL, a Job Description file, or a Person Specification file.",
+      },
+      { status: 400 }
+    );
   }
 
-  if (!isValidUrl(url)) {
-    return NextResponse.json({ error: "url is not a valid http/https URL" }, { status: 400 });
+  // 3a. File-based path — if files provided, use Gemini directly
+  if (hasFiles) {
+    let job: ExtractedJob;
+    try {
+      job = await extractFromFiles(jobDescFile, personSpecFile);
+    } catch (err: any) {
+      return NextResponse.json(
+        { error: `File extraction failed: ${err.message}` },
+        { status: 502 }
+      );
+    }
+
+    // If a URL was also given, scrape it and merge (files take priority for their fields)
+    if (hasUrl) {
+      try {
+        if (!isValidUrl(url!)) throw new Error("Invalid URL");
+        const pageText = await fetchPageText(url!);
+        const rawContent = await grokChatCompletion([
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: pageText },
+        ]);
+        const urlJob = parseJsonFromLLM(rawContent);
+
+        // Merge: file fields win; URL fills any gaps left empty
+        const merged: ExtractedJob = {} as ExtractedJob;
+        for (const key of Object.keys(EMPTY_JOB) as (keyof ExtractedJob)[]) {
+          merged[key] = job[key] || urlJob[key] || "";
+        }
+        return NextResponse.json(merged);
+      } catch {
+        // URL scrape failed — just return what we got from files
+        return NextResponse.json(job);
+      }
+    }
+
+    return NextResponse.json(job);
   }
 
-  // 2. Scrape
+  // 3b. URL-only path (original flow)
+  if (!isValidUrl(url!)) {
+    return NextResponse.json(
+      { error: "URL is not a valid http/https address" },
+      { status: 400 }
+    );
+  }
+
   let pageText: string;
   try {
-    pageText = await fetchPageText(url);
+    pageText = await fetchPageText(url!);
   } catch (err: any) {
     const timedOut = err?.name === "AbortError";
     return NextResponse.json(
@@ -157,7 +274,6 @@ export async function POST(req: Request) {
     );
   }
 
-  // 3. Extract with LLM
   let rawContent: string;
   try {
     rawContent = await grokChatCompletion([
@@ -171,7 +287,6 @@ export async function POST(req: Request) {
     );
   }
 
-  // 4. Parse LLM response
   let job: ExtractedJob;
   try {
     job = parseJsonFromLLM(rawContent);

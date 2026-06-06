@@ -135,7 +135,12 @@ async function callGroq(prompt: string, maxTokens: number): Promise<string> {
 
 // ─── Unified caller with fallback ─────────────────────────────────────────────
 
+// ─── Unified caller with fallback ─────────────────────────────────────────────
+
 async function callAI(prompt: string, maxTokens: number): Promise<string> {
+  const estimatedInputTokens = estimateTokens(prompt)
+  const GROQ_INPUT_LIMIT = 8_000 // leave headroom under their 12k TPM limit
+
   // Try Gemini first
   if (process.env.GEMINI_API_KEY) {
     try {
@@ -149,14 +154,19 @@ async function callAI(prompt: string, maxTokens: number): Promise<string> {
     }
   }
 
-  // Fallback to Groq
+  // Fallback to Groq — but only if payload fits
   if (process.env.GROQ_API_KEY) {
+    if (estimatedInputTokens > GROQ_INPUT_LIMIT) {
+      throw new Error(
+        `Payload too large for Groq fallback (estimated ${estimatedInputTokens} input tokens, limit ~${GROQ_INPUT_LIMIT}). ` +
+        `Gemini must be available for large analyses. Check GEMINI_API_KEY.`
+      )
+    }
     return await callGroq(prompt, maxTokens)
   }
 
   throw new Error("No AI provider configured. Set GEMINI_API_KEY or GROQ_API_KEY in .env")
 }
-
 // ─── JSON parsing with repair ─────────────────────────────────────────────────
 
 function parseJSON(raw: string): any {
