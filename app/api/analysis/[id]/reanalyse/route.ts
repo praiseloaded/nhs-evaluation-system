@@ -3,6 +3,7 @@ import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 import { getValidatedAIResult } from '@/modules/ai/retry'
 import { calculateNhsBandScore } from '@/lib/scoring/calculate-overall-score'
+import { detectEvidenceVault } from '@/lib/billing/detect-evidence-vault'
 
 export async function POST(
   req: Request,
@@ -40,6 +41,15 @@ export async function POST(
     tier:      await import('@/lib/billing/tier').then(m => m.getUserTier(record.userId)),
   }
 
+  const evidenceVault = await detectEvidenceVault({
+  cv:                record.cv                ?? "",
+  statement:         record.statement         ?? "",
+  jobDescription:    record.jobDescription    ?? "",
+  essentialCriteria: record.essentialCriteria ?? "",
+  desirableCriteria: record.desirableCriteria ?? "",
+  personSpec:        record.personSpec        ?? "",
+})
+
   // 3. Re-run AI
   let aiResult: any
   try {
@@ -50,7 +60,7 @@ export async function POST(
 
   // 4. Recompute scored breakdown
   const scoredBreakdown = calculateNhsBandScore(aiResult)
-  const result = { ...aiResult, scoredBreakdown }
+  const result = { ...aiResult, scoredBreakdown, evidenceVault }
 
   // 5. Update the existing record — preserve all original fields, only update result
   await prisma.analysis.update({

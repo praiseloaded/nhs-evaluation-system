@@ -5,6 +5,7 @@ import { DimensionPanel } from '@/components/dimension-panel'
 import { InsightsPanel }  from '@/components/insights-panel'
 import { PremiumGate }    from '@/components/premium-gate'
 import { ReanalyseButton } from '@/components/reanalyse-button'
+import { ShortlistPopupTrigger } from '@/components/shortlisting/ShortlistPopupTrigger' // ← NEW
 import {
   BookOpen, Target, Heart, Pen, Zap,
   CheckCircle2, XCircle, MinusCircle,
@@ -143,10 +144,11 @@ export default async function AnalysisPage({ params }: Params) {
   const { analysis, isPro } = data
   const result = analysis.result ?? {}
 
-  const isIncomplete =
-    !result.bandCoaching ||
-    !result.rejectionRisk?.gates?.length ||
-    (result.nhsValues?.length ?? 0) < 5
+  // ── Detect if popup should auto-open ──────────────────────────────────────
+  // We can't read searchParams in a server component without passing them in,
+  // so we pass showOnMount=true always and let the client component check the URL.
+  // Cost: negligible — the client component renders null if no trigger param found.
+  const showOnMount = true
 
   const scored     = result.scoredBreakdown ?? null
   const dimensions = buildDimensionScores(result, scored)
@@ -170,6 +172,14 @@ export default async function AnalysisPage({ params }: Params) {
     <div className="min-h-screen bg-background">
       <Navbar />
 
+      {/* ── Popup trigger — mounts invisibly, fires when ?new=1 or ?reanalysed=1 ── */}
+      <ShortlistPopupTrigger
+        analysisId={analysis.id}
+        result={result}
+        isPro={isPro}
+        showOnMount={showOnMount}
+      />
+
       <main className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-10 space-y-10">
 
         {/* ── Breadcrumb ── */}
@@ -181,11 +191,35 @@ export default async function AnalysisPage({ params }: Params) {
           <span className="text-foreground font-medium truncate max-w-xs">{analysis.jobTitle || 'Untitled'}</span>
         </div>
 
-        {/* ── Re-analyse banner ── */}
-        {isIncomplete && <ReanalyseButton analysisId={analysis.id} />}
+        {/* ── Re-analyse banner — only shown if user triggers a failed reanalysis ── */}
+        <ReanalyseButton analysisId={analysis.id} />
 
         {/* ── Score header ── */}
         <ScoreHeader analysis={analysis} isPro={isPro} />
+
+        <div className="flex flex-wrap gap-3">
+          <Link
+            href={`/dashboard/analysis/${analysis.id}/recruiter-sim`}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-700 transition-colors"
+          >
+            <Zap className="w-4 h-4 text-amber-400" />
+            Open Recruiter Simulator™
+          </Link>
+          <Link
+            href={`/dashboard/analysis/${analysis.id}/report`}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
+          >
+            <FileText className="w-4 h-4" />
+            Generate Report
+          </Link>
+          <Link
+            href={`/dashboard/analysis/${analysis.id}/summary`}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-800 text-sm font-semibold hover:bg-gray-50 transition-colors"
+          >
+            <BookOpen className="w-4 h-4" />
+            Generate Summary
+          </Link>
+        </div>
 
         {/* ── Meta strip ── */}
         <div className="flex flex-wrap gap-3">

@@ -6,6 +6,7 @@ import { getUserTier }           from "@/lib/billing/tier"
 import { sanitizeAnalysisForTier } from "@/lib/billing/sanitize-analysis"
 import { auth }                  from "@/auth"
 import { calculateNhsBandScore } from "@/lib/scoring/calculate-overall-score"
+import { detectEvidenceVault } from "@/lib/billing/detect-evidence-vault"
 
 function normalize(value?: string) {
   return value?.trim() || ""
@@ -103,6 +104,16 @@ export async function POST(req: Request) {
       tier: userTier,
     })
 
+
+    const evidenceVault = await detectEvidenceVault({
+  cv,
+  statement,
+  jobDescription:    combinedJobSpec,
+  essentialCriteria: normalize(body.essentialCriteria),
+  desirableCriteria: normalize(body.desirableCriteria),
+  personSpec:        normalize(body.personSpec),
+})
+
     // ───────────────────────────────
     // 4. ENGINE SCORING
     // ───────────────────────────────
@@ -111,6 +122,7 @@ export async function POST(req: Request) {
     const result = {
       ...aiResult,
       scoredBreakdown,
+        evidenceVault, 
     }
 
     // ───────────────────────────────

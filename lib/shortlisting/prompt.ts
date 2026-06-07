@@ -1,4 +1,8 @@
 // lib/shortlisting/prompt.ts
+// EvidenceVault™ integration — vault context is injected before ASSESSMENT INSTRUCTIONS.
+// The scoring prompt itself is untouched.
+
+import { vaultToPromptContext, type EvidenceVault } from "@/lib/billing/evidence-vault"
 
 export interface ShortlistInput {
   jobTitle: string
@@ -17,6 +21,8 @@ export interface ShortlistInput {
     hasEvidence: boolean
     paragraphScore: number | null
   }>
+  /** Optional — injected from user's EvidenceVault™ store */
+  evidenceVault?: EvidenceVault | null
 }
 
 export function buildShortlistPrompt(input: ShortlistInput): string {
@@ -49,6 +55,12 @@ CV OPTIMISER RESULTS:
 - Clinical Relevance: ${input.cvScore.clinicalRelevance?.score ?? 'N/A'}%
 - Missing Keywords: ${input.cvScore.atsMatch?.criticalMissing?.join(', ') ?? 'None identified'}` : ''
 
+  // ── EvidenceVault™ block ──────────────────────────────────────────────────
+  const vaultBlock = input.evidenceVault
+    ? `\n${vaultToPromptContext(input.evidenceVault)}\n`
+    : ""
+  // ─────────────────────────────────────────────────────────────────────────
+
   return `
 You are a senior NHS shortlisting panel consisting of:
 - A Clinical Lead who assesses clinical competence and patient safety
@@ -70,7 +82,7 @@ DESIRABLE CRITERIA (${desirableCovered}/${desirableCriteria.length} addressed):
 ${desirableList}
 ${existingScores}
 ${cvScoreInfo}
-
+${vaultBlock}
 CANDIDATE'S CV:
 ${(input.cvText ?? 'No CV provided').slice(0, 3000)}
 
