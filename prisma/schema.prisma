@@ -27,6 +27,10 @@ model User {
   interviews    Interview[]
   applications  Application[]
 
+
+stripeCustomerId     String?
+stripeSubscriptionId String?
+
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }

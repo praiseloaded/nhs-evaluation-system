@@ -1,40 +1,41 @@
-import { stripe } from "@/lib/stripe"
-import { auth } from "@/auth"
+// app/api/stripe/checkout/route.ts
 
-export async function POST() {
+import { auth }   from '@/auth'
+import Stripe     from 'stripe'
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: '2025-05-28.basil',
+})
+
+export async function POST(req: Request) {
   try {
     const session = await auth()
-
     if (!session?.user?.id || !session.user.email) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 })
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // HARDCODED temporarily to debug
-    const baseUrl = "http://localhost:3000"
-
-    console.log("baseUrl:", baseUrl)
-    console.log("priceId:", process.env.STRIPE_PRO_PRICE_ID)
+    const { priceId } = await req.json()
 
     const checkout = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      payment_method_types: ["card"],
-      customer_email: session.user.email,
+      mode:               'subscription',
+      payment_method_types: ['card'],
+      customer_email:     session.user.email,
       line_items: [
         {
-          price: process.env.STRIPE_PRO_PRICE_ID!,
+          price:    priceId ?? process.env.STRIPE_PRO_PRICE_ID!,
           quantity: 1,
         },
       ],
-      success_url: `${baseUrl}/dashboard?upgrade=success`,
-      cancel_url: `${baseUrl}/upgrade?canceled=true`,
+      metadata: {
+        userId: session.user.id,
+      },
+      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/upgrade/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url:  `${process.env.NEXT_PUBLIC_APP_URL}/upgrade?cancelled=1`,
     })
 
-    return Response.json({ success: true, url: checkout.url })
-  } catch (error: any) {
-    console.error("Stripe error:", error)
-    return Response.json(
-      { error: error.message || "Stripe error" },
-      { status: 500 }
-    )
+    return Response.json({ url: checkout.url })
+  } catch (err: any) {
+    console.error('[stripe/checkout]', err)
+    return Response.json({ error: err.message }, { status: 500 })
   }
 }

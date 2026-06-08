@@ -1,23 +1,22 @@
-import { AlertTriangle }  from 'lucide-react'
 import { Navbar }         from '@/components/navbar'
 import { ScoreHeader }    from '@/components/score-header'
 import { DimensionPanel } from '@/components/dimension-panel'
 import { InsightsPanel }  from '@/components/insights-panel'
 import { PremiumGate }    from '@/components/premium-gate'
-import { ReanalyseButton } from '@/components/reanalyse-button'
-import { ShortlistPopupTrigger } from '@/components/shortlisting/ShortlistPopupTrigger' // ← NEW
+import { ReanalyseButton }       from '@/components/reanalyse-button'
+import { ShortlistPopupTrigger } from '@/components/shortlisting/ShortlistPopupTrigger'
+import { AnalysisTabs }          from '@/components/AnalysisTabs'
 import {
   BookOpen, Target, Heart, Pen, Zap,
   CheckCircle2, XCircle, MinusCircle,
   ChevronRight, Stethoscope, FileText,
   Award, Shield
 } from 'lucide-react'
-import Link               from 'next/link'
-import { notFound }       from 'next/navigation'
+import Link             from 'next/link'
+import { notFound }     from 'next/navigation'
 import { buildDimensionScores } from '@/lib/types'
-import type { AnalysisResult, ScoredBreakdown } from '@/lib/types'
-import { auth }           from '@/auth'
-import { prisma }         from '@/lib/prisma'
+import { auth }         from '@/auth'
+import { prisma }       from '@/lib/prisma'
 import { getUserTier }             from '@/lib/billing/tier'
 import { sanitizeAnalysisForTier } from '@/lib/billing/sanitize-analysis'
 import { calculateNhsBandScore }   from '@/lib/scoring/calculate-overall-score'
@@ -44,35 +43,40 @@ function normalizeRecommendations(recs: any[]): string[] {
   })
 }
 
-async function getAnalysis(id: string, userId: string): Promise<{ analysis: Analysis; isPro: boolean } | null> {
+async function getAnalysis(id: string, userId: string) {
   try {
     const record = await prisma.analysis.findUnique({ where: { id } })
-    if (!record) return null
-    if (record.userId !== userId) return null
+    if (!record || record.userId !== userId) return null
 
     const raw = (record.result as any) ?? {}
-
     if (!raw.scoredBreakdown && raw.breakdown) {
       raw.scoredBreakdown = calculateNhsBandScore(raw)
     }
-
     if (Array.isArray(raw.recommendations)) {
       raw.recommendations = normalizeRecommendations(raw.recommendations)
     }
 
     const userTier = await getUserTier(userId)
-    const tier = userTier === 'pro' ? 'pro' : 'free'
-    const filteredResult = sanitizeAnalysisForTier(raw, tier)
+    const tier     = userTier === 'pro' ? 'pro' : 'free'
+    const filtered = sanitizeAnalysisForTier(raw, tier)
 
     return {
       analysis: {
         id:             record.id,
-        jobTitle:       record.jobTitle ?? '',
-        jobDescription: record.jobDescription ?? '',
-        band:           (record as any).band ?? null,
+        jobTitle:       record.jobTitle          ?? '',
+        jobDescription: record.jobDescription    ?? '',
+        band:           (record as any).band     ?? null,
         location:       (record as any).location ?? null,
         createdAt:      record.createdAt,
-        result:         filteredResult,
+        result:         filtered,
+      },
+      // Raw record fields needed by BandMatchTab
+      record: {
+        essentialCriteria: record.essentialCriteria ?? '',
+        desirableCriteria: record.desirableCriteria ?? '',
+        personSpec:        record.personSpec        ?? '',
+        jobDescription:    record.jobDescription    ?? '',
+        band:              (record as any).band     ?? null,
       },
       isPro: tier === 'pro',
     }
@@ -82,28 +86,14 @@ async function getAnalysis(id: string, userId: string): Promise<{ analysis: Anal
   }
 }
 
-// ─── Status icon helper ───────────────────────────────────────────────────────
-
 function CriterionStatusIcon({ status }: { status: string }) {
-  if (status === 'met')
-    return <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-  if (status === 'partially met')
-    return <MinusCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+  if (status === 'met')           return <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+  if (status === 'partially met') return <MinusCircle  className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
   return <XCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
 }
 
-// ─── Section wrapper ──────────────────────────────────────────────────────────
-
-function Section({
-  label,
-  badge,
-  badgeColor = 'blue',
-  children,
-}: {
-  label: string
-  badge?: string
-  badgeColor?: 'blue' | 'green' | 'purple' | 'amber'
-  children: React.ReactNode
+function Section({ label, badge, badgeColor = 'blue', children }: {
+  label: string; badge?: string; badgeColor?: 'blue'|'green'|'purple'|'amber'; children: React.ReactNode
 }) {
   const badgeStyles = {
     blue:   'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800',
@@ -111,13 +101,10 @@ function Section({
     purple: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800',
     amber:  'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800',
   }
-
   return (
     <section>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-bold uppercase tracking-widest text-foreground/50">
-          {label}
-        </h2>
+        <h2 className="text-sm font-bold uppercase tracking-widest text-foreground/50">{label}</h2>
         {badge && (
           <span className={`text-[10px] font-semibold uppercase tracking-wider border px-2.5 py-1 rounded-full ${badgeStyles[badgeColor]}`}>
             {badge}
@@ -129,11 +116,8 @@ function Section({
   )
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
 export default async function AnalysisPage({ params }: Params) {
-  const { id } = await params
-
+  const { id }  = await params
   const session = await auth()
   if (!session?.user?.id) notFound()
 
@@ -141,14 +125,8 @@ export default async function AnalysisPage({ params }: Params) {
   const data   = await getAnalysis(id, userId)
   if (!data) notFound()
 
-  const { analysis, isPro } = data
+  const { analysis, record, isPro } = data
   const result = analysis.result ?? {}
-
-  // ── Detect if popup should auto-open ──────────────────────────────────────
-  // We can't read searchParams in a server component without passing them in,
-  // so we pass showOnMount=true always and let the client component check the URL.
-  // Cost: negligible — the client component renders null if no trigger param found.
-  const showOnMount = true
 
   const scored     = result.scoredBreakdown ?? null
   const dimensions = buildDimensionScores(result, scored)
@@ -172,17 +150,16 @@ export default async function AnalysisPage({ params }: Params) {
     <div className="min-h-screen bg-background">
       <Navbar />
 
-      {/* ── Popup trigger — mounts invisibly, fires when ?new=1 or ?reanalysed=1 ── */}
       <ShortlistPopupTrigger
         analysisId={analysis.id}
         result={result}
         isPro={isPro}
-        showOnMount={showOnMount}
+        showOnMount={true}
       />
 
-      <main className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-10 space-y-10">
+      <main className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-10 space-y-8">
 
-        {/* ── Breadcrumb ── */}
+        {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Link href="/dashboard/saved-analyses" className="hover:text-foreground transition-colors">
             Analyses
@@ -191,12 +168,13 @@ export default async function AnalysisPage({ params }: Params) {
           <span className="text-foreground font-medium truncate max-w-xs">{analysis.jobTitle || 'Untitled'}</span>
         </div>
 
-        {/* ── Re-analyse banner — only shown if user triggers a failed reanalysis ── */}
+        {/* Re-analyse error banner */}
         <ReanalyseButton analysisId={analysis.id} />
 
-        {/* ── Score header ── */}
+        {/* Score header */}
         <ScoreHeader analysis={analysis} isPro={isPro} />
 
+        {/* Action buttons */}
         <div className="flex flex-wrap gap-3">
           <Link
             href={`/dashboard/analysis/${analysis.id}/recruiter-sim`}
@@ -206,157 +184,159 @@ export default async function AnalysisPage({ params }: Params) {
             Open Recruiter Simulator™
           </Link>
           <Link
-            href={`/dashboard/analysis/${analysis.id}/report`}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
-          >
-            <FileText className="w-4 h-4" />
-            Generate Report
-          </Link>
-          <Link
             href={`/dashboard/analysis/${analysis.id}/summary`}
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-800 text-sm font-semibold hover:bg-gray-50 transition-colors"
           >
             <BookOpen className="w-4 h-4" />
             Generate Summary
           </Link>
+          {isPro ? (
+            <Link
+              href={`/dashboard/analysis/${analysis.id}/report`}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
+            >
+              <FileText className="w-4 h-4" />
+              Generate Full Report
+            </Link>
+          ) : (
+            <Link
+              href="/upgrade"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-50 text-blue-700 border border-blue-200 text-sm font-semibold hover:bg-blue-100 transition-colors"
+            >
+              <FileText className="w-4 h-4" />
+              Generate Full Report
+              <span className="text-xs bg-blue-600 text-white px-1.5 py-0.5 rounded-full">Pro</span>
+            </Link>
+          )}
         </div>
 
-        {/* ── Meta strip ── */}
+        {/* Meta strip */}
         <div className="flex flex-wrap gap-3">
           {analysis.band && (
             <div className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground/70 bg-muted border border-border rounded-full px-3 py-1.5">
-              <Award className="w-3.5 h-3.5" />
-              {analysis.band}
+              <Award className="w-3.5 h-3.5" />{analysis.band}
             </div>
           )}
           {analysis.location && (
             <div className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground/70 bg-muted border border-border rounded-full px-3 py-1.5">
-              <Stethoscope className="w-3.5 h-3.5" />
-              {analysis.location}
+              <Stethoscope className="w-3.5 h-3.5" />{analysis.location}
             </div>
           )}
           <div className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground/70 bg-muted border border-border rounded-full px-3 py-1.5">
-            <FileText className="w-3.5 h-3.5" />
-            Analysed {createdAt}
+            <FileText className="w-3.5 h-3.5" />Analysed {createdAt}
           </div>
           {result.statementScan?.wordCount > 0 && (
             <div className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground/70 bg-muted border border-border rounded-full px-3 py-1.5">
-              <Shield className="w-3.5 h-3.5" />
-              {result.statementScan.wordCount} words in statement
+              <Shield className="w-3.5 h-3.5" />{result.statementScan.wordCount} words in statement
             </div>
           )}
         </div>
 
-        {/* ── Criteria analysis ── */}
-        <Section label="Criteria Breakdown" badge="Essential & Desirable" badgeColor="blue">
-          <div className="grid md:grid-cols-2 gap-6">
+        {/* ── Tabbed content ── */}
+        <AnalysisTabs
+          analysisId={analysis.id}
+          isPro={isPro}
+          jobTitle={analysis.jobTitle}
+          result={result}
+          record={record}
+        >
+          {/* ── Tab 1 content: existing analysis sections ── */}
 
-            {/* Essential */}
-            <div className="rounded-xl border border-border bg-card overflow-hidden">
-              <div className="px-4 py-3 border-b border-border bg-muted/40 flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-foreground/60">Essential</span>
-                <span className="text-xs text-muted-foreground">
-                  {essentialCriteria.filter((c: any) => c.status === 'met').length} of {essentialCriteria.length} met
-                </span>
-              </div>
-              <ul className="divide-y divide-border">
-                {essentialCriteria.length > 0 ? essentialCriteria.map((c: any, i: number) => (
-                  <li key={i} className="flex items-start gap-3 px-4 py-3">
-                    <CriterionStatusIcon status={c.status} />
-                    <span className="text-sm text-foreground/80 leading-snug">{c.criterion}</span>
-                  </li>
-                )) : (
-                  <li className="px-4 py-4 text-sm text-muted-foreground">None recorded</li>
-                )}
-              </ul>
-            </div>
-
-            {/* Desirable */}
-            <div className="rounded-xl border border-border bg-card overflow-hidden">
-              <div className="px-4 py-3 border-b border-border bg-muted/40 flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-foreground/60">Desirable</span>
-                <span className="text-xs text-muted-foreground">
-                  {desirableCriteria.filter((c: any) => c.status === 'met').length} of {desirableCriteria.length} met
-                </span>
-              </div>
-              <ul className="divide-y divide-border">
-                {desirableCriteria.length > 0 ? desirableCriteria.map((c: any, i: number) => (
-                  <li key={i} className="flex items-start gap-3 px-4 py-3">
-                    <CriterionStatusIcon status={c.status} />
-                    <span className="text-sm text-foreground/80 leading-snug">{c.criterion}</span>
-                  </li>
-                )) : (
-                  <li className="px-4 py-4 text-sm text-muted-foreground">None recorded</li>
-                )}
-              </ul>
-            </div>
-          </div>
-
-          {/* Legend */}
-          <div className="mt-3 flex items-center gap-5 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> Met</span>
-            <span className="flex items-center gap-1.5"><MinusCircle  className="w-3.5 h-3.5 text-amber-400"   /> Partially met</span>
-            <span className="flex items-center gap-1.5"><XCircle      className="w-3.5 h-3.5 text-red-400"     /> Not met</span>
-          </div>
-        </Section>
-
-        {/* ── Skills & Values ── */}
-        <Section label="Keywords & Values" badgeColor="green">
-          <div className="grid md:grid-cols-2 gap-6">
-
-            <div className="rounded-xl border border-border bg-card p-5 space-y-3">
-              <p className="text-xs font-bold uppercase tracking-wider text-foreground/50">Skills Detected</p>
-              {skillLines.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {skillLines.map((skill: string, i: number) => (
-                    <span key={i} className="px-2.5 py-1 rounded-md bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-xs font-medium">
-                      {skill}
-                    </span>
-                  ))}
+          <Section label="Criteria Breakdown" badge="Essential & Desirable" badgeColor="blue">
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="rounded-xl border border-border bg-card overflow-hidden">
+                <div className="px-4 py-3 border-b border-border bg-muted/40 flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-foreground/60">Essential</span>
+                  <span className="text-xs text-muted-foreground">
+                    {essentialCriteria.filter((c: any) => c.status === 'met').length} of {essentialCriteria.length} met
+                  </span>
                 </div>
-              ) : <p className="text-sm text-muted-foreground">None detected</p>}
-            </div>
-
-            <div className="rounded-xl border border-border bg-card p-5 space-y-3">
-              <p className="text-xs font-bold uppercase tracking-wider text-foreground/50">NHS Values Demonstrated</p>
-              {valueLines.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {valueLines.map((v: string, i: number) => (
-                    <span key={i} className="px-2.5 py-1 rounded-md bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs font-medium">
-                      {v}
-                    </span>
-                  ))}
+                <ul className="divide-y divide-border">
+                  {essentialCriteria.length > 0 ? essentialCriteria.map((c: any, i: number) => (
+                    <li key={i} className="flex items-start gap-3 px-4 py-3">
+                      <CriterionStatusIcon status={c.status} />
+                      <span className="text-sm text-foreground/80 leading-snug">{c.criterion}</span>
+                    </li>
+                  )) : <li className="px-4 py-4 text-sm text-muted-foreground">None recorded</li>}
+                </ul>
+              </div>
+              <div className="rounded-xl border border-border bg-card overflow-hidden">
+                <div className="px-4 py-3 border-b border-border bg-muted/40 flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-foreground/60">Desirable</span>
+                  <span className="text-xs text-muted-foreground">
+                    {desirableCriteria.filter((c: any) => c.status === 'met').length} of {desirableCriteria.length} met
+                  </span>
                 </div>
-              ) : <p className="text-sm text-muted-foreground">None detected</p>}
+                <ul className="divide-y divide-border">
+                  {desirableCriteria.length > 0 ? desirableCriteria.map((c: any, i: number) => (
+                    <li key={i} className="flex items-start gap-3 px-4 py-3">
+                      <CriterionStatusIcon status={c.status} />
+                      <span className="text-sm text-foreground/80 leading-snug">{c.criterion}</span>
+                    </li>
+                  )) : <li className="px-4 py-4 text-sm text-muted-foreground">None recorded</li>}
+                </ul>
+              </div>
             </div>
-          </div>
-        </Section>
+            <div className="mt-3 flex items-center gap-5 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> Met</span>
+              <span className="flex items-center gap-1.5"><MinusCircle  className="w-3.5 h-3.5 text-amber-400"   /> Partially met</span>
+              <span className="flex items-center gap-1.5"><XCircle      className="w-3.5 h-3.5 text-red-400"     /> Not met</span>
+            </div>
+          </Section>
 
-        {/* ── Free dimensions ── */}
-        <Section label="Evaluation Dimensions" badge="Included" badgeColor="green">
-          <div className="grid sm:grid-cols-2 gap-4">
-            {dimCriteria && <DimensionPanel dimension={dimCriteria} icon={<Target className="w-4 h-4" />} />}
-            {dimValues   && <DimensionPanel dimension={dimValues}   icon={<Heart  className="w-4 h-4" />} />}
-          </div>
-        </Section>
+          <Section label="Keywords & Values" badgeColor="green">
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="rounded-xl border border-border bg-card p-5 space-y-3">
+                <p className="text-xs font-bold uppercase tracking-wider text-foreground/50">Skills Detected</p>
+                {skillLines.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {skillLines.map((skill: string, i: number) => (
+                      <span key={i} className="px-2.5 py-1 rounded-md bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-xs font-medium">
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                ) : <p className="text-sm text-muted-foreground">None detected</p>}
+              </div>
+              <div className="rounded-xl border border-border bg-card p-5 space-y-3">
+                <p className="text-xs font-bold uppercase tracking-wider text-foreground/50">NHS Values Demonstrated</p>
+                {valueLines.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {valueLines.map((v: string, i: number) => (
+                      <span key={i} className="px-2.5 py-1 rounded-md bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs font-medium">
+                        {v}
+                      </span>
+                    ))}
+                  </div>
+                ) : <p className="text-sm text-muted-foreground">None detected</p>}
+              </div>
+            </div>
+          </Section>
 
-        {/* ── Pro dimensions ── */}
-        <Section label="Advanced Dimensions" badge="Pro" badgeColor="purple">
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <PremiumGate label="STAR structure analysis" reason="star" isPro={isPro}>
-              {dimStar     && <DimensionPanel dimension={dimStar}     icon={<Zap      className="w-4 h-4" />} />}
-            </PremiumGate>
-            <PremiumGate label="Language mirroring" reason="language" isPro={isPro}>
-              {dimLanguage && <DimensionPanel dimension={dimLanguage} icon={<Pen      className="w-4 h-4" />} />}
-            </PremiumGate>
-            <PremiumGate label="Specificity analysis" reason="specificity" isPro={isPro}>
-              {dimDetail   && <DimensionPanel dimension={dimDetail}   icon={<BookOpen className="w-4 h-4" />} />}
-            </PremiumGate>
-          </div>
-        </Section>
+          <Section label="Evaluation Dimensions" badge="Included" badgeColor="green">
+            <div className="grid sm:grid-cols-2 gap-4">
+              {dimCriteria && <DimensionPanel dimension={dimCriteria} icon={<Target className="w-4 h-4" />} />}
+              {dimValues   && <DimensionPanel dimension={dimValues}   icon={<Heart  className="w-4 h-4" />} />}
+            </div>
+          </Section>
 
-        {/* ── Insights ── */}
-        <InsightsPanel analysis={analysis} isPro={isPro} />
+          <Section label="Advanced Dimensions" badge="Pro" badgeColor="purple">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <PremiumGate label="STAR structure analysis" reason="star" isPro={isPro}>
+                {dimStar     && <DimensionPanel dimension={dimStar}     icon={<Zap      className="w-4 h-4" />} />}
+              </PremiumGate>
+              <PremiumGate label="Language mirroring" reason="language" isPro={isPro}>
+                {dimLanguage && <DimensionPanel dimension={dimLanguage} icon={<Pen      className="w-4 h-4" />} />}
+              </PremiumGate>
+              <PremiumGate label="Specificity analysis" reason="specificity" isPro={isPro}>
+                {dimDetail   && <DimensionPanel dimension={dimDetail}   icon={<BookOpen className="w-4 h-4" />} />}
+              </PremiumGate>
+            </div>
+          </Section>
+
+          <InsightsPanel analysis={analysis} isPro={isPro} />
+
+        </AnalysisTabs>
 
       </main>
     </div>
