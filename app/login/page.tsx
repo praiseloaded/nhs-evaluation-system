@@ -1,187 +1,212 @@
-'use client'
+"use client";
 
-import { signIn } from "next-auth/react"
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import Link from "next/link"
-import { Eye, EyeOff, LogIn, AlertCircle } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { signIn } from "next-auth/react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { Eye, EyeOff, LogIn, AlertCircle, Moon, Sun } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
 
-const inp = `
-  w-full bg-[#060D1F] border border-[#1E3A5F] rounded-lg px-3 py-2 text-[13px]
-  text-[#E2EEF9] placeholder:text-[#1E3A5F] outline-none transition-all
-  focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20
-`
+const inputBase =
+  "w-full rounded-xl px-3 py-2 text-sm outline-none transition border " +
+  "bg-white text-gray-900 border-gray-200 placeholder:text-gray-400 " +
+  "focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 " +
+  "dark:bg-[#0B1220] dark:text-white dark:border-[#1E3A5F]";
 
 export default function LoginPage() {
-  const [email,    setEmail]    = useState("")
-  const [password, setPassword] = useState("")
-  const [showPw,   setShowPw]   = useState(false)
-  const [loading,  setLoading]  = useState(false)
-  const [error,    setError]    = useState<string | null>(null)
-  const router = useRouter()
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleCredentialsLogin = async () => {
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const router = useRouter();
+
+  // ── Theme init ──
+  useEffect(() => {
+    const saved = localStorage.getItem("theme") as "light" | "dark" | null;
+    const initial =
+      saved ?? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+
+    setTheme(initial);
+    document.documentElement.classList.toggle("dark", initial === "dark");
+  }, []);
+
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    localStorage.setItem("theme", next);
+    document.documentElement.classList.toggle("dark", next === "dark");
+  };
+
+  const login = async () => {
     if (!email || !password) {
-      setError("Please enter your email and password.")
-      return
+      setError("Please enter email and password");
+      return;
     }
 
-    setLoading(true)
-    setError(null)
+    setLoading(true);
+    setError(null);
 
     const res = await signIn("credentials", {
       email,
       password,
       redirect: false,
-    })
+    });
 
-    setLoading(false)
+    setLoading(false);
 
     if (res?.error) {
-      setError("Invalid email or password.")
-      return
+      setError("Invalid credentials");
+      return;
     }
 
-    router.push("/dashboard")
-  }
+    router.push("/dashboard");
+  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#060D1F] px-6 py-12">
-      <div className="w-full lg:w-[40%] max-w-md border border-[#1E3A5F] rounded-2xl overflow-hidden">
-        <div className="bg-[#0A1628] px-8 py-10">
+    <div className="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 via-white to-blue-50 dark:from-[#050A16] dark:via-[#060D1F] dark:to-[#050A16] px-6 overflow-hidden">
 
-          {/* Logo */}
-          <div className="flex items-center gap-2 mb-8">
-            <div className="w-7 h-7 rounded-lg bg-[#0D2240] border border-[#2A5080] flex items-center justify-center">
-              <div className="w-2 h-2 rounded-full bg-blue-400" />
+      {/* Background glow (Auth0 style depth) */}
+      <div className="absolute w-[500px] h-[500px] bg-blue-500/10 blur-3xl rounded-full top-[-120px] left-[-120px]" />
+      <div className="absolute w-[400px] h-[400px] bg-indigo-500/10 blur-3xl rounded-full bottom-[-120px] right-[-120px]" />
+
+      {/* Card */}
+      <motion.div
+        initial={{ opacity: 0, y: 20, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.4 }}
+        className="relative w-full max-w-md"
+      >
+        <div className="rounded-2xl border border-gray-200 dark:border-[#1E3A5F] bg-white/80 dark:bg-[#0B1220]/80 backdrop-blur-xl shadow-2xl overflow-hidden">
+
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-[#1E3A5F]">
+            <div className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center shadow-md">
+                <div className="w-2 h-2 bg-white rounded-full" />
+              </div>
+              <span className="font-semibold text-gray-900 dark:text-white">
+                Omni JobReady
+              </span>
             </div>
-            <span className="text-[20px] font-medium text-[#E2EEF9]">Omni JobReady</span>
+
+            {/* Theme toggle */}
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#13213A] transition"
+            >
+              {theme === "dark" ? (
+                <Sun className="w-4 h-4 text-yellow-400" />
+              ) : (
+                <Moon className="w-4 h-4 text-gray-700" />
+              )}
+            </button>
           </div>
 
-          {/* Heading */}
-          <div className="mb-6">
-            <span className="inline-block text-[12px] font-medium tracking-widest text-blue-400 bg-[#0D2240] border border-[#1E4A7A] rounded-full px-3 py-1 mb-3">
-              NHS APPLICATION PLATFORM
-            </span>
-            <h1 className="text-[19px] font-semibold text-[#E2EEF9] mb-4">
-              Welcome back
-            </h1>
-            <p className="text-[14px] text-[#6B8FAE] leading-relaxed">
-              Sign in to your NHS dashboard and continue where you left off.
-            </p>
-          </div>
+          {/* Body */}
+          <div className="p-6 space-y-5">
 
-          {/* Error */}
-          {error && (
-            <div className="flex items-start gap-2 bg-red-950/50 border border-red-800/50 rounded-lg px-3 py-2.5 mb-4 text-[12px] text-red-300">
-              <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-              <span>{error}</span>
+            {/* Title */}
+            <div>
+              <p className="text-xs tracking-widest text-blue-600 dark:text-blue-400 font-semibold">
+                NHS APPLICATION PLATFORM
+              </p>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
+                Welcome back
+              </h1>
+              <p className="text-sm text-gray-500 dark:text-[#7AA2C6] mt-1">
+                Sign in to continue your dashboard
+              </p>
             </div>
-          )}
 
-          <div className="space-y-3">
+            {/* Error */}
+            {error && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="flex items-start gap-2 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl px-3 py-2 text-sm text-red-600 dark:text-red-300"
+              >
+                <AlertCircle className="w-4 h-4 mt-0.5" />
+                {error}
+              </motion.div>
+            )}
 
             {/* Email */}
             <div>
-              <label className="block text-[13px] font-medium text-[#4A6A8A] mb-1.5 tracking-wider">
-                EMAIL ADDRESS
+              <label className="text-xs font-medium text-gray-500 dark:text-[#6B8FAE]">
+                EMAIL
               </label>
               <input
-                type="email"
-                placeholder="jane@nhs.net"
                 value={email}
-                onChange={e => setEmail(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && handleCredentialsLogin()}
-                className={inp}
+                onChange={(e) => setEmail(e.target.value)}
+                className={inputBase}
+                placeholder="jane@nhs.net"
               />
             </div>
 
             {/* Password */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-[13px] font-medium text-[#4A6A8A] tracking-wider">
-                  PASSWORD
-                </label>
-                <Link href="/forgot-password" className="text-[10px] text-blue-400 hover:underline">
-                  Forgot password?
-                </Link>
-              </div>
+              <label className="text-xs font-medium text-gray-500 dark:text-[#6B8FAE]">
+                PASSWORD
+              </label>
+
               <div className="relative">
                 <input
                   type={showPw ? "text" : "password"}
-                  placeholder="••••••••"
                   value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && handleCredentialsLogin()}
-                  className={cn(inp, "pr-10")}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={cn(inputBase, "pr-10")}
+                  placeholder="••••••••"
                 />
+
                 <button
                   type="button"
-                  onClick={() => setShowPw(p => !p)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#2A4A6A] hover:text-[#6B8FAE] transition-colors"
-                  aria-label={showPw ? "Hide password" : "Show password"}
+                  onClick={() => setShowPw(!showPw)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-white"
                 >
-                  {showPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
 
-            {/* Sign in */}
+            {/* Login */}
             <button
-              onClick={handleCredentialsLogin}
+              onClick={login}
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 bg-blue-700
-                         hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed
-                         text-white rounded-lg py-2.5 text-[13px] font-medium
-                         transition-colors mt-1"
+              className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl py-2.5 text-sm font-semibold transition-all active:scale-[0.99]"
             >
-              <LogIn className="w-3.5 h-3.5" />
+              <LogIn className="w-4 h-4" />
               {loading ? "Signing in..." : "Sign in"}
             </button>
 
+            {/* Divider */}
+            <div className="flex items-center gap-3">
+              <div className="h-px bg-gray-200 dark:bg-[#1E3A5F] flex-1" />
+              <span className="text-xs text-gray-400">or</span>
+              <div className="h-px bg-gray-200 dark:bg-[#1E3A5F] flex-1" />
+            </div>
+
+            {/* Google */}
+            <button
+              onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+              className="w-full border border-gray-200 dark:border-[#1E3A5F] rounded-xl py-2.5 text-sm flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-[#13213A] transition"
+            >
+              Continue with Google
+            </button>
+
+            {/* Footer */}
+            <p className="text-center text-xs text-gray-500 dark:text-[#6B8FAE]">
+              Don’t have an account?{" "}
+              <Link href="/register" className="text-blue-600 hover:underline">
+                Create one
+              </Link>
+            </p>
           </div>
-
-          {/* Divider */}
-          <div className="flex items-center gap-3 my-3.5">
-            <div className="flex-1 h-px bg-[#1E3A5F]" />
-            <span className="text-[10px] text-[#2A4A6A]">or</span>
-            <div className="flex-1 h-px bg-[#1E3A5F]" />
-          </div>
-
-          {/* Google */}
-          <button
-            onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
-            className="w-full flex items-center justify-center gap-2 bg-[#060D1F]
-                       border border-[#1E3A5F] hover:bg-[#0D2240] hover:border-[#2A5080]
-                       rounded-lg py-2.5 text-[12px] font-medium text-[#B8D4EC]
-                       transition-all"
-          >
-            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
-              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
-              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-            </svg>
-            Continue with Google
-          </button>
-
-          {/* Footer */}
-          <p className="text-center text-[11px] text-[#4A6A8A] mt-4">
-            Don't have an account?{" "}
-            <Link href="/register" className="text-blue-400 hover:underline">
-              Create one free
-            </Link>
-          </p>
-          <p className="text-center text-[10px] text-[#2A4A6A] mt-2 leading-relaxed">
-            By signing in you agree to our{" "}
-            <Link href="/terms" className="hover:text-blue-400 transition-colors">Terms</Link>
-            {" "}and{" "}
-            <Link href="/privacy" className="hover:text-blue-400 transition-colors">Privacy Policy</Link>
-          </p>
-
         </div>
-      </div>
+      </motion.div>
     </div>
-  )
+  );
 }

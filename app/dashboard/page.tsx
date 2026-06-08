@@ -716,6 +716,12 @@ export default function DashboardPage() {
 
   useEffect(() => { load() }, [load])
 
+  useEffect(() => {
+  const url = new URL(window.location.href)
+  if (url.searchParams.get("login") === "success") {
+    toast.success("Signed in successfully 🎉")
+  }
+}, [])
   const total    = pagination?.total ?? analyses.length
   const avgScore = analyses.length > 0
     ? Math.round(analyses.reduce((acc, a) => acc + deriveScore(a), 0) / analyses.length)

@@ -105,29 +105,41 @@ export default function RegisterPage() {
   const [loading,   setLoading]   = useState(false)
   const [error,     setError]     = useState("")
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setLoading(true)
-    setError("")
-    try {
-      const res = await fetch("/api/auth/register", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
-          name: `${firstName} ${lastName}`,
-          email,
-          password,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Registration failed")
-      router.push("/login?registered=true")
-    } catch (err: any) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
+ async function handleSubmit(e: React.FormEvent) {
+  e.preventDefault()
+  setLoading(true)
+  setError("")
+
+  try {
+    const res = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: `${firstName} ${lastName}`,
+        email,
+        password,
+      }),
+    })
+
+    const data = await res.json()
+
+    if (!res.ok) {
+      throw new Error(data.error || "Registration failed")
     }
+
+    toast.success("Account created successfully 🚀")
+
+    setTimeout(() => {
+      router.push("/login?registered=true")
+    }, 800)
+
+  } catch (err: any) {
+    toast.error(err.message)
+    setError(err.message)
+  } finally {
+    setLoading(false)
   }
+}
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#060D1F] px-6 py-12">
@@ -230,7 +242,7 @@ export default function RegisterPage() {
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPw(p => !p)}
+                  onClick={() => setShowPw(prev => !prev)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-[#2A4A6A] hover:text-[#6B8FAE] transition-colors"
                   aria-label={showPw ? "Hide password" : "Show password"}
                 >
