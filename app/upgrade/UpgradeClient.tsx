@@ -1,191 +1,285 @@
-'use client'
+"use client";
 
-import { Check, X, ShieldCheck, RefreshCw, Users, Lock } from 'lucide-react'
-import { Navbar } from '@/components/navbar'
-import { useSearchParams } from 'next/navigation'
-import { useState } from 'react'
+import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import {
+  CheckCircle2,
+  Zap,
+  Shield,
+  FileText,
+  Mic,
+  BarChart3,
+  BookOpen,
+} from "lucide-react";
 
-// ─── Plans ─────────────────────────────
-
-const freePlan = {
-  label: 'Current',
-  name: 'Free',
-  price: '£0',
-  desc: 'Basic scores and keyword detection to get you started.',
-  included: [
-    'ATS match score',
-    'NHS values analysis',
-    'Missing keywords detection',
-    'Shortlist readiness meter',
-    'NHS role match suggestions',
-    '1 analysis / day',
-  ],
-  excluded: [
-    'Full statement rewrite',
-    'Rejection risk analysis',
-    'Language mirroring',
-    'Interview coach',
-  ],
-}
-
-const proPlan = {
-  label: 'Recommended',
-  name: 'Pro',
-  price: '£14.99',
-  desc: 'Everything you need to get shortlisted — rewrites, analysis, and unlimited scans.',
-  included: [
-    'Everything in Free',
-    'Unlimited analyses',
-    'Full statement rewrite',
-    'Language mirroring',
-    'Rejection risk analysis',
-    'Interview prep AI',
-    'Application tracking',
-  ],
-}
-
-// ─── Feature Row ─────────────────────────
-
-function FeatureRow({
-  text,
-  included,
-  isPro,
-}: {
-  text: string
-  included: boolean
-  isPro?: boolean
-}) {
-  return (
-    <li className="flex items-start gap-2 text-sm">
-      {included ? (
-        <Check className={`w-4 h-4 mt-0.5 ${isPro ? 'text-purple-600' : 'text-green-600'}`} />
-      ) : (
-        <X className="w-4 h-4 mt-0.5 text-muted-foreground/40" />
-      )}
-      <span className={included ? 'text-foreground' : 'text-muted-foreground'}>
-        {text}
-      </span>
-    </li>
-  )
-}
-
-// ─── PAGE ─────────────────────────────
+const PRO_FEATURES = [
+  { icon: FileText, label: "Unlimited analyses" },
+  { icon: BarChart3, label: "Full 7-factor shortlist probability score" },
+  { icon: Shield, label: "Targeted gap recommendations" },
+  { icon: BookOpen, label: "Full PDF report download" },
+  { icon: Mic, label: "NHS Recruiter Simulator™" },
+  { icon: Zap, label: "EvidenceVault™ auto-detection" },
+  { icon: BarChart3, label: "Band coaching & panel chair view" },
+  { icon: Shield, label: "Rejection risk gate analysis" },
+];
 
 export default function UpgradeClient() {
-  const searchParams = useSearchParams()
-  const reason = searchParams.get('reason')
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const cancelled = searchParams.get("cancelled") === "1";
 
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const isLimitReached = reason === 'limit_reached'
+  async function handleUpgrade() {
+    setLoading(true);
+    setError(null);
 
-  const handleUpgrade = async () => {
     try {
-      setLoading(true)
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          priceId: process.env.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID,
+        }),
+      });
 
-      const res = await fetch('/api/billing/upgrade', {
-        method: 'POST',
-      })
+      const data = await res.json();
 
-      const data = await res.json()
-
-      if (!data.success || !data.url) {
-        throw new Error(data.error || 'Stripe checkout failed')
+      if (!res.ok) {
+        throw new Error(data.error ?? "Failed to start checkout");
       }
 
-      window.location.href = data.url
-    } catch (err) {
-      console.error(err)
-      alert('Upgrade failed. Please try again.')
-    } finally {
-      setLoading(false)
+      window.location.href = data.url;
+    } catch (err: any) {
+      setError(err.message);
+      setLoading(false);
     }
   }
 
   return (
-    <div className="min-h-screen bg-muted/40">
-      <Navbar />
+    <div
+      style={{
+        minHeight: "100vh",
+        backgroundColor: "#f9fafb",
+        fontFamily: "system-ui, sans-serif",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "2rem",
+      }}
+    >
+      {cancelled && (
+        <div
+          style={{
+            marginBottom: 20,
+            padding: "10px 20px",
+            backgroundColor: "#fef9c3",
+            border: "1px solid #fde68a",
+            borderRadius: 8,
+            fontSize: 13,
+            color: "#854d0e",
+          }}
+        >
+          Payment cancelled — no charge was made.
+        </div>
+      )}
 
-      <div className="py-16 px-4">
-
+      <div style={{ maxWidth: 460, width: "100%" }}>
         {/* Header */}
-        <div className="text-center mb-10 max-w-md mx-auto">
-          <span className="inline-block text-xs font-medium text-purple-700 bg-purple-50 px-3 py-1 rounded-full mb-4">
-            Plans
-          </span>
+        <div style={{ textAlign: "center", marginBottom: 32 }}>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              backgroundColor: "#dbeafe",
+              padding: "6px 16px",
+              borderRadius: 20,
+              marginBottom: 16,
+            }}
+          >
+            <Zap size={14} color="#1e40af" />
+            <span style={{ fontSize: 13, fontWeight: 600, color: "#1e40af" }}>
+              NHS JobReady AI Pro
+            </span>
+          </div>
 
-          <h1 className="text-2xl font-semibold mb-2">
-            {isLimitReached
-              ? "You've used your free analysis"
-              : "Unlock your full potential"}
+          <h1
+            style={{
+              fontSize: 28,
+              fontWeight: 800,
+              color: "#111827",
+              marginBottom: 8,
+              lineHeight: 1.2,
+            }}
+          >
+            Get shortlisted more often
           </h1>
 
-          <p className="text-sm text-muted-foreground">
-            {isLimitReached
-              ? "Upgrade to continue using AI analysis tools."
-              : "Choose a plan that boosts your NHS application success."}
+          <p style={{ fontSize: 15, color: "#6b7280", lineHeight: 1.6 }}>
+            Full analysis, evidence vault, and every tool you need to compete for NHS roles.
           </p>
         </div>
 
-        {/* Plans */}
-        <div className="grid md:grid-cols-2 gap-4 max-w-4xl mx-auto">
+        {/* Pricing card */}
+        <div
+          style={{
+            backgroundColor: "#fff",
+            border: "1px solid #e5e7eb",
+            borderRadius: 16,
+            overflow: "hidden",
+            boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
+          }}
+        >
+          {/* Price header */}
+          <div
+            style={{
+              background: "linear-gradient(135deg, #1e3a5f 0%, #1e40af 100%)",
+              padding: "32px 32px 24px",
+              textAlign: "center",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 13,
+                color: "#93c5fd",
+                marginBottom: 8,
+                fontWeight: 500,
+                letterSpacing: "0.05em",
+                textTransform: "uppercase",
+              }}
+            >
+              Pro Plan
+            </div>
 
-          {/* Free */}
-          <div className="border rounded-xl p-6 bg-white">
-            <p className="text-sm">{freePlan.name}</p>
-            <p className="text-2xl font-bold">{freePlan.price}</p>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "center",
+                gap: 4,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 20,
+                  color: "#fff",
+                  marginTop: 8,
+                  fontWeight: 500,
+                }}
+              >
+                £
+              </span>
+              <span
+                style={{
+                  fontSize: 52,
+                  fontWeight: 800,
+                  color: "#fff",
+                  lineHeight: 1,
+                }}
+              >
+                9
+              </span>
+              <span style={{ fontSize: 16, color: "#93c5fd", marginTop: 14 }}>
+                /month
+              </span>
+            </div>
 
-            <ul className="mt-4 space-y-2">
-              {freePlan.included.map(f => (
-                <FeatureRow key={f} text={f} included />
-              ))}
-              {freePlan.excluded.map(f => (
-                <FeatureRow key={f} text={f} included={false} />
-              ))}
-            </ul>
-
-            <button disabled className="mt-4 w-full border py-2 rounded-lg text-sm">
-              Current plan
-            </button>
+            <p style={{ fontSize: 13, color: "#93c5fd", marginTop: 8 }}>
+              Cancel anytime · Instant access
+            </p>
           </div>
 
-          {/* Pro */}
-          <div className="border-2 border-purple-500 rounded-xl p-6 bg-white">
-            <p className="text-sm">{proPlan.name}</p>
-            <p className="text-2xl font-bold">{proPlan.price}</p>
-
-            <ul className="mt-4 space-y-2">
-              {proPlan.included.map(f => (
-                <FeatureRow key={f} text={f} included isPro />
+          {/* Features */}
+          <div style={{ padding: "24px 28px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
+              {PRO_FEATURES.map(({ label }) => (
+                <div key={label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div
+                    style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: "50%",
+                      backgroundColor: "#dcfce7",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <CheckCircle2 size={13} color="#15803d" />
+                  </div>
+                  <span style={{ fontSize: 14, color: "#374151" }}>{label}</span>
+                </div>
               ))}
-            </ul>
+            </div>
+
+            {error && (
+              <div
+                style={{
+                  marginBottom: 14,
+                  padding: "10px 14px",
+                  backgroundColor: "#fee2e2",
+                  border: "1px solid #fecaca",
+                  borderRadius: 8,
+                  fontSize: 13,
+                  color: "#991b1b",
+                }}
+              >
+                {error}
+              </div>
+            )}
 
             <button
               onClick={handleUpgrade}
               disabled={loading}
-              className="mt-4 w-full bg-purple-600 text-white py-2 rounded-lg text-sm"
+              style={{
+                width: "100%",
+                padding: "14px",
+                backgroundColor: loading ? "#93c5fd" : "#1e40af",
+                color: "#fff",
+                border: "none",
+                borderRadius: 10,
+                fontSize: 15,
+                fontWeight: 700,
+                cursor: loading ? "not-allowed" : "pointer",
+              }}
             >
-              {loading ? 'Redirecting...' : 'Upgrade with Stripe'}
+              {loading ? "Redirecting to checkout…" : "Upgrade to Pro — £9/month"}
             </button>
+
+            <p
+              style={{
+                fontSize: 12,
+                color: "#9ca3af",
+                textAlign: "center",
+                marginTop: 12,
+              }}
+            >
+              Secured by Stripe · No hidden fees
+            </p>
           </div>
         </div>
 
-        {/* Trust */}
-        <div className="grid md:grid-cols-4 gap-3 max-w-4xl mx-auto mt-10 text-center">
-          {[
-            { icon: ShieldCheck, t: 'Secure payments' },
-            { icon: RefreshCw, t: 'Instant access' },
-            { icon: Users, t: 'Built for NHS' },
-            { icon: Lock, t: 'Data protected' },
-          ].map(({ icon: Icon, t }) => (
-            <div key={t} className="border rounded-lg p-4">
-              <Icon className="mx-auto mb-2 text-purple-600" />
-              <p className="text-sm">{t}</p>
-            </div>
-          ))}
+        {/* Back */}
+        <div style={{ textAlign: "center", marginTop: 20 }}>
+          <button
+            onClick={() => router.back()}
+            style={{
+              fontSize: 13,
+              color: "#6b7280",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              textDecoration: "underline",
+            }}
+          >
+            ← Go back
+          </button>
         </div>
-
       </div>
     </div>
-  )
+  );
 }
