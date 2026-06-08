@@ -7,7 +7,7 @@ import {
   TrendingUp, Target, BarChart3, Lock,
   ShieldAlert, AlertTriangle, CheckCircle2,
   Users, Wifi, WifiOff, Sparkles,
-  ChevronRight, Activity,
+  ChevronRight, Activity, ArrowUpRight,
 } from 'lucide-react'
 import { useSession } from 'next-auth/react'
 
@@ -123,33 +123,92 @@ function resolveVerdict(score: number, verdict?: Verdict | null): string {
   return 'reject'
 }
 
+// ─── Verdict configuration ─────────────────────────────────────────────────────
+
 const VERDICT_CONFIG: Record<string, {
   label: string
   pill: string
-  accent: string
-  bar: string
+  ringColor: string
+  ringTrack: string
+  glowColor: string
+  scoreGradientStart: string
+  scoreGradientEnd: string
+  accentBorder: string
+  badgeBg: string
+  badgeText: string
   dot: string
-  ring: string
-  scoreColor: string
+  bar: string
 }> = {
-  strong:      { label: 'Strong',      pill: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300', accent: 'bg-emerald-400', bar: 'bg-emerald-400', dot: 'bg-emerald-400', ring: 'ring-emerald-200',  scoreColor: 'text-emerald-600' },
-  competitive: { label: 'Competitive', pill: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',             accent: 'bg-blue-400',    bar: 'bg-blue-400',    dot: 'bg-blue-400',    ring: 'ring-blue-200',     scoreColor: 'text-blue-600'    },
-  weak:        { label: 'Needs Work',  pill: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',         accent: 'bg-amber-400',   bar: 'bg-amber-400',   dot: 'bg-amber-400',   ring: 'ring-amber-200',    scoreColor: 'text-amber-600'   },
-  reject:      { label: 'At Risk',     pill: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',                 accent: 'bg-red-400',     bar: 'bg-red-400',     dot: 'bg-red-400',     ring: 'ring-red-200',      scoreColor: 'text-red-600'     },
+  strong: {
+    label: 'Strong',
+    pill: 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700',
+    ringColor: '#10b981',
+    ringTrack: '#d1fae5',
+    glowColor: 'rgba(16,185,129,0.12)',
+    scoreGradientStart: '#10b981',
+    scoreGradientEnd: '#059669',
+    accentBorder: 'border-t-4 border-t-emerald-400',
+    badgeBg: 'bg-emerald-500',
+    badgeText: 'text-white',
+    dot: 'bg-emerald-400',
+    bar: 'bg-emerald-400',
+  },
+  competitive: {
+    label: 'Competitive',
+    pill: 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700',
+    ringColor: '#3b82f6',
+    ringTrack: '#dbeafe',
+    glowColor: 'rgba(59,130,246,0.12)',
+    scoreGradientStart: '#3b82f6',
+    scoreGradientEnd: '#2563eb',
+    accentBorder: 'border-t-4 border-t-blue-400',
+    badgeBg: 'bg-blue-500',
+    badgeText: 'text-white',
+    dot: 'bg-blue-400',
+    bar: 'bg-blue-400',
+  },
+  weak: {
+    label: 'Needs Work',
+    pill: 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700',
+    ringColor: '#f59e0b',
+    ringTrack: '#fef3c7',
+    glowColor: 'rgba(245,158,11,0.12)',
+    scoreGradientStart: '#f59e0b',
+    scoreGradientEnd: '#d97706',
+    accentBorder: 'border-t-4 border-t-amber-400',
+    badgeBg: 'bg-amber-500',
+    badgeText: 'text-white',
+    dot: 'bg-amber-400',
+    bar: 'bg-amber-400',
+  },
+  reject: {
+    label: 'At Risk',
+    pill: 'bg-red-50 text-red-700 border border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700',
+    ringColor: '#ef4444',
+    ringTrack: '#fee2e2',
+    glowColor: 'rgba(239,68,68,0.12)',
+    scoreGradientStart: '#ef4444',
+    scoreGradientEnd: '#dc2626',
+    accentBorder: 'border-t-4 border-t-red-400',
+    badgeBg: 'bg-red-500',
+    badgeText: 'text-white',
+    dot: 'bg-red-400',
+    bar: 'bg-red-400',
+  },
 }
 
 const RISK_CONFIG = {
-  high:   { icon: ShieldAlert,   cls: 'text-red-500',     bg: 'bg-red-50 dark:bg-red-950',       label: 'High rejection risk'   },
-  medium: { icon: AlertTriangle, cls: 'text-amber-500',   bg: 'bg-amber-50 dark:bg-amber-950',   label: 'Medium rejection risk' },
-  low:    { icon: CheckCircle2,  cls: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-950', label: 'Low rejection risk'  },
+  high:   { icon: ShieldAlert,   cls: 'text-red-500',     bg: 'bg-red-50 dark:bg-red-950/50',       label: 'High rejection risk',   border: 'border-red-200 dark:border-red-800'   },
+  medium: { icon: AlertTriangle, cls: 'text-amber-500',   bg: 'bg-amber-50 dark:bg-amber-950/50',   label: 'Medium rejection risk', border: 'border-amber-200 dark:border-amber-800' },
+  low:    { icon: CheckCircle2,  cls: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-950/50', label: 'Low rejection risk',  border: 'border-emerald-200 dark:border-emerald-800' },
 }
 
 const VALUE_LABEL: Record<string, { label: string; cls: string }> = {
-  behavioural_with_outcome: { label: 'Evidenced',     cls: 'text-emerald-600 dark:text-emerald-400' },
-  behavioural:              { label: 'Shown',          cls: 'text-blue-600 dark:text-blue-400'       },
-  referenced:               { label: 'Referenced',     cls: 'text-amber-600 dark:text-amber-400'     },
-  keyword:                  { label: 'Keyword only',   cls: 'text-orange-500 dark:text-orange-400'   },
-  absent:                   { label: 'Missing',        cls: 'text-red-500 dark:text-red-400'         },
+  behavioural_with_outcome: { label: 'Evidenced',   cls: 'text-emerald-600 dark:text-emerald-400' },
+  behavioural:              { label: 'Shown',        cls: 'text-blue-600 dark:text-blue-400'       },
+  referenced:               { label: 'Referenced',   cls: 'text-amber-600 dark:text-amber-400'     },
+  keyword:                  { label: 'Keyword only', cls: 'text-orange-500 dark:text-orange-400'   },
+  absent:                   { label: 'Missing',      cls: 'text-red-500 dark:text-red-400'         },
 }
 
 function getConfig(score: number, verdict?: Verdict | null) {
@@ -162,96 +221,169 @@ function formatDate(value?: string): string {
   catch { return '—' }
 }
 
-// ─── Shared UI ─────────────────────────────────────────────────────────────────
+// ─── Large Score Ring (TubeBuddy-style) ───────────────────────────────────────
 
-function MiniBar({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <div className="space-y-1">
-      <div className="flex justify-between items-center">
-        <span className="text-[10px] text-muted-foreground font-medium tracking-wide">{label}</span>
-        <span className="text-[10px] font-mono font-semibold text-foreground/60">{value}%</span>
-      </div>
-      <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
-        <div className={`h-full rounded-full ${color} transition-all duration-700`} style={{ width: `${value}%` }} />
-      </div>
-    </div>
-  )
-}
-
-function LockedMiniBar({ label }: { label: string }) {
-  return (
-    <div className="space-y-1">
-      <div className="flex justify-between items-center">
-        <span className="text-[10px] text-muted-foreground/50 font-medium tracking-wide">{label}</span>
-        <Lock className="w-2.5 h-2.5 text-muted-foreground/30" />
-      </div>
-      <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
-        <div className="h-full w-3/5 rounded-full bg-muted-foreground/20" />
-      </div>
-    </div>
-  )
-}
-
-function ScoreRing({ score, config }: { score: number; config: typeof VERDICT_CONFIG[string] }) {
-  const r = 20
+function LargeScoreRing({
+  score,
+  config,
+  size = 120,
+  label,
+}: {
+  score: number
+  config: typeof VERDICT_CONFIG[string]
+  size?: number
+  label?: string
+}) {
+  const strokeWidth = 10
+  const r = (size - strokeWidth * 2) / 2
   const circ = 2 * Math.PI * r
   const offset = circ - (score / 100) * circ
+  const cx = size / 2
+  const cy = size / 2
 
   return (
-    <svg width="56" height="56" className="shrink-0 -rotate-90">
-      <circle cx="28" cy="28" r={r} fill="none" stroke="currentColor" strokeWidth="3.5" className="text-muted" />
-      <circle
-        cx="28" cy="28" r={r} fill="none" strokeWidth="3.5"
-        strokeDasharray={circ} strokeDashoffset={offset}
-        strokeLinecap="round"
-        className={`transition-all duration-700 ${
-          config.label === 'Strong' ? 'stroke-emerald-400' :
-          config.label === 'Competitive' ? 'stroke-blue-400' :
-          config.label === 'Needs Work' ? 'stroke-amber-400' : 'stroke-red-400'
-        }`}
-      />
-      <text x="28" y="28" dominantBaseline="middle" textAnchor="middle"
-        className="text-[10px] font-mono font-bold fill-current rotate-90 origin-center"
-        style={{ fontSize: 10, transform: 'rotate(90deg)', transformOrigin: '28px 28px' }}
-      >
-        {score}
-      </text>
-    </svg>
+    <div className="flex flex-col items-center gap-2">
+      <div className="relative" style={{ width: size, height: size }}>
+        {/* Glow behind ring */}
+        <div
+          className="absolute inset-0 rounded-full blur-xl opacity-60"
+          style={{ background: config.glowColor }}
+        />
+        <svg
+          width={size}
+          height={size}
+          className="relative -rotate-90 drop-shadow-sm"
+          viewBox={`0 0 ${size} ${size}`}
+        >
+          {/* Track */}
+          <circle
+            cx={cx} cy={cy} r={r}
+            fill="none"
+            stroke={config.ringTrack}
+            strokeWidth={strokeWidth}
+            className="dark:opacity-20"
+          />
+          {/* Progress arc */}
+          <circle
+            cx={cx} cy={cy} r={r}
+            fill="none"
+            stroke={config.ringColor}
+            strokeWidth={strokeWidth}
+            strokeDasharray={circ}
+            strokeDashoffset={offset}
+            strokeLinecap="round"
+            style={{ transition: 'stroke-dashoffset 0.8s cubic-bezier(0.4,0,0.2,1)' }}
+          />
+        </svg>
+        {/* Center text */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span
+            className="font-black tabular-nums leading-none"
+            style={{
+              fontSize: size * 0.22,
+              color: config.ringColor,
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {score}
+          </span>
+          <span
+            className="font-semibold tracking-wider text-muted-foreground uppercase"
+            style={{ fontSize: size * 0.085 }}
+          >
+            / 100
+          </span>
+        </div>
+      </div>
+      {label && (
+        <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{label}</span>
+      )}
+    </div>
   )
 }
 
-function KpiCard({ icon: Icon, label, value, sub, accent = false }: {
-  icon: React.ElementType; label: string; value: string | number; sub?: React.ReactNode; accent?: boolean
+// ─── Sub-score bar ─────────────────────────────────────────────────────────────
+
+function SubScoreBar({
+  label,
+  value,
+  color,
+  locked = false,
+}: {
+  label: string
+  value?: number
+  color: string
+  locked?: boolean
 }) {
   return (
-    <div className={`rounded-2xl border p-5 shadow-sm transition-all ${
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
+        {locked ? (
+          <Lock className="w-3 h-3 text-muted-foreground/30" />
+        ) : (
+          <span className="text-[11px] font-mono font-bold" style={{ color }}>{value}%</span>
+        )}
+      </div>
+      <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+        {locked ? (
+          <div className="h-full w-3/5 rounded-full bg-muted-foreground/15" />
+        ) : (
+          <div
+            className="h-full rounded-full transition-all duration-700"
+            style={{ width: `${value}%`, background: color }}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── KPI Card ─────────────────────────────────────────────────────────────────
+
+function KpiCard({
+  icon: Icon,
+  label,
+  value,
+  sub,
+  accent = false,
+  trend,
+}: {
+  icon: React.ElementType
+  label: string
+  value: string | number
+  sub?: React.ReactNode
+  accent?: boolean
+  trend?: string
+}) {
+  return (
+    <div className={`rounded-2xl border p-6 shadow-sm transition-all duration-200 hover:shadow-md ${
       accent
         ? 'bg-foreground text-background border-foreground'
         : 'bg-card border-border'
     }`}>
-      <div className="flex items-center justify-between mb-4">
-        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${accent ? 'bg-background/10' : 'bg-muted'}`}>
-          <Icon className={`w-4 h-4 ${accent ? 'text-background/80' : 'text-muted-foreground'}`} />
+      <div className="flex items-start justify-between mb-5">
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${accent ? 'bg-background/10' : 'bg-muted'}`}>
+          <Icon className={`w-5 h-5 ${accent ? 'text-background/80' : 'text-muted-foreground'}`} />
         </div>
-        <span className={`text-[10px] font-bold uppercase tracking-widest ${accent ? 'text-background/50' : 'text-muted-foreground'}`}>
-          {label}
-        </span>
+        {trend && (
+          <span className="flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-1 rounded-full border border-emerald-200 dark:border-emerald-700">
+            <ArrowUpRight className="w-3 h-3" />{trend}
+          </span>
+        )}
       </div>
-      <p className={`text-4xl font-mono font-bold tracking-tight ${accent ? 'text-background' : 'text-foreground'}`}>
+      <p className={`text-4xl font-black tracking-tight tabular-nums mb-1 ${accent ? 'text-background' : 'text-foreground'}`}>
         {value}
       </p>
-      {sub && <div className="mt-3">{sub}</div>}
+      <p className={`text-xs font-semibold uppercase tracking-widest ${accent ? 'text-background/50' : 'text-muted-foreground'}`}>
+        {label}
+      </p>
+      {sub && <div className="mt-4">{sub}</div>}
     </div>
   )
 }
 
-function ScoreBar({ score }: { score: number }) {
-  return (
-    <div className="w-full h-1 bg-muted-foreground/20 rounded-full overflow-hidden">
-      <div className="h-full rounded-full bg-current opacity-60 transition-all duration-700" style={{ width: `${score}%` }} />
-    </div>
-  )
-}
+// ─── Distribution Bar ─────────────────────────────────────────────────────────
 
 function DistributionBar({ analyses }: { analyses: Analysis[] }) {
   const total = analyses.length
@@ -264,32 +396,41 @@ function DistributionBar({ analyses }: { analyses: Analysis[] }) {
   }
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-      <div className="flex items-center gap-2 mb-5">
-        <div className="w-8 h-8 rounded-xl bg-muted flex items-center justify-center">
-          <Activity className="w-4 h-4 text-muted-foreground" />
+    <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
+            <Activity className="w-5 h-5 text-muted-foreground" />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-foreground">Score Distribution</p>
+            <p className="text-xs text-muted-foreground">{total} analyses tracked</p>
+          </div>
         </div>
-        <div>
-          <p className="text-sm font-semibold text-foreground">Score Distribution</p>
-          <p className="text-xs text-muted-foreground">{total} analyses tracked</p>
-        </div>
+        <BarChart3 className="w-4 h-4 text-muted-foreground/40" />
       </div>
-      <div className="flex h-2.5 w-full rounded-full overflow-hidden gap-0.5">
+      <div className="flex h-3 w-full rounded-full overflow-hidden gap-0.5">
         {(Object.entries(counts) as [string, number][]).map(([verdict, count]) => {
           if (count === 0) return null
           return (
-            <div key={verdict} className={`${VERDICT_CONFIG[verdict].bar} h-full transition-all rounded-sm`}
-              style={{ width: `${(count / total) * 100}%` }} title={`${verdict}: ${count}`} />
+            <div
+              key={verdict}
+              className={`${VERDICT_CONFIG[verdict].bar} h-full transition-all first:rounded-l-full last:rounded-r-full`}
+              style={{ width: `${(count / total) * 100}%` }}
+              title={`${verdict}: ${count}`}
+            />
           )
         })}
       </div>
-      <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5">
         {(Object.entries(counts) as [string, number][]).map(([verdict, count]) => (
-          <span key={verdict} className="flex items-center gap-2 text-xs">
-            <span className={`w-2 h-2 rounded-full ${VERDICT_CONFIG[verdict].dot}`} />
-            <span className="text-muted-foreground">{VERDICT_CONFIG[verdict].label}</span>
-            <span className="font-mono font-semibold text-foreground">{count}</span>
-          </span>
+          <div key={verdict} className="flex items-center gap-2">
+            <span className={`w-2.5 h-2.5 rounded-full ${VERDICT_CONFIG[verdict].dot} shrink-0`} />
+            <div>
+              <p className="text-xs text-muted-foreground">{VERDICT_CONFIG[verdict].label}</p>
+              <p className="text-sm font-bold text-foreground tabular-nums">{count}</p>
+            </div>
+          </div>
         ))}
       </div>
     </div>
@@ -312,202 +453,229 @@ function AnalysisCard({ a, isPro }: { a: Analysis; isPro: boolean }) {
   const strengths     = result?.strengths?.slice(0, 1) ?? []
   const weaknesses    = result?.weaknesses?.slice(0, 1) ?? []
 
-  const proBreakdownBars = [
-    { label: 'Criteria', value: sb?.criteriaCoverage,  color: 'bg-blue-400'    },
-    { label: 'STAR',     value: sb?.starCompleteness,  color: 'bg-violet-400'  },
-    { label: 'Values',   value: sb?.valuesAlignment,   color: 'bg-emerald-400' },
-    { label: 'Language', value: sb?.languageMirroring, color: 'bg-pink-400'    },
-    { label: 'Detail',   value: sb?.specificity,       color: 'bg-amber-400'   },
-  ].filter(s => typeof s.value === 'number') as { label: string; value: number; color: string }[]
-
-  const freeBreakdownBars = proBreakdownBars.filter(b => b.label === 'Criteria' || b.label === 'Values')
-  const lockedLabels = ['STAR', 'Language', 'Detail']
   const riskConfig = rejectionRisk?.overall ? RISK_CONFIG[rejectionRisk.overall] : null
+
+  const subScores = [
+    { label: 'Criteria',   value: sb?.criteriaCoverage,  color: '#3b82f6', free: true  },
+    { label: 'STAR',       value: sb?.starCompleteness,  color: '#8b5cf6', free: false },
+    { label: 'Values',     value: sb?.valuesAlignment,   color: '#10b981', free: true  },
+    { label: 'Language',   value: sb?.languageMirroring, color: '#ec4899', free: false },
+    { label: 'Specificity',value: sb?.specificity,       color: '#f59e0b', free: false },
+  ].filter(s => isPro ? typeof s.value === 'number' : (typeof s.value === 'number' || !s.free))
 
   return (
     <Link
       href={`/dashboard/analysis/${a.id}`}
-      className="group relative bg-card border border-border rounded-2xl overflow-hidden hover:shadow-lg hover:border-foreground/20 transition-all duration-200 flex flex-col"
+      className={`group relative bg-card border border-border rounded-2xl overflow-hidden hover:shadow-xl hover:border-foreground/20 transition-all duration-300 flex flex-col ${config.accentBorder}`}
     >
-      {/* Top accent bar */}
-      <div className={`h-1 w-full ${config.accent}`} />
+      <div className="p-6 flex flex-col gap-5">
 
-      <div className="p-5 flex flex-col gap-4">
+        {/* ── Header: Large ring + title ── */}
+        <div className="flex items-start gap-5">
+          {/* Large ring — the hero element */}
+          <div className="shrink-0">
+            <LargeScoreRing score={score} config={config} size={100} />
+          </div>
 
-        {/* Header: score ring + title */}
-        <div className="flex items-start gap-4">
-          <ScoreRing score={score} config={config} />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-2 mb-1">
-              <h3 className="font-semibold text-foreground text-sm leading-snug group-hover:text-primary transition-colors line-clamp-2">
+          {/* Title block */}
+          <div className="flex-1 min-w-0 pt-1">
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <h3 className="font-bold text-foreground text-sm leading-snug group-hover:text-primary transition-colors line-clamp-3">
                 {a.jobTitle}
               </h3>
-              <span className={`shrink-0 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${config.pill}`}>
-                {config.label}
-              </span>
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
+            <span className={`inline-flex items-center text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full ${config.pill}`}>
+              {config.label}
+            </span>
+            <div className="flex flex-wrap items-center gap-2 mt-2">
               {a.band && (
-                <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                <span className="text-[10px] font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded-md border border-border">
                   {a.band}
                 </span>
               )}
               {a.location && (
                 <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">{a.location}</span>
               )}
-              <span className="text-[10px] font-mono text-muted-foreground ml-auto">{formatDate(a.createdAt)}</span>
             </div>
           </div>
         </div>
 
-        {/* Quick stats row */}
-        <div className="flex items-center gap-4 text-xs border-t border-border pt-3">
-          <span className={`font-mono font-bold text-base ${config.scoreColor}`}>{score}%</span>
-          {atsScore !== null && (
-            <span className="flex items-center gap-1 text-muted-foreground font-mono">
-              <Wifi className="w-3 h-3" />{atsScore}% ATS
-            </span>
-          )}
-          {typeof result?.confidence === 'number' && (
-            <span className="text-muted-foreground font-mono hidden sm:inline">{result.confidence}% conf.</span>
-          )}
-          {scan?.wordCount > 0 && (
-            <span className="text-muted-foreground font-mono ml-auto">{scan.wordCount}w</span>
-          )}
-        </div>
+        {/* ── ATS + confidence quick stats ── */}
+        {(atsScore !== null || result?.confidence || scan?.wordCount) && (
+          <div className="grid grid-cols-3 gap-3 p-3 bg-muted/50 rounded-xl border border-border">
+            {atsScore !== null && (
+              <div className="text-center">
+                <p className="text-base font-black tabular-nums" style={{ color: config.ringColor }}>{atsScore}%</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mt-0.5">ATS Match</p>
+              </div>
+            )}
+            {typeof result?.confidence === 'number' && (
+              <div className="text-center">
+                <p className="text-base font-black tabular-nums text-foreground">{result.confidence}%</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mt-0.5">Confidence</p>
+              </div>
+            )}
+            {scan?.wordCount > 0 && (
+              <div className="text-center">
+                <p className="text-base font-black tabular-nums text-foreground">{scan.wordCount}</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mt-0.5">Words</p>
+              </div>
+            )}
+          </div>
+        )}
 
-        {/* Statement flags */}
+        {/* ── Statement flags ── */}
         {scan && (scan.usesWeLanguage || !scan.resultsPresent || !scan.hasExamples) && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {scan.usesWeLanguage && (
-              <span className="text-[10px] font-mono text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 px-1.5 py-0.5 rounded flex items-center gap-1">
-                <WifiOff className="w-2.5 h-2.5" /> "We" language
+              <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-700 px-2 py-1 rounded-lg flex items-center gap-1">
+                <WifiOff className="w-3 h-3" /> "We" language
               </span>
             )}
             {!scan.resultsPresent && (
-              <span className="text-[10px] font-mono text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 px-1.5 py-0.5 rounded">
-                No results
+              <span className="text-[10px] font-semibold text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-700 px-2 py-1 rounded-lg">
+                No results stated
               </span>
             )}
             {!scan.hasExamples && (
-              <span className="text-[10px] font-mono text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 px-1.5 py-0.5 rounded">
+              <span className="text-[10px] font-semibold text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-700 px-2 py-1 rounded-lg">
                 No examples
               </span>
             )}
           </div>
         )}
 
-        {/* Band gap warning */}
+        {/* ── Band gap warning ── */}
         {seniority && seniority.bandGap > 0 && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800">
-            <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0" />
-            <span className="text-[10px] font-mono text-amber-700 dark:text-amber-300">
-              Band gap: B{seniority.demonstratedBand} → B{seniority.targetBand} (−{seniority.bandGap * 10}pts)
+          <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+            <span className="text-[11px] font-semibold text-amber-800 dark:text-amber-300">
+              Band gap: B{seniority.demonstratedBand} → B{seniority.targetBand} (−{seniority.bandGap * 10} pts)
             </span>
           </div>
         )}
 
-        {/* Breakdown sub-scores */}
-        {(proBreakdownBars.length > 0 || !isPro) && (
-          <div className="grid grid-cols-2 gap-x-5 gap-y-2.5 pt-3 border-t border-border">
-            {isPro
-              ? proBreakdownBars.map(s => <MiniBar key={s.label} {...s} />)
-              : (
+        {/* ── Sub-score breakdown ── */}
+        {(sb || !isPro) && (
+          <div className="pt-4 border-t border-border space-y-3">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Score Breakdown</p>
+            <div className="space-y-2.5">
+              {isPro ? (
+                [
+                  { label: 'Criteria',    value: sb?.criteriaCoverage,  color: '#3b82f6' },
+                  { label: 'STAR',        value: sb?.starCompleteness,  color: '#8b5cf6' },
+                  { label: 'Values',      value: sb?.valuesAlignment,   color: '#10b981' },
+                  { label: 'Language',    value: sb?.languageMirroring, color: '#ec4899' },
+                  { label: 'Specificity', value: sb?.specificity,       color: '#f59e0b' },
+                ].filter(s => typeof s.value === 'number').map(s => (
+                  <SubScoreBar key={s.label} label={s.label} value={s.value} color={s.color} />
+                ))
+              ) : (
                 <>
-                  {freeBreakdownBars.map(s => <MiniBar key={s.label} {...s} />)}
-                  {lockedLabels.map(l => <LockedMiniBar key={l} label={l} />)}
+                  {typeof sb?.criteriaCoverage === 'number' && (
+                    <SubScoreBar label="Criteria" value={sb.criteriaCoverage} color="#3b82f6" />
+                  )}
+                  {typeof sb?.valuesAlignment === 'number' && (
+                    <SubScoreBar label="Values" value={sb.valuesAlignment} color="#10b981" />
+                  )}
+                  <SubScoreBar label="STAR" locked color="#8b5cf6" />
+                  <SubScoreBar label="Language" locked color="#ec4899" />
+                  <SubScoreBar label="Specificity" locked color="#f59e0b" />
                 </>
-              )
-            }
-          </div>
-        )}
-
-        {/* NHS Values */}
-        {nhsValues.length > 0 && (
-          <div className="pt-3 border-t border-border">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1">
-              <Users className="w-3 h-3" /> NHS Values
-            </p>
-            <div className="flex flex-wrap gap-x-4 gap-y-1">
-              {nhsValues.slice(0, isPro ? 6 : 3).map(v => {
-                const vc = VALUE_LABEL[v.classification] ?? { label: v.classification, cls: 'text-muted-foreground' }
-                return (
-                  <span key={v.name} className="text-[10px] font-mono">
-                    <span className="text-foreground/60">{v.name.split(' ')[0]}</span>
-                    <span className={`ml-1 ${vc.cls}`}>{vc.label}</span>
-                  </span>
-                )
-              })}
-              {!isPro && nhsValues.length > 3 && (
-                <span className="text-[10px] font-mono text-muted-foreground/40 flex items-center gap-0.5">
-                  <Lock className="w-2 h-2" /> +{nhsValues.length - 3} more
-                </span>
               )}
             </div>
           </div>
         )}
 
-        {/* Rejection risk */}
-        {isPro && riskConfig ? (
-          <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${riskConfig.bg} border border-transparent`}>
-            <riskConfig.icon className={`w-3.5 h-3.5 shrink-0 ${riskConfig.cls}`} />
-            <span className={`text-[10px] font-mono font-medium ${riskConfig.cls}`}>{riskConfig.label}</span>
-          </div>
-        ) : !isPro && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted border border-border">
-            <Lock className="w-3 h-3 text-muted-foreground/50 shrink-0" />
-            <span className="text-[10px] font-mono text-muted-foreground/60 flex-1">Rejection risk analysis</span>
-            <button
-              onClick={e => { e.preventDefault(); e.stopPropagation(); window.location.href = '/upgrade?reason=rejection_risk' }}
-              className="text-[10px] font-semibold text-primary hover:underline bg-transparent border-0 p-0 cursor-pointer"
-            >
-              Unlock Pro →
-            </button>
-          </div>
-        )}
-
-        {/* Band coaching */}
-        {isPro && bandCoaching?.mostCriticalBandGap && (
-          <div className="pt-1">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">
-              Band {bandCoaching.targetBand} critical gap
+        {/* ── NHS Values ── */}
+        {nhsValues.length > 0 && (
+          <div className="pt-4 border-t border-border">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2.5 flex items-center gap-1.5">
+              <Users className="w-3 h-3" /> NHS Values
             </p>
-            <p className="text-xs text-foreground/70 line-clamp-2">{bandCoaching.mostCriticalBandGap}</p>
-          </div>
-        )}
-
-        {/* Strength */}
-        {strengths.length > 0 && (
-          <div className="pt-3 border-t border-border">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 mb-1">↑ Top strength</p>
-            <p className="text-xs text-foreground/70 line-clamp-2">{strengths[0].claim}</p>
-          </div>
-        )}
-
-        {/* Weakness */}
-        {weaknesses.length > 0 && (
-          <div className="pt-1">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1 flex items-center gap-1">
-              ↓ Key gap {!isPro && <Lock className="w-2.5 h-2.5" />}
-            </p>
-            <p className={`text-xs text-foreground/70 line-clamp-1 ${!isPro ? 'blur-[3px] select-none pointer-events-none' : ''}`}>
-              {weaknesses[0]}
-            </p>
-            {!isPro && (
-              <button
-                onClick={e => { e.preventDefault(); e.stopPropagation(); window.location.href = '/upgrade?reason=weaknesses' }}
-                className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary hover:underline mt-1 bg-transparent border-0 p-0 cursor-pointer"
-              >
-                <Lock className="w-2.5 h-2.5" /> Unlock with Pro
-              </button>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+              {nhsValues.slice(0, isPro ? 6 : 3).map(v => {
+                const vc = VALUE_LABEL[v.classification] ?? { label: v.classification, cls: 'text-muted-foreground' }
+                return (
+                  <div key={v.name} className="flex items-center justify-between gap-1">
+                    <span className="text-[11px] text-foreground/60 truncate">{v.name.split(' ')[0]}</span>
+                    <span className={`text-[10px] font-semibold shrink-0 ${vc.cls}`}>{vc.label}</span>
+                  </div>
+                )
+              })}
+            </div>
+            {!isPro && nhsValues.length > 3 && (
+              <p className="text-[10px] font-semibold text-muted-foreground/50 flex items-center gap-1 mt-1.5">
+                <Lock className="w-2.5 h-2.5" /> +{nhsValues.length - 3} more values hidden
+              </p>
             )}
           </div>
         )}
 
-        {/* Footer CTA */}
-        <div className="flex items-center justify-end pt-2 border-t border-border">
-          <span className="text-[10px] font-semibold text-muted-foreground group-hover:text-primary transition-colors flex items-center gap-1">
-            View full report <ChevronRight className="w-3 h-3" />
+        {/* ── Rejection risk ── */}
+        {isPro && riskConfig ? (
+          <div className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border ${riskConfig.bg} ${riskConfig.border}`}>
+            <riskConfig.icon className={`w-4 h-4 shrink-0 ${riskConfig.cls}`} />
+            <span className={`text-[11px] font-bold ${riskConfig.cls}`}>{riskConfig.label}</span>
+          </div>
+        ) : !isPro ? (
+          <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-muted border border-border">
+            <Lock className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0" />
+            <span className="text-[11px] font-semibold text-muted-foreground/60 flex-1">Rejection risk analysis</span>
+            <button
+              onClick={e => { e.preventDefault(); e.stopPropagation(); window.location.href = '/upgrade?reason=rejection_risk' }}
+              className="text-[10px] font-bold text-primary hover:underline bg-transparent border-0 p-0 cursor-pointer"
+            >
+              Unlock Pro →
+            </button>
+          </div>
+        ) : null}
+
+        {/* ── Band coaching ── */}
+        {isPro && bandCoaching?.mostCriticalBandGap && (
+          <div className="pt-1">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
+              Band {bandCoaching.targetBand} critical gap
+            </p>
+            <p className="text-xs text-foreground/70 line-clamp-2 leading-relaxed">{bandCoaching.mostCriticalBandGap}</p>
+          </div>
+        )}
+
+        {/* ── Strength / Weakness ── */}
+        {(strengths.length > 0 || weaknesses.length > 0) && (
+          <div className="pt-4 border-t border-border space-y-3">
+            {strengths.length > 0 && (
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 mb-1">↑ Top Strength</p>
+                <p className="text-xs text-foreground/70 line-clamp-2 leading-relaxed">{strengths[0].claim}</p>
+              </div>
+            )}
+            {weaknesses.length > 0 && (
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1 flex items-center gap-1">
+                  ↓ Key Gap {!isPro && <Lock className="w-2.5 h-2.5" />}
+                </p>
+                <p className={`text-xs text-foreground/70 line-clamp-2 leading-relaxed ${!isPro ? 'blur-sm select-none pointer-events-none' : ''}`}>
+                  {weaknesses[0]}
+                </p>
+                {!isPro && (
+                  <button
+                    onClick={e => { e.preventDefault(); e.stopPropagation(); window.location.href = '/upgrade?reason=weaknesses' }}
+                    className="inline-flex items-center gap-1 text-[10px] font-bold text-primary hover:underline mt-1.5 bg-transparent border-0 p-0 cursor-pointer"
+                  >
+                    <Lock className="w-2.5 h-2.5" /> Unlock with Pro
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Footer ── */}
+        <div className="flex items-center justify-between pt-3 border-t border-border">
+          <span className="text-[10px] font-mono text-muted-foreground">{formatDate(a.createdAt)}</span>
+          <span className="text-[11px] font-bold text-muted-foreground group-hover:text-primary transition-colors flex items-center gap-1">
+            View full report <ChevronRight className="w-3.5 h-3.5" />
           </span>
         </div>
 
@@ -563,23 +731,23 @@ export default function DashboardPage() {
   if (loading) return (
     <div className="flex items-center justify-center h-[60vh] gap-3 text-muted-foreground">
       <RefreshCw className="w-4 h-4 animate-spin" />
-      <span className="text-sm font-mono">Loading dashboard…</span>
+      <span className="text-sm font-semibold">Loading dashboard…</span>
     </div>
   )
 
   // ── Error ──
   if (error) return (
-    <div className="flex flex-col items-center justify-center h-[60vh] gap-4 text-center px-4">
-      <div className="w-14 h-14 rounded-2xl bg-destructive/10 flex items-center justify-center">
-        <AlertCircle className="w-6 h-6 text-destructive" />
+    <div className="flex flex-col items-center justify-center h-[60vh] gap-5 text-center px-4">
+      <div className="w-16 h-16 rounded-2xl bg-destructive/10 flex items-center justify-center">
+        <AlertCircle className="w-7 h-7 text-destructive" />
       </div>
       <div>
-        <p className="font-semibold text-foreground">Failed to load dashboard</p>
+        <p className="font-bold text-foreground text-lg">Failed to load dashboard</p>
         <p className="text-sm text-muted-foreground mt-1">{error}</p>
       </div>
       <button
         onClick={() => load()}
-        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-foreground text-background text-sm font-medium hover:opacity-90 transition-opacity"
+        className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-foreground text-background text-sm font-bold hover:opacity-90 transition-opacity"
       >
         <RefreshCw className="w-4 h-4" /> Try again
       </button>
@@ -589,16 +757,16 @@ export default function DashboardPage() {
   // ── Empty ──
   if (total === 0) return (
     <div className="flex flex-col items-center justify-center h-[60vh] text-center px-4">
-      <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-5">
-        <Sparkles className="w-7 h-7 text-muted-foreground" />
+      <div className="w-20 h-20 rounded-3xl bg-muted flex items-center justify-center mb-6">
+        <Sparkles className="w-9 h-9 text-muted-foreground" />
       </div>
-      <h2 className="text-xl font-bold text-foreground mb-2">No analyses yet</h2>
+      <h2 className="text-2xl font-black text-foreground mb-2">No analyses yet</h2>
       <p className="text-sm text-muted-foreground mb-8 max-w-xs leading-relaxed">
         Run your first AI evaluation to start tracking your NHS application performance.
       </p>
       <Link
         href="/dashboard/new-analysis"
-        className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-foreground text-background text-sm font-semibold hover:opacity-90 transition-opacity"
+        className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-foreground text-background text-sm font-bold hover:opacity-90 transition-opacity"
       >
         <Plus className="w-4 h-4" /> Start First Analysis
       </Link>
@@ -611,14 +779,14 @@ export default function DashboardPage() {
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground tracking-tight">Application Dashboard</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <h1 className="text-3xl font-black text-foreground tracking-tight">Application Dashboard</h1>
+          <p className="text-sm text-muted-foreground mt-1.5 font-medium">
             Track and improve your NHS job applications
           </p>
         </div>
         <Link
           href="/dashboard/new-analysis"
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-foreground text-background text-sm font-semibold hover:opacity-90 transition-opacity self-start"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-foreground text-background text-sm font-bold hover:opacity-90 transition-opacity self-start shadow-sm"
         >
           <Plus className="w-4 h-4" /> New Analysis
         </Link>
@@ -626,9 +794,9 @@ export default function DashboardPage() {
 
       {/* ── KPI cards ── */}
       <div className="grid sm:grid-cols-3 gap-4">
-        <KpiCard icon={FileText}   label="Total"       value={total}        accent />
-        <KpiCard icon={TrendingUp} label="Avg Score"   value={`${avgScore}%`} sub={<ScoreBar score={avgScore} />} />
-        <KpiCard icon={Target}     label="Avg ATS"     value={`${avgAts}%`}   sub={<ScoreBar score={avgAts} />} />
+        <KpiCard icon={FileText}   label="Total Analyses" value={total}          accent />
+        <KpiCard icon={TrendingUp} label="Average Score"  value={`${avgScore}%`} trend="+2.4%" />
+        <KpiCard icon={Target}     label="Average ATS"    value={`${avgAts}%`} />
       </div>
 
       {/* ── Distribution ── */}
@@ -636,10 +804,17 @@ export default function DashboardPage() {
 
       {/* ── Analyses grid ── */}
       <div>
-        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">
-          Recent Analyses
-        </p>
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="flex items-center justify-between mb-5">
+          <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">
+            Recent Analyses
+          </p>
+          {pagination && pagination.total > 6 && (
+            <p className="text-xs text-muted-foreground font-medium">
+              Showing 6 of {pagination.total}
+            </p>
+          )}
+        </div>
+        <div className="grid md:grid-cols-2 gap-5">
           {recent.map(a => <AnalysisCard key={a.id} a={a} isPro={isPro} />)}
         </div>
       </div>
@@ -650,17 +825,17 @@ export default function DashboardPage() {
           <button
             onClick={() => load(pagination.page - 1)}
             disabled={pagination.page <= 1}
-            className="px-4 py-2 rounded-xl border border-border text-sm font-mono text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="px-5 py-2.5 rounded-xl border border-border text-sm font-semibold text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             ← Previous
           </button>
-          <span className="text-xs font-mono text-muted-foreground">
+          <span className="text-xs font-mono font-semibold text-muted-foreground bg-muted px-3 py-2 rounded-lg">
             {pagination.page} / {pagination.totalPages}
           </span>
           <button
             onClick={() => load(pagination.page + 1)}
             disabled={!pagination.hasMore}
-            className="px-4 py-2 rounded-xl border border-border text-sm font-mono text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="px-5 py-2.5 rounded-xl border border-border text-sm font-semibold text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             Next →
           </button>
