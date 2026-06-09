@@ -1,24 +1,7 @@
 'use client'
 
-// components/band-match/BandMatchTab.tsx
-
 import { useState, useEffect } from 'react'
 import { useRouter }           from 'next/navigation'
-import { Lock, TrendingUp, AlertCircle, CheckCircle2, XCircle, MinusCircle, Zap, ChevronDown, ChevronUp } from 'lucide-react'
-
-interface Props {
-  analysisId: string
-  isPro:      boolean
-  jobTitle:   string
-  result:     any    // full result object — criteria, values, scoredBreakdown etc.
-  record:     {      // raw DB record fields
-    essentialCriteria: string
-    desirableCriteria: string
-    personSpec:        string
-    jobDescription:    string
-    band:              string | null
-  }
-}
 
 interface BandResult {
   band:        string
@@ -32,170 +15,179 @@ interface BandResult {
   verdict:     string
 }
 
-// ── Band definitions ──────────────────────────────────────────────────────────
-const BAND_LEVELS = [
-  { band: '2',   label: 'Band 2',   description: 'Healthcare Support Worker'       },
-  { band: '3',   label: 'Band 3',   description: 'Senior Support / Technician'     },
-  { band: '4',   label: 'Band 4',   description: 'Associate Practitioner'          },
-  { band: '5',   label: 'Band 5',   description: 'Qualified Practitioner / Staff Nurse' },
-  { band: '6',   label: 'Band 6',   description: 'Specialist / Senior Practitioner' },
-  { band: '7',   label: 'Band 7',   description: 'Advanced Practitioner / Manager' },
-  { band: '8a',  label: 'Band 8a',  description: 'Consultant / Senior Manager'     },
-]
-
-function statusConfig(status: BandResult['status']) {
-  const map = {
-    exceeds: { bg: '#dcfce7', border: '#86efac', text: '#166534', label: 'Exceeds',  dot: '#22c55e' },
-    strong:  { bg: '#dbeafe', border: '#93c5fd', text: '#1e40af', label: 'Strong',   dot: '#3b82f6' },
-    match:   { bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d', label: 'Match',    dot: '#22c55e' },
-    stretch: { bg: '#fef9c3', border: '#fde68a', text: '#854d0e', label: 'Stretch',  dot: '#f59e0b' },
-    gap:     { bg: '#fee2e2', border: '#fecaca', text: '#991b1b', label: 'Gap',      dot: '#ef4444' },
+interface Props {
+  analysisId:  string
+  isPro:       boolean
+  jobTitle:    string
+  result:      any
+  record: {
+    essentialCriteria: string
+    desirableCriteria: string
+    personSpec:        string
+    jobDescription:    string
+    band:              string | null
   }
-  return map[status]
 }
 
-function ScoreArc({ pct, color }: { pct: number; color: string }) {
-  const r  = 28
-  const cx = 36
-  const cy = 36
-  const circumference = 2 * Math.PI * r
-  const offset = circumference - (pct / 100) * circumference
+const STATUS_MAP = {
+  exceeds: { bg: 'var(--color-background-success)', border: 'var(--color-border-success)', text: 'var(--color-text-success)', label: 'Exceeds',  bar: '#22c55e' },
+  strong:  { bg: 'var(--color-background-info)',    border: 'var(--color-border-info)',    text: 'var(--color-text-info)',    label: 'Strong',   bar: '#3b82f6' },
+  match:   { bg: 'var(--color-background-success)', border: 'var(--color-border-success)', text: 'var(--color-text-success)', label: 'Match',    bar: '#22c55e' },
+  stretch: { bg: 'var(--color-background-warning)', border: 'var(--color-border-warning)', text: 'var(--color-text-warning)', label: 'Stretch',  bar: '#f59e0b' },
+  gap:     { bg: 'var(--color-background-danger)',  border: 'var(--color-border-danger)',  text: 'var(--color-text-danger)',  label: 'Gap',      bar: '#ef4444' },
+}
 
+function MiniBar({ pct, color }: { pct: number; color: string }) {
   return (
-    <svg width="72" height="72" viewBox="0 0 72 72">
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="#e5e7eb" strokeWidth="6" />
-      <circle
-        cx={cx} cy={cy} r={r} fill="none"
-        stroke={color} strokeWidth="6"
-        strokeDasharray={circumference}
-        strokeDashoffset={offset}
-        strokeLinecap="round"
-        transform={`rotate(-90 ${cx} ${cy})`}
-        style={{ transition: 'stroke-dashoffset 1s ease' }}
-      />
-      <text x={cx} y={cy + 1} textAnchor="middle" dominantBaseline="middle" fontSize="13" fontWeight="700" fill={color}>
-        {pct}%
-      </text>
-    </svg>
+    <div style={{ height: 4, background: 'var(--color-border-tertiary)', borderRadius: 2, overflow: 'hidden', marginTop: 4 }}>
+      <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 2, transition: 'width 1s ease' }} />
+    </div>
   )
 }
 
 function BandCard({ band, isPro, targetBand, expanded, onToggle }: {
-  band: BandResult
-  isPro: boolean
-  targetBand: string | null
-  expanded: boolean
-  onToggle: () => void
+  band: BandResult; isPro: boolean; targetBand: string | null; expanded: boolean; onToggle: () => void
 }) {
-  const cfg       = statusConfig(band.status)
-  const isTarget  = band.band === targetBand
-  const isLocked  = !isPro && !['2','3','4'].includes(band.band)
+  const cfg      = STATUS_MAP[band.status]
+  const isTarget = band.band === targetBand
+  const isLocked = !isPro && !['2', '3', '4'].includes(band.band)
 
   return (
     <div style={{
-      border: `1.5px solid ${isTarget ? '#1e40af' : cfg.border}`,
-      borderRadius: 12,
+      borderRadius: 'var(--border-radius-lg)',
+      border: `${isTarget ? '1.5px' : '0.5px'} solid ${isTarget ? 'var(--color-border-info)' : 'var(--color-border-tertiary)'}`,
       overflow: 'hidden',
-      opacity: isLocked ? 0.6 : 1,
-      filter: isLocked ? 'blur(1.5px)' : 'none',
+      opacity: isLocked ? 0.45 : 1,
+      filter: isLocked ? 'blur(2px)' : 'none',
       pointerEvents: isLocked ? 'none' : 'auto',
+      userSelect: isLocked ? 'none' : 'auto',
+      background: 'var(--color-background-primary)',
     }}>
-      {/* Card header */}
+      {/* Header row */}
       <div
         onClick={onToggle}
-        style={{ background: cfg.bg, padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}
+        style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', cursor: 'pointer', background: expanded ? 'var(--color-background-secondary)' : 'transparent' }}
       >
-        <ScoreArc pct={band.matchPct} color={cfg.dot} />
+        {/* Score circle */}
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          <svg width="52" height="52" viewBox="0 0 52 52">
+            <circle cx="26" cy="26" r="22" fill="none" stroke="var(--color-border-tertiary)" strokeWidth="4" />
+            <circle
+              cx="26" cy="26" r="22" fill="none"
+              stroke={cfg.bar} strokeWidth="4"
+              strokeDasharray={`${2 * Math.PI * 22}`}
+              strokeDashoffset={`${2 * Math.PI * 22 * (1 - band.matchPct / 100)}`}
+              strokeLinecap="round"
+              transform="rotate(-90 26 26)"
+              style={{ transition: 'stroke-dashoffset 1s ease' }}
+            />
+            <text x="26" y="26" textAnchor="middle" dominantBaseline="central" fontSize="12" fontWeight="500" fill={cfg.bar}>
+              {band.matchPct}%
+            </text>
+          </svg>
+        </div>
 
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-            <span style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>{band.label}</span>
+        {/* Label + verdict */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+            <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)' }}>{band.label}</span>
             {isTarget && (
-              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10, backgroundColor: '#1e40af', color: '#fff', letterSpacing: '0.04em' }}>
-                APPLIED
+              <span style={{ fontSize: 10, fontWeight: 500, padding: '2px 7px', borderRadius: 20, background: 'var(--color-background-info)', color: 'var(--color-text-info)', letterSpacing: '0.03em' }}>
+                applied
               </span>
             )}
-            <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10, backgroundColor: cfg.bg, color: cfg.text, border: `1px solid ${cfg.border}`, marginLeft: 'auto' }}>
+            <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 20, background: cfg.bg, color: cfg.text, border: `0.5px solid ${cfg.border}` }}>
               {cfg.label}
             </span>
           </div>
-          <div style={{ fontSize: 12, color: '#6b7280' }}>
-            {band.metCount} of {band.totalCount} criteria evidenced
+          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0, lineHeight: 1.4 }}>{band.verdict}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+            <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>{band.metCount} of {band.totalCount} criteria evidenced</span>
           </div>
-          <div style={{ fontSize: 12, color: '#374151', marginTop: 3, fontStyle: 'italic' }}>
-            {band.verdict}
-          </div>
+          <MiniBar pct={band.matchPct} color={cfg.bar} />
         </div>
 
-        <div style={{ color: '#9ca3af' }}>
-          {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        {/* Chevron */}
+        <div style={{ color: 'var(--color-text-tertiary)', fontSize: 18, transition: 'transform 0.2s', transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+          ⌄
         </div>
       </div>
 
       {/* Expanded detail */}
       {expanded && (
-        <div style={{ padding: '14px 16px', backgroundColor: '#fff', borderTop: `1px solid ${cfg.border}` }}>
-          {band.strengths.length > 0 && (
-            <div style={{ marginBottom: 12 }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-                ✓ Evidenced
-              </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {band.strengths.map((s, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 8, fontSize: 12, color: '#374151' }}>
-                    <CheckCircle2 size={13} color="#22c55e" style={{ flexShrink: 0, marginTop: 1 }} />
-                    {s}
-                  </div>
-                ))}
+        <div style={{ padding: '12px 16px 16px', borderTop: '0.5px solid var(--color-border-tertiary)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            {band.strengths.length > 0 && (
+              <div>
+                <p style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-success)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                  Evidence found
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  {band.strengths.map((s, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 6, fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
+                      <span style={{ color: 'var(--color-text-success)', flexShrink: 0, marginTop: 1 }}>✓</span>
+                      {s}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-          {band.gaps.length > 0 && (
-            <div>
-              <p style={{ fontSize: 11, fontWeight: 700, color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-                ✗ Missing evidence
-              </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {band.gaps.map((g, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 8, fontSize: 12, color: '#374151' }}>
-                    <XCircle size={13} color="#ef4444" style={{ flexShrink: 0, marginTop: 1 }} />
-                    {g}
-                  </div>
-                ))}
+            )}
+            {band.gaps.length > 0 && (
+              <div>
+                <p style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-danger)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                  Missing evidence
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  {band.gaps.map((g, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 6, fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
+                      <span style={{ color: 'var(--color-text-danger)', flexShrink: 0, marginTop: 1 }}>✗</span>
+                      {g}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
     </div>
   )
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
 export function BandMatchTab({ analysisId, isPro, jobTitle, result, record }: Props) {
   const router = useRouter()
-  const [loading,    setLoading]    = useState(false)
-  const [bandData,   setBandData]   = useState<BandResult[] | null>(null)
-  const [error,      setError]      = useState<string | null>(null)
-  const [expanded,   setExpanded]   = useState<string | null>(null)
+  const [loading,  setLoading]  = useState(false)
+  const [bandData, setBandData] = useState<BandResult[] | null>(result?.bandMatch ?? null)
+  const [error,    setError]    = useState<string | null>(null)
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [animated, setAnimated] = useState(false)
 
   const targetBand = record.band?.replace(/band\s*/i, '').trim() ?? null
+
+  // Auto-run if not stored
+  useEffect(() => {
+    if (!bandData) runAnalysis()
+  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Trigger bar animations after data loads
+  useEffect(() => {
+    if (bandData) {
+      setTimeout(() => setAnimated(true), 100)
+      if (!expanded) {
+        const target = bandData.find(b => b.band === targetBand)
+        setExpanded(target?.band ?? bandData[0]?.band ?? null)
+      }
+    }
+  }, [bandData])  // eslint-disable-line react-hooks/exhaustive-deps
 
   async function runAnalysis() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/analysis/${analysisId}/band-match`, {
-        method: 'POST',
-      })
+      const res  = await fetch(`/api/analysis/${analysisId}/band-match`, { method: 'POST' })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Band match analysis failed')
+      if (!res.ok) throw new Error(data.error ?? 'Band match failed')
       setBandData(data.bands)
-      // Auto-expand target band
-      if (data.bands?.length) {
-        const target = data.bands.find((b: BandResult) => b.band === targetBand)
-        setExpanded(target?.band ?? data.bands[0].band)
-      }
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -203,157 +195,147 @@ export function BandMatchTab({ analysisId, isPro, jobTitle, result, record }: Pr
     }
   }
 
-  // Visible bands based on tier
   const visibleBands = bandData
-    ? isPro
-      ? bandData
-      : bandData.filter(b => ['2','3','4'].includes(b.band))
+    ? isPro ? bandData : bandData.filter(b => ['2', '3', '4'].includes(b.band))
     : []
 
   const lockedCount = bandData
-    ? bandData.filter(b => !['2','3','4'].includes(b.band)).length
+    ? bandData.filter(b => !['2', '3', '4'].includes(b.band)).length
     : 0
 
+  // Loading skeleton
+  if (loading) {
+    return (
+      <div style={{ padding: '32px 0' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '48px 0' }}>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {[0,1,2].map(i => (
+              <div key={i} style={{
+                width: 8, height: 8, borderRadius: '50%',
+                background: 'var(--color-border-secondary)',
+                animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite`,
+              }} />
+            ))}
+          </div>
+          <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0 }}>
+            Analysing across NHS Band 2–8a…
+          </p>
+        </div>
+        <style>{`@keyframes pulse { 0%,100%{opacity:.3;transform:scale(.8)} 50%{opacity:1;transform:scale(1)} }`}</style>
+      </div>
+    )
+  }
+
+  // Error
+  if (error) {
+    return (
+      <div style={{ padding: '24px 0' }}>
+        <div style={{ display: 'flex', gap: 10, padding: '14px 16px', background: 'var(--color-background-danger)', border: '0.5px solid var(--color-border-danger)', borderRadius: 'var(--border-radius-md)' }}>
+          <span style={{ color: 'var(--color-text-danger)', flexShrink: 0 }}>⚠</span>
+          <div>
+            <p style={{ fontSize: 13, color: 'var(--color-text-danger)', margin: '0 0 4px', fontWeight: 500 }}>{error}</p>
+            <button onClick={runAnalysis} style={{ fontSize: 12, color: 'var(--color-text-info)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
+              Try again
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!bandData) return null
+
   return (
-    <div style={{ padding: '24px 0', display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: '#111827', marginBottom: 4 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 500, color: 'var(--color-text-primary)', margin: '0 0 4px' }}>
             Person Spec DNA™
           </h2>
-          <p style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
-            How well does your application match each NHS band level?
-            {targetBand && ` You applied for Band ${targetBand}.`}
+          <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0 }}>
+            How your application scores across NHS Band 2–8a
+            {targetBand && ` · You applied for Band ${targetBand}`}
           </p>
         </div>
-        {!bandData && !loading && (
-          <button
-            onClick={runAnalysis}
-            style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 18px', backgroundColor: '#1e40af', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-          >
-            <TrendingUp size={15} />
-            Analyse Band Match
-          </button>
-        )}
+        <button
+          onClick={runAnalysis}
+          style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', fontSize: 12, color: 'var(--color-text-secondary)', background: 'transparent', border: '0.5px solid var(--color-border-secondary)', borderRadius: 'var(--border-radius-md)', cursor: 'pointer', fontFamily: 'inherit' }}
+        >
+          ↻ Re-run
+        </button>
       </div>
 
-      {/* Loading state */}
-      {loading && (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '48px 0' }}>
-          <div style={{ width: 40, height: 40, border: '3px solid #dbeafe', borderTopColor: '#1e40af', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-          <p style={{ fontSize: 13, color: '#6b7280' }}>Analysing your application across all NHS band levels…</p>
-          <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-        </div>
-      )}
-
-      {/* Error */}
-      {error && (
-        <div style={{ display: 'flex', gap: 10, padding: '12px 16px', backgroundColor: '#fee2e2', border: '1px solid #fecaca', borderRadius: 10 }}>
-          <AlertCircle size={16} color="#ef4444" style={{ flexShrink: 0, marginTop: 1 }} />
-          <div>
-            <p style={{ fontSize: 13, color: '#991b1b', fontWeight: 500 }}>{error}</p>
-            <button onClick={runAnalysis} style={{ fontSize: 12, color: '#1e40af', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginTop: 4, textDecoration: 'underline' }}>Try again</button>
-          </div>
-        </div>
-      )}
-
-      {/* Empty state */}
-      {!bandData && !loading && !error && (
-        <div style={{ textAlign: 'center', padding: '48px 24px', backgroundColor: '#f9fafb', borderRadius: 12, border: '1px dashed #e5e7eb' }}>
-          <TrendingUp size={32} color="#9ca3af" style={{ margin: '0 auto 12px' }} />
-          <p style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-            Band Match not yet run
-          </p>
-          <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 16 }}>
-            Click "Analyse Band Match" to see how your application scores across NHS Band 2–8a.
-          </p>
-          <button
-            onClick={runAnalysis}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 20px', backgroundColor: '#1e40af', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-          >
-            <Zap size={14} /> Run Band Match Analysis
-          </button>
-        </div>
-      )}
-
-      {/* Results */}
-      {bandData && !loading && (
-        <>
-          {/* Summary bar */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 8 }}>
-            {bandData.map(b => {
-              const cfg = statusConfig(b.status)
-              const isLocked = !isPro && !['2','3','4'].includes(b.band)
-              return (
-                <div
-                  key={b.band}
-                  onClick={() => !isLocked && setExpanded(expanded === b.band ? null : b.band)}
-                  style={{
-                    padding: '10px 8px',
-                    textAlign: 'center',
-                    backgroundColor: b.band === expanded ? cfg.bg : '#f9fafb',
-                    border: `1.5px solid ${b.band === expanded ? cfg.border : '#e5e7eb'}`,
-                    borderRadius: 10,
-                    cursor: isLocked ? 'not-allowed' : 'pointer',
-                    filter: isLocked ? 'blur(2px)' : 'none',
-                    opacity: isLocked ? 0.5 : 1,
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  <div style={{ fontSize: 15, fontWeight: 700, color: cfg.dot }}>{b.matchPct}%</div>
-                  <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{b.label}</div>
-                  {b.band === targetBand && <div style={{ fontSize: 9, fontWeight: 700, color: '#1e40af', marginTop: 2 }}>APPLIED</div>}
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Band cards */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {visibleBands.map(b => (
-              <BandCard
-                key={b.band}
-                band={b}
-                isPro={isPro}
-                targetBand={targetBand}
-                expanded={expanded === b.band}
-                onToggle={() => setExpanded(expanded === b.band ? null : b.band)}
-              />
-            ))}
-          </div>
-
-          {/* Pro upsell for locked bands */}
-          {!isPro && lockedCount > 0 && (
-            <div style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #4c1d95 100%)', borderRadius: 12, padding: '20px 24px', color: '#fff' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <Lock size={16} color="#c4b5fd" />
-                <span style={{ fontSize: 14, fontWeight: 700 }}>{lockedCount} band levels hidden</span>
-              </div>
-              <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.75)', marginBottom: 14, lineHeight: 1.5 }}>
-                Upgrade to Pro to see Band 5, 6, 7, and 8a match scores — including exactly what evidence is missing to qualify for senior NHS roles.
-              </p>
-              <button
-                onClick={() => router.push('/upgrade')}
-                style={{ padding: '10px 20px', backgroundColor: '#fff', color: '#4c1d95', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
-              >
-                Unlock All Bands → Upgrade to Pro
-              </button>
-            </div>
-          )}
-
-          {/* Re-run button */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button
-              onClick={runAnalysis}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', backgroundColor: '#f3f4f6', color: '#374151', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}
+      {/* Summary bar — all 7 bands as mini cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
+        {bandData.map(b => {
+          const cfg      = STATUS_MAP[b.status]
+          const isLocked = !isPro && !['2', '3', '4'].includes(b.band)
+          const isActive = expanded === b.band
+          return (
+            <div
+              key={b.band}
+              onClick={() => !isLocked && setExpanded(expanded === b.band ? null : b.band)}
+              style={{
+                padding: '8px 6px',
+                textAlign: 'center',
+                borderRadius: 'var(--border-radius-md)',
+                border: `${isActive ? '1.5px' : '0.5px'} solid ${isActive ? cfg.border : 'var(--color-border-tertiary)'}`,
+                background: isActive ? cfg.bg : 'var(--color-background-primary)',
+                cursor: isLocked ? 'default' : 'pointer',
+                filter: isLocked ? 'blur(2px)' : 'none',
+                opacity: isLocked ? 0.4 : 1,
+                transition: 'all 0.15s',
+                userSelect: 'none',
+              }}
             >
-              <TrendingUp size={13} /> Re-run analysis
+              <div style={{ fontSize: 14, fontWeight: 500, color: cfg.bar }}>{b.matchPct}%</div>
+              <div style={{ fontSize: 10, color: 'var(--color-text-tertiary)', marginTop: 2 }}>{b.label}</div>
+              {b.band === targetBand && (
+                <div style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--color-text-info)', margin: '3px auto 0' }} />
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Band cards */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {visibleBands.map(b => (
+          <BandCard
+            key={b.band}
+            band={b}
+            isPro={isPro}
+            targetBand={targetBand}
+            expanded={expanded === b.band}
+            onToggle={() => setExpanded(expanded === b.band ? null : b.band)}
+          />
+        ))}
+      </div>
+
+      {/* Pro upsell */}
+      {!isPro && lockedCount > 0 && (
+        <div style={{ background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-lg)', padding: '16px 20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', margin: '0 0 3px' }}>
+                🔒 {lockedCount} band levels hidden
+              </p>
+              <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>
+                Upgrade to Pro to see Band 5, 6, 7 and 8a match scores
+              </p>
+            </div>
+            <button
+              onClick={() => router.push('/upgrade')}
+              style={{ flexShrink: 0, padding: '8px 16px', background: 'var(--color-text-primary)', color: 'var(--color-background-primary)', border: 'none', borderRadius: 'var(--border-radius-md)', fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+            >
+              Upgrade to Pro
             </button>
           </div>
-        </>
+        </div>
       )}
+
     </div>
   )
 }

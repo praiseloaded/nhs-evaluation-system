@@ -10,16 +10,15 @@ const BAND_LEVELS = ['2', '3', '4', '5', '6', '7', '8a']
 
 const BAND_EXPECTATIONS: Record<string, string> = {
   '2':  'Basic healthcare support tasks, working under supervision. No formal qualifications required. Evidence needed: willingness to learn, patient interaction, basic care duties, following instructions.',
-  '3':  'Skilled support role with some autonomy. May supervise Band 2. Evidence needed: relevant experience, some specialist knowledge, ability to work without constant supervision, basic clinical skills.',
-  '4':  'Associate practitioner level. Significant autonomy, specialist skills, may lead small teams. Evidence needed: specialist clinical skills, independent working, some leadership, relevant qualification or equivalent experience.',
-  '5':  'Qualified practitioner (e.g. Staff Nurse, Physiotherapist). Full professional registration required. Evidence needed: professional qualification, NMC/HCPC registration, clinical decision-making, patient assessment, MDT working.',
+  '3':  'Skilled support role with some autonomy. May supervise Band 2. Evidence needed: relevant experience, specialist knowledge, ability to work without constant supervision, basic clinical skills.',
+  '4':  'Associate practitioner level. Significant autonomy, specialist skills, may lead small teams. Evidence needed: specialist clinical skills, independent working, some leadership, relevant qualification.',
+  '5':  'Qualified practitioner (e.g. Staff Nurse). Full professional registration required. Evidence needed: professional qualification, NMC/HCPC registration, clinical decision-making, patient assessment, MDT working.',
   '6':  'Senior/specialist practitioner. Leads service area, mentors others, contributes to service development. Evidence needed: specialist expertise, leadership, service development, advanced clinical skills, autonomous practice.',
-  '7':  'Advanced practitioner or manager. Strategic responsibility, manages teams, advanced clinical or managerial role. Evidence needed: advanced qualifications, team leadership, budget management, strategic thinking, research/audit.',
-  '8a': 'Consultant or senior manager. Organisation-wide impact, highly specialised expertise. Evidence needed: consultant-level expertise, strategic leadership, publications or significant research, budget responsibility.',
+  '7':  'Advanced practitioner or manager. Strategic responsibility, manages teams. Evidence needed: advanced qualifications, team leadership, budget management, strategic thinking, research/audit.',
+  '8a': 'Consultant or senior manager. Organisation-wide impact, highly specialised expertise. Evidence needed: consultant-level expertise, strategic leadership, publications or significant research.',
 }
 
 async function callAI(prompt: string): Promise<string> {
-  // Gemini primary
   if (process.env.GEMINI_API_KEY) {
     try {
       const res = await fetch(
@@ -43,7 +42,6 @@ async function callAI(prompt: string): Promise<string> {
     }
   }
 
-  // Groq fallback
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -65,13 +63,10 @@ function buildPrompt(
   jobTitle: string,
   jobDescription: string,
   essentialCriteria: string,
-  desirableCriteria: string,
   personSpec: string,
   criteriaAnalysis: any[],
   nhsValues: any[],
   strengths: any[],
-  cv: string,
-  statement: string,
 ): string {
   const metCriteria    = criteriaAnalysis.filter(c => c.status === 'met').map(c => c.criterion)
   const notMetCriteria = criteriaAnalysis.filter(c => c.status !== 'met').map(c => c.criterion)
@@ -112,12 +107,13 @@ For each band 2, 3, 4, 5, 6, 7, 8a:
 3. List up to 4 specific gaps — what evidence is MISSING for that band
 4. List up to 4 specific strengths — what evidence IS present for that band
 5. Write a verdict (max 15 words) — one honest sentence about this band fit
+6. metCount: number of band criteria the candidate evidences
+7. totalCount: total criteria expected at this band
 
 CALIBRATION:
-- Be realistic and strict. A Band 5 requires professional registration and clinical decision-making.
-- A Band 6 requires demonstrated leadership and specialist expertise.
-- Do NOT inflate scores. If the candidate shows no leadership evidence, Band 7+ should score below 30%.
-- The band they applied for should be scored most carefully against the actual job spec.
+- Be realistic and strict. Band 5 requires professional registration and clinical decision-making.
+- Band 6 requires demonstrated leadership and specialist expertise.
+- Do NOT inflate scores. If no leadership evidence, Band 7+ should score below 30%.
 
 Return ONLY valid JSON — no markdown, no preamble:
 {
@@ -150,22 +146,25 @@ export async function POST(_req: NextRequest, { params }: Params) {
       return Response.json({ error: 'Not found' }, { status: 404 })
     }
 
-    const result   = (record.result as any) ?? {}
-    const criteria = result.criteriaAnalysis ?? []
-    const values   = result.nhsValues        ?? []
-    const strengths= result.strengths        ?? []
+    const result    = (record.result as any) ?? {}
+    const criteria  = result.criteriaAnalysis ?? []
+    const values    = result.nhsValues        ?? []
+    const strengths = result.strengths        ?? []
 
-    const prompt = buildPrompt(
+    // ── Return cached result if already stored ──────────────────────────────
+    if (result.bandMatch?.length) {
+      return Response.json({ bands: result.bandMatch, cached: true })
+    }
+
+    // ── Run AI analysis ─────────────────────────────────────────────────────
+    const prompt  = buildPrompt(
       record.jobTitle          ?? '',
       record.jobDescription    ?? '',
       record.essentialCriteria ?? '',
-      record.desirableCriteria ?? '',
       record.personSpec        ?? '',
       criteria,
       values,
       strengths,
-      record.cv        ?? '',
-      record.statement ?? '',
     )
 
     const raw     = await callAI(prompt)
@@ -178,24 +177,29 @@ export async function POST(_req: NextRequest, { params }: Params) {
       return Response.json({ error: 'Failed to parse band match result' }, { status: 500 })
     }
 
-    // Ensure all 7 bands are present — fill missing with defaults
-    const resultBands: any[] = []
-    for (const level of BAND_LEVELS) {
+    // Ensure all 7 bands present
+    const resultBands: any[] = BAND_LEVELS.map(level => {
       const found = parsed.bands?.find((b: any) => b.band === level)
-      resultBands.push(found ?? {
-        band:       level,
-        label:      `Band ${level}`,
-        matchPct:   0,
-        status:     'gap',
-        metCount:   0,
-        totalCount: 10,
-        gaps:       ['Insufficient data to assess'],
-        strengths:  [],
-        verdict:    'Could not assess — insufficient data',
-      })
-    }
+      return found ?? {
+        band: level, label: `Band ${level}`, matchPct: 0,
+        status: 'gap', metCount: 0, totalCount: 10,
+        gaps: ['Insufficient data to assess'], strengths: [],
+        verdict: 'Could not assess — insufficient data',
+      }
+    })
 
-    return Response.json({ bands: resultBands })
+    // ── Save into result JSON ───────────────────────────────────────────────
+    await prisma.analysis.update({
+      where: { id },
+      data:  {
+        result: {
+          ...result,
+          bandMatch: resultBands,
+        },
+      },
+    })
+
+    return Response.json({ bands: resultBands, cached: false })
 
   } catch (err: any) {
     console.error('[band-match]', err)
