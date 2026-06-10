@@ -265,6 +265,49 @@ export default function StatementBuilderWizard() {
     fetch('/api/application/list').then(r=>r.json()).then(d=>setPastApps(d.applications??[])).catch(()=>{}).finally(()=>setLoadingPast(false))
   }, [])
 
+  // ── Persist wizard state to localStorage so refresh/navigation doesn't wipe it
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('nhs_wizard_state')
+      if (saved) {
+        const s = JSON.parse(saved)
+        if (s.applicationId) setApplicationId(s.applicationId)
+        if (s.step && s.step > 1) setStep(s.step)
+        if (s.jobTitle) setJobTitle(s.jobTitle)
+        if (s.employer) setEmployer(s.employer)
+        if (s.band) setBand(s.band)
+        if (s.wordLimit) setWordLimit(s.wordLimit)
+        if (s.detectedNation) setDetectedNation(s.detectedNation)
+        if (s.criteria?.length) setCriteria(s.criteria)
+        if (s.parsedSpec) setParsedSpec(s.parsedSpec)
+        if (s.currentRole) setCurrentRole(s.currentRole)
+        if (s.yearsExp) setYearsExp(s.yearsExp)
+        if (s.whyRole) setWhyRole(s.whyRole)
+        if (s.whyOrg) setWhyOrg(s.whyOrg)
+        if (s.careerGoals) setCareerGoals(s.careerGoals)
+        if (s.statementQ1) setStatementQ1(s.statementQ1)
+        if (s.statementQ2) setStatementQ2(s.statementQ2)
+        if (s.statementQ3) setStatementQ3(s.statementQ3)
+        if (s.savedEvidence) setSavedEvidence(s.savedEvidence)
+        if (s.evidenceIndex !== undefined) setEvidenceIndex(s.evidenceIndex)
+      }
+    } catch {}
+  }, [])
+
+  // Save wizard state whenever key values change
+  useEffect(() => {
+    if (!applicationId && step === 1) return // nothing to save yet
+    try {
+      localStorage.setItem('nhs_wizard_state', JSON.stringify({
+        applicationId, step, jobTitle, employer, band, wordLimit, detectedNation,
+        criteria, parsedSpec, currentRole, yearsExp, whyRole, whyOrg, careerGoals,
+        statementQ1, statementQ2, statementQ3, savedEvidence, evidenceIndex,
+      }))
+    } catch {}
+  }, [applicationId, step, jobTitle, employer, band, wordLimit, detectedNation,
+      criteria, parsedSpec, currentRole, yearsExp, whyRole, whyOrg, careerGoals,
+      statementQ1, statementQ2, statementQ3, savedEvidence, evidenceIndex])
+
   useEffect(() => {
     const n = detectNation(employer)
     setDetectedNation(n)
@@ -296,11 +339,23 @@ export default function StatementBuilderWizard() {
   const clearSlot = (setSlot: (fn: (s: FileSlot) => FileSlot) => void) => setSlot(() => createSlot())
 
   // ── Step 1 → 2: Parse ────────────────────────────────────────────────────────
+  const clearWizard = () => {
+    try { localStorage.removeItem('nhs_wizard_state') } catch {}
+    setApplicationId(null); setStep(1); setCriteria([]); setParsedSpec(null)
+    setStatementQ1(''); setStatementQ2(''); setStatementQ3('')
+    setSavedEvidence({}); setEvidenceIndex(0); setEvidenceValues({})
+    setNoExpFlags({}); setJobTitle(''); setEmployer(''); setBand('')
+    setWhyRole(''); setWhyOrg(''); setCareerGoals(''); setCurrentRole(''); setYearsExp('')
+    setError(null)
+  }
+
   const parseAndProceed = async () => {
     const jd = jdPaste ? jdText : jdSlot.text
     if (!jobTitle.trim()) { setError('Job title is required'); return }
     if (!jd.trim()) { setError('Job description is required'); return }
     setParsing(true); setError(null)
+    // Clear any previous wizard state for a fresh start
+    try { localStorage.removeItem('nhs_wizard_state') } catch {}
     try {
       const res = await fetch('/api/application/parse-spec', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -372,6 +427,10 @@ export default function StatementBuilderWizard() {
 
   // ── Step 5: Generate Q1 ────────────────────────────────────────────────────
   const generateQ1 = async () => {
+    if (!applicationId) {
+      setError('Session lost — please click "Start fresh" and begin again.')
+      return
+    }
     setGeneratingQ1(true); setError(null)
     try {
       const res = await fetch('/api/application/generate-statement', {
@@ -439,14 +498,21 @@ export default function StatementBuilderWizard() {
   const q3Limit = isScotland ? 200 : Math.round(wordLimit * 0.15)
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+    <div className="max-w-2xl mx-auto px-4 py-8">
       <div className="mb-6">
         <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-3">
           <ArrowLeft className="w-4 h-4" /> Dashboard
         </Link>
-        <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
-          <Sparkles className="w-5 h-5 text-primary" /> NHS Statement Builder
-        </h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-primary" /> NHS Statement Builder
+          </h1>
+          {step > 1 && (
+            <button onClick={clearWizard} className="text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg px-3 py-1.5 hover:bg-accent transition-colors">
+              Start fresh
+            </button>
+          )}
+        </div>
         <p className="text-xs text-muted-foreground mt-0.5">Scotland · England · Wales · Northern Ireland</p>
       </div>
 
