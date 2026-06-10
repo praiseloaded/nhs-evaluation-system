@@ -439,7 +439,7 @@ export default function StatementBuilderWizard() {
   const q3Limit = isScotland ? 200 : Math.round(wordLimit * 0.15)
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8">
+    <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
       <div className="mb-6">
         <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-3">
           <ArrowLeft className="w-4 h-4" /> Dashboard
