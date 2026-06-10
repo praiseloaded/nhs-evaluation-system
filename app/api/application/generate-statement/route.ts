@@ -1,118 +1,121 @@
-// app/api/application/generate-statement/route.ts
+// app/api/application/parse-spec/route.ts
+//
+// Accepts four separate document texts:
+//   jobDescription    — the job advert text
+//   personSpec        — person specification (may overlap with jobDescription)
+//   cvText            — applicant CV
+//   nhsValuesText     — Trust/Board NHS values document (used in Q2 generation)
+//
+// Also accepts pre-detected nation + word limit from the launcher UI.
 
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/auth"
 import { callGeminiJSON } from "@/lib/application/ai"
-import {
-  buildIntroductionPrompt,
-  buildClosingPrompt,
-  assembleStatementLocally,
-} from "@/lib/application/statement-generator"
-import { scoreApplication } from "@/lib/application/scoring"
+import { buildParserPrompt, postProcessParsedSpec } from "@/lib/application/parser"
 
 export async function POST(req: Request) {
   try {
     const session = await auth()
     if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
+    const userId = session.user.id as string
 
     const body = await req.json()
-    const { applicationId } = body
+    const {
+      jobTitle,
+      jobDescription,
+      personSpec,          // now separate from jobDescription
+      cvText,
+      nhsValuesText,       // NEW — Trust/Board values document
+      employer,
+      band,
+      sourceUrl,
+      detectedNation,      // NEW — from launcher auto-detection
+      statementWordLimit,  // NEW — for England/Wales/NI dynamic limit
+    } = body
 
-    if (!applicationId) return Response.json({ error: "applicationId required" }, { status: 400 })
-
-    const application = await prisma.application.findUnique({
-      where: { id: applicationId },
-      include: { criteria: { orderBy: { order: "asc" } } },
-    })
-
-    if (!application || application.userId !== session.user.id) {
-      return Response.json({ error: "Not found" }, { status: 404 })
+    if (!jobTitle || !jobDescription) {
+      return Response.json({ error: "jobTitle and jobDescription required" }, { status: 400 })
     }
 
-    const parsed = application.parsedSpec as any
-    const criteriaWithParagraphs = application.criteria
-      .filter(c => c.generatedParagraph)
-      .map(c => ({
-        criterionText: c.criterionText,
-        type: c.type as "essential" | "desirable",
-        paragraph: c.generatedParagraph!,
-        order: c.order,
-      }))
+    // Combine JD + person spec for criteria extraction
+    const combined = [jobDescription, personSpec].filter(Boolean).join("\n\n")
 
-    if (criteriaWithParagraphs.length === 0) {
-      return Response.json({ error: "No criteria paragraphs generated yet. Complete at least one criterion first." }, { status: 400 })
-    }
+    // Attempt to extract employer from JD if not supplied
+    const parserInput = employer
+      ? combined
+      : `[NOTE: Extract the NHS employer / Health Board name from this job description if present]\n\n${combined}`
 
-    const input = {
-      jobTitle: application.jobTitle,
-      band: application.band,
-      employer: application.employer,
-      criterionParagraphs: criteriaWithParagraphs,
-      currentRole: application.currentRole,
-      yearsExperience: application.yearsExperience,
-      nhsValues: parsed?.nhsValues ?? [],
-    }
+    const prompt = buildParserPrompt(jobTitle, parserInput)
+    const raw = await callGeminiJSON(prompt, 6000)
+    const parsed = postProcessParsedSpec(raw)
 
-    // Generate introduction
-    const introResult = await callGeminiJSON(buildIntroductionPrompt(input), 1500)
-    const introduction = introResult.introduction ?? ''
+    const resolvedEmployer = employer ?? parsed.employer ?? raw.employer ?? null
+    const resolvedNation   = detectedNation ?? raw.detectedNation ?? "unknown"
 
-    // Generate closing
-    const closingResult = await callGeminiJSON(buildClosingPrompt(input), 1500)
-    const closing = closingResult.closing ?? ''
+    // Q3 trigger detection
+    const combinedLower = combined.toLowerCase()
+    const q3Triggers: string[] = []
+    if (combinedLower.includes("guaranteed interview") || combinedLower.includes("disability confident")) q3Triggers.push("gis")
+    if (combinedLower.includes("relocation")) q3Triggers.push("relocation")
+    if (combinedLower.includes("part time") || combinedLower.includes("part-time") || combinedLower.includes("flexible working") || combinedLower.includes("job share")) q3Triggers.push("part_time")
+    if (combinedLower.includes("notice period") || combinedLower.includes("start date")) q3Triggers.push("notice_period")
 
-    // Assemble full statement
-    const fullStatement = assembleStatementLocally(introduction, criteriaWithParagraphs, closing)
-    const wordCount = fullStatement.split(/\s+/).filter(Boolean).length
-
-    // Score the application
-    const criteriaInputs = application.criteria.map(c => ({
-      type: c.type as "essential" | "desirable",
-      situation: c.situation,
-      task: c.task,
-      action: c.action,
-      result: c.result,
-      metrics: c.metrics,
-      reflection: c.reflection,
-      generatedParagraph: c.generatedParagraph,
-      keywords: (parsed?.essentialCriteria ?? []).concat(parsed?.desirableCriteria ?? [])
-        .find((p: any) => p.text === c.criterionText)?.keywords ?? [],
-      criterionText: c.criterionText,
-    }))
-
-    const liveScore = scoreApplication(criteriaInputs, introduction, closing, fullStatement, parsed?.nhsValues ?? [])
-
-    // Save
-    await prisma.application.update({
-      where: { id: applicationId },
+    // Create application
+    const application = await prisma.application.create({
       data: {
-        introduction,
-        closing,
-        fullStatement,
-        wordCount,
-        liveScore,
-        status: "complete",
+        userId,
+        jobTitle,
+        band: band ?? null,
+        employer: resolvedEmployer,
+        sourceUrl: sourceUrl ?? null,
+        jobDescription,
+        personSpec: personSpec ?? null,
+        cvText: cvText ?? null,
+        // @ts-expect-error — new fields
+        nhsValuesText: nhsValuesText ?? null,
+        parsedSpec: {
+          ...parsed,
+          q3Triggers,
+          resolvedBoard: resolvedEmployer,
+          detectedNation: resolvedNation,
+          statementWordLimit: statementWordLimit ?? null,
+        },
+        status: "draft",
       },
     })
 
-    // Save draft version
-    await prisma.applicationDraft.create({
-      data: {
-        applicationId,
-        content: fullStatement,
-        wordCount,
-        score: liveScore,
-      },
-    })
+    // Create criterion records
+    const allCriteria = [
+      ...parsed.essentialCriteria.map((c: any, i: number) => ({ ...c, order: i })),
+      ...parsed.desirableCriteria.map((c: any, i: number) => ({ ...c, order: i + 100 })),
+    ]
+    for (const c of allCriteria) {
+      await prisma.applicationCriterion.create({
+        data: {
+          applicationId: application.id,
+          criterionText: c.text,
+          type: c.type,
+          category: c.category,
+          order: c.order,
+        },
+      })
+    }
 
     return Response.json({
       success: true,
-      statement: fullStatement,
-      wordCount,
-      score: liveScore,
+      applicationId: application.id,
+      parsed,
+      criteriaCount: allCriteria.length,
+      resolvedEmployer,
+      resolvedNation,
+      q3Triggers,
+      nhsValuesLoaded: !!nhsValuesText,
+      employerWarning: !resolvedEmployer
+        ? "No Health Board/Trust name detected. Q2 will use generic values. Add the employer name for a more targeted statement."
+        : null,
     })
   } catch (error: any) {
-    console.error("GENERATE_STATEMENT_ERROR:", error)
-    return Response.json({ error: error?.message ?? "Failed" }, { status: 500 })
+    console.error("PARSE_SPEC_ERROR:", error)
+    return Response.json({ error: error?.message ?? "Parse failed" }, { status: 500 })
   }
 }

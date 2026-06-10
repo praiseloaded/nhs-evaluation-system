@@ -1,4 +1,3 @@
-
 generator client {
   provider = "prisma-client-js"
   output   = "../node_modules/.prisma/client"
@@ -27,9 +26,8 @@ model User {
   interviews    Interview[]
   applications  Application[]
 
-
-stripeCustomerId     String?
-stripeSubscriptionId String?
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
 
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -157,35 +155,48 @@ model Application {
   userId          String
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // ── Job details ───────────────────────────────────────────────────────────
   jobTitle        String
   band            String?
   employer        String?
   sourceUrl       String?
   jobDescription  String
-  personSpec      String?
+  personSpec      String?   // person spec stored separately from job description
 
-  parsedSpec      Json?
+  parsedSpec      Json?     // AI-extracted criteria, nation, word limits, q3 triggers
 
+  // ── Applicant context ─────────────────────────────────────────────────────
   cvText          String?
+  nhsValuesText   String?   // uploaded Trust/Board values document — used in Q2
   yearsExperience Int?
   currentBand     Int?
   currentRole     String?
 
+  // ── Legacy single-statement fields (kept for backwards compatibility) ─────
   introduction    String?
   closing         String?
   fullStatement   String?
   wordCount       Int?
 
+  // ── Three-question statement fields (Scotland = 3 separate boxes) ─────────
+  // For England/Wales/NI these are the three sections combined into one paste
+  statementQ1     String?   // Q1: Why are you suitable? (suitability + STAR evidence)
+  statementQ2     String?   // Q2: Why do you want to work here? (values + employer-specific)
+  statementQ3     String?   // Q3: Any other relevant information? (gaps, GIS, relocation etc.)
+  wordCountQ1     Int?
+  wordCountQ2     Int?
+  wordCountQ3     Int?
+  q3Context       Json?     // stores career gap, GIS, relocation, part-time flags
+
+  // ── Tracker fields ────────────────────────────────────────────────────────
   notes           String?
   submittedAt     DateTime?
   interviewDate   DateTime?
   deadlineDate    DateTime?
   cvScore         Json?
   shortlistAssessment Json?
-
   liveScore       Json?
   completeness    Float    @default(0)
-
   status          String   @default("draft")
 
   criteria        ApplicationCriterion[]

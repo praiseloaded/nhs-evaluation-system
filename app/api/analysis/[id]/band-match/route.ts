@@ -8,16 +8,6 @@ type Params = { params: Promise<{ id: string }> }
 
 const BAND_LEVELS = ['2', '3', '4', '5', '6', '7', '8a']
 
-const BAND_EXPECTATIONS: Record<string, string> = {
-  '2':  'Basic healthcare support tasks, working under supervision. No formal qualifications required. Evidence needed: willingness to learn, patient interaction, basic care duties, following instructions.',
-  '3':  'Skilled support role with some autonomy. May supervise Band 2. Evidence needed: relevant experience, specialist knowledge, ability to work without constant supervision, basic clinical skills.',
-  '4':  'Associate practitioner level. Significant autonomy, specialist skills, may lead small teams. Evidence needed: specialist clinical skills, independent working, some leadership, relevant qualification.',
-  '5':  'Qualified practitioner (e.g. Staff Nurse). Full professional registration required. Evidence needed: professional qualification, NMC/HCPC registration, clinical decision-making, patient assessment, MDT working.',
-  '6':  'Senior/specialist practitioner. Leads service area, mentors others, contributes to service development. Evidence needed: specialist expertise, leadership, service development, advanced clinical skills, autonomous practice.',
-  '7':  'Advanced practitioner or manager. Strategic responsibility, manages teams. Evidence needed: advanced qualifications, team leadership, budget management, strategic thinking, research/audit.',
-  '8a': 'Consultant or senior manager. Organisation-wide impact, highly specialised expertise. Evidence needed: consultant-level expertise, strategic leadership, publications or significant research.',
-}
-
 async function callAI(prompt: string): Promise<string> {
   if (process.env.GEMINI_API_KEY) {
     try {
@@ -28,7 +18,11 @@ async function callAI(prompt: string): Promise<string> {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.1, maxOutputTokens: 4000 },
+            generationConfig: {
+              temperature: 0.1,
+              maxOutputTokens: 8192,
+              responseMimeType: 'application/json',
+            },
           }),
         }
       )
@@ -36,9 +30,37 @@ async function callAI(prompt: string): Promise<string> {
         const data = await res.json()
         const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim()
         if (text) return text
+        const reason = data?.candidates?.[0]?.finishReason
+        console.warn('[band-match] Gemini empty text, finishReason:', reason)
+      } else {
+        const errStatus = res.status
+        console.warn('[band-match] Gemini HTTP', errStatus)
+        // 503 = overloaded — try fallback model
+        if (errStatus === 503) {
+          try {
+            const res2 = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                  generationConfig: { temperature: 0.1, maxOutputTokens: 8192, responseMimeType: 'application/json' },
+                }),
+              }
+            )
+            if (res2.ok) {
+              const data2 = await res2.json()
+              const text2 = data2?.candidates?.[0]?.content?.parts?.[0]?.text?.trim()
+              if (text2) return text2
+            }
+          } catch (e2: any) {
+            console.warn('[band-match] Gemini 1.5 fallback failed:', e2.message)
+          }
+        }
       }
-    } catch (e) {
-      console.warn('[band-match] Gemini failed, trying Groq')
+    } catch (e: any) {
+      console.warn('[band-match] Gemini error:', e.message)
     }
   }
 
@@ -49,154 +71,179 @@ async function callAI(prompt: string): Promise<string> {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
-      max_tokens: 4000,
-      temperature: 0.1,
-      messages: [{ role: 'user', content: prompt }],
+      model:            'llama-3.3-70b-versatile',
+      max_tokens:       6000,
+      temperature:      0.1,
+      response_format:  { type: 'json_object' },
+      messages:         [{ role: 'user', content: prompt }],
     }),
+    signal: AbortSignal.timeout(50000),
   })
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => '')
+    throw new Error(`Groq HTTP ${res.status}: ${errBody}`)
+  }
   const data = await res.json()
   return data.choices[0].message.content as string
 }
 
-function buildPrompt(
-  jobTitle: string,
-  jobDescription: string,
-  essentialCriteria: string,
-  personSpec: string,
-  criteriaAnalysis: any[],
-  nhsValues: any[],
-  strengths: any[],
-): string {
-  const metCriteria    = criteriaAnalysis.filter(c => c.status === 'met').map(c => c.criterion)
-  const notMetCriteria = criteriaAnalysis.filter(c => c.status !== 'met').map(c => c.criterion)
-  const valuesShown    = nhsValues.filter(v => v.classification !== 'absent').map(v => v.name)
-  const strengthsList  = strengths.map(s => typeof s === 'string' ? s : s.claim ?? '')
+function extractJSON(raw: string): any | null {
+  if (!raw) return null
+  const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+  try { return JSON.parse(cleaned) } catch {}
+  const start = cleaned.indexOf('{')
+  const end   = cleaned.lastIndexOf('}')
+  if (start !== -1 && end > start) {
+    try { return JSON.parse(cleaned.slice(start, end + 1)) } catch {}
+  }
+  return null
+}
 
-  const bandExpectationsText = BAND_LEVELS
-    .map(b => `BAND ${b}: ${BAND_EXPECTATIONS[b]}`)
-    .join('\n\n')
+function normaliseBands(parsed: any): any[] {
+  let bands: any[] = Array.isArray(parsed) ? parsed : (parsed?.bands ?? [])
 
-  return `
-You are an expert NHS recruitment analyst. Assess how well this candidate's application matches each NHS Band level from 2 to 8a.
-
-JOB APPLIED FOR: ${jobTitle}
-
-CANDIDATE EVIDENCE SUMMARY:
-- Criteria met: ${metCriteria.slice(0, 15).join(', ') || 'None identified'}
-- Criteria not met: ${notMetCriteria.slice(0, 10).join(', ') || 'None'}
-- NHS Values demonstrated: ${valuesShown.join(', ') || 'None identified'}
-- Strengths: ${strengthsList.slice(0, 5).join('; ') || 'None identified'}
-
-JOB DESCRIPTION (excerpt):
-${jobDescription.slice(0, 1000)}
-
-ESSENTIAL CRITERIA:
-${essentialCriteria.slice(0, 800)}
-
-PERSON SPECIFICATION:
-${personSpec.slice(0, 800)}
-
-NHS BAND EXPECTATIONS:
-${bandExpectationsText}
-
-ASSESSMENT INSTRUCTIONS:
-For each band 2, 3, 4, 5, 6, 7, 8a:
-1. Calculate matchPct (0-100) — how well the candidate's EVIDENCE matches that band's expectations
-2. Determine status: "exceeds" (90+), "strong" (75-89), "match" (60-74), "stretch" (45-59), "gap" (below 45)
-3. List up to 4 specific gaps — what evidence is MISSING for that band
-4. List up to 4 specific strengths — what evidence IS present for that band
-5. Write a verdict (max 15 words) — one honest sentence about this band fit
-6. metCount: number of band criteria the candidate evidences
-7. totalCount: total criteria expected at this band
-
-CALIBRATION:
-- Be realistic and strict. Band 5 requires professional registration and clinical decision-making.
-- Band 6 requires demonstrated leadership and specialist expertise.
-- Do NOT inflate scores. If no leadership evidence, Band 7+ should score below 30%.
-
-Return ONLY valid JSON — no markdown, no preamble:
-{
-  "bands": [
-    {
-      "band": "2",
-      "label": "Band 2",
-      "matchPct": <0-100>,
-      "status": "exceeds|strong|match|stretch|gap",
-      "metCount": <number>,
-      "totalCount": <number>,
-      "gaps": ["...", "..."],
-      "strengths": ["...", "..."],
-      "verdict": "..."
+  return BAND_LEVELS.map(level => {
+    const found = bands.find((b: any) => String(b.band) === level)
+    if (found) {
+      return {
+        band:            String(found.band ?? level),
+        label:           found.label           ?? `Band ${level}`,
+        matchPct:        Math.min(100, Math.max(0, Number(found.matchPct ?? 0))),
+        status:          ['exceeds','strong','match','stretch','gap'].includes(found.status) ? found.status : 'gap',
+        metCount:        Number(found.metCount  ?? 0),
+        totalCount:      Number(found.totalCount ?? 10),
+        gaps:            Array.isArray(found.gaps)            ? found.gaps.slice(0, 5)            : [],
+        strengths:       Array.isArray(found.strengths)       ? found.strengths.slice(0, 5)       : [],
+        keyMissing:      Array.isArray(found.keyMissing)      ? found.keyMissing.slice(0, 3)      : [],
+        developmentPlan: Array.isArray(found.developmentPlan) ? found.developmentPlan.slice(0, 3) : [],
+        verdict:         String(found.verdict  ?? ''),
+        suitability:     String(found.suitability ?? ''),
+        timeToReady:     found.timeToReady ?? null,
+      }
     }
-  ]
-}`.trim()
+    return {
+      band: level, label: `Band ${level}`, matchPct: 0, status: 'gap',
+      metCount: 0, totalCount: 10, gaps: [], strengths: [],
+      keyMissing: [], developmentPlan: [],
+      verdict: 'Insufficient data', suitability: '', timeToReady: null,
+    }
+  })
+}
+
+function buildPrompt(record: any, result: any): string {
+  const criteria  = result.criteriaAnalysis ?? []
+  const values    = result.nhsValues        ?? []
+  const strengths = result.strengths        ?? []
+
+  const metCriteria    = criteria.filter((c: any) => c.status === 'met').map((c: any) => c.criterion).slice(0, 10)
+  const partialCriteria= criteria.filter((c: any) => c.status === 'partially met').map((c: any) => c.criterion).slice(0, 6)
+  const notMetCriteria = criteria.filter((c: any) => c.status === 'not met').map((c: any) => c.criterion).slice(0, 8)
+  const valuesShown    = values.filter((v: any) => v.classification !== 'absent').map((v: any) => v.name)
+  const strengthsList  = strengths.map((s: any) => typeof s === 'string' ? s : s.claim ?? '').slice(0, 5)
+  const weaknesses     = (result.weaknesses ?? []).slice(0, 5)
+  const sb             = result.scoredBreakdown ?? {}
+
+  return `You are a senior NHS workforce development specialist and recruitment expert.
+
+Analyse this candidate's application and produce a detailed band-level match assessment across all 7 NHS bands.
+
+═══ CANDIDATE PROFILE ═══
+Job applied for: ${record.jobTitle ?? 'Unknown'}
+Overall score: ${sb.overallScore ?? 'N/A'}%
+Criteria coverage: ${sb.criteriaCoverage ?? 'N/A'}%
+Values alignment: ${sb.valuesAlignment ?? 'N/A'}%
+
+Criteria MET (${metCriteria.length}): ${metCriteria.join(' | ') || 'None'}
+Criteria PARTIALLY MET (${partialCriteria.length}): ${partialCriteria.join(' | ') || 'None'}
+Criteria NOT MET (${notMetCriteria.length}): ${notMetCriteria.join(' | ') || 'None'}
+
+NHS Values demonstrated: ${valuesShown.join(', ') || 'None identified'}
+Key strengths: ${strengthsList.join(' | ') || 'None'}
+Key weaknesses: ${weaknesses.join(' | ') || 'None'}
+
+Job description: ${(record.jobDescription ?? '').slice(0, 600)}
+Essential criteria: ${(record.essentialCriteria ?? '').slice(0, 400)}
+Person spec: ${(record.personSpec ?? '').slice(0, 300)}
+
+═══ BAND STANDARDS ═══
+Band 2: Basic HCA/support tasks. Supervised. No quals needed. Evidence: basic care, following instructions, patient contact.
+Band 3: Skilled support, some autonomy, may supervise Band 2. Evidence: specific skills, working independently, basic clinical.
+Band 4: Associate practitioner. Significant autonomy, specialist skills. Evidence: specialist clinical, independent working, leadership beginnings, HNC/foundation degree or equiv.
+Band 5: Qualified practitioner (nurse/AHP/scientist). FULL REGISTRATION required (NMC/HCPC). Evidence: degree, professional reg, clinical decision-making, MDT, patient assessment.
+Band 6: Senior/specialist. Leads service, mentors staff, service development. Evidence: post-reg experience, specialist expertise, leadership, audit/quality improvement, autonomous practice.
+Band 7: Advanced practitioner or manager. Manages teams, strategic input. Evidence: advanced qualification, team management, budget responsibility, research, change leadership.
+Band 8a: Consultant or senior manager. Org-wide influence. Evidence: consultant expertise, strategic leadership, publications, significant research, high-level management.
+
+═══ INSTRUCTIONS ═══
+For each band produce:
+- matchPct: honest 0-100 score (be strict — Band 5 with no NMC reg = max 20%)
+- status: exceeds/strong/match/stretch/gap
+- metCount/totalCount: criteria evidenced vs expected at this band
+- strengths: up to 4 specific pieces of evidence that support this band
+- gaps: up to 4 specific things missing for this band
+- keyMissing: top 2-3 critical missing items that MOST limit this band fit
+- developmentPlan: up to 3 specific actionable steps to close the gap for this band
+- verdict: one honest sentence (max 15 words) about fit
+- suitability: "Ready now" | "6-12 months" | "1-2 years" | "2+ years" | "Not applicable"
+- timeToReady: estimated months to be ready for this band (integer, null if already ready or not applicable)
+
+Rules:
+- Max 3 strengths per band (10 words each max)
+- Max 3 gaps per band (10 words each max)
+- Max 2 keyMissing per band (8 words each max)
+- Max 2 developmentPlan per band (12 words each max)
+- verdict max 12 words
+- suitability: "Ready now" or "6-12 months" or "1-2 years" or "2+ years" or "Not applicable"
+
+Return JSON object with bands array. Be concise to avoid truncation.`.trim()
 }
 
 export async function POST(_req: NextRequest, { params }: Params) {
   try {
     const { id }  = await params
     const session = await auth()
-    if (!session?.user?.id) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    if (!session?.user?.id) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
     const record = await prisma.analysis.findUnique({ where: { id } })
-    if (!record || record.userId !== session.user.id) {
-      return Response.json({ error: 'Not found' }, { status: 404 })
-    }
+    if (!record || record.userId !== session.user.id) return Response.json({ error: 'Not found' }, { status: 404 })
 
-    const result    = (record.result as any) ?? {}
-    const criteria  = result.criteriaAnalysis ?? []
-    const values    = result.nhsValues        ?? []
-    const strengths = result.strengths        ?? []
+    const result = (record.result as any) ?? {}
 
-    // ── Return cached result if already stored ──────────────────────────────
+    // Return cached — but re-run if all bands show 0% (bad cached result)
     if (result.bandMatch?.length) {
-      return Response.json({ bands: result.bandMatch, cached: true })
-    }
-
-    // ── Run AI analysis ─────────────────────────────────────────────────────
-    const prompt  = buildPrompt(
-      record.jobTitle          ?? '',
-      record.jobDescription    ?? '',
-      record.essentialCriteria ?? '',
-      record.personSpec        ?? '',
-      criteria,
-      values,
-      strengths,
-    )
-
-    const raw     = await callAI(prompt)
-    const cleaned = raw.replace(/```json|```/g, '').trim()
-
-    let parsed: any
-    try {
-      parsed = JSON.parse(cleaned)
-    } catch {
-      return Response.json({ error: 'Failed to parse band match result' }, { status: 500 })
-    }
-
-    // Ensure all 7 bands present
-    const resultBands: any[] = BAND_LEVELS.map(level => {
-      const found = parsed.bands?.find((b: any) => b.band === level)
-      return found ?? {
-        band: level, label: `Band ${level}`, matchPct: 0,
-        status: 'gap', metCount: 0, totalCount: 10,
-        gaps: ['Insufficient data to assess'], strengths: [],
-        verdict: 'Could not assess — insufficient data',
+      const allZero = result.bandMatch.every((b: any) => b.matchPct === 0)
+      const hasData = result.bandMatch.some((b: any) =>
+        (b.strengths?.length ?? 0) > 0 || (b.gaps?.length ?? 0) > 0 || b.verdict !== 'Insufficient data'
+      )
+      if (!allZero && hasData) {
+        return Response.json({ bands: result.bandMatch, cached: true })
       }
-    })
+      console.log('[band-match] Stale/empty cache detected — re-running')
+    }
 
-    // ── Save into result JSON ───────────────────────────────────────────────
+    // Run AI
+    const raw    = await callAI(buildPrompt(record, result))
+    console.log('[band-match] Raw response (first 600):', raw.slice(0, 600))
+
+    const parsed = extractJSON(raw)
+    console.log('[band-match] Parsed type:', typeof parsed, '| keys:', parsed ? Object.keys(parsed) : 'null')
+    console.log('[band-match] Parsed bands count:', parsed?.bands?.length ?? parsed?.length ?? 'none')
+    if (parsed?.bands?.[0]) {
+      console.log('[band-match] First band sample:', JSON.stringify(parsed.bands[0]).slice(0, 200))
+    }
+
+    if (!parsed) {
+      console.error('[band-match] Parse failed. Raw (800 chars):', raw.slice(0, 800))
+      return Response.json({ error: 'AI returned invalid response — please try again' }, { status: 500 })
+    }
+
+    const resultBands = normaliseBands(parsed)
+    console.log('[band-match] First normalised band:', JSON.stringify(resultBands[0]).slice(0, 200))
+
+    // Save
     await prisma.analysis.update({
       where: { id },
-      data:  {
-        result: {
-          ...result,
-          bandMatch: resultBands,
-        },
-      },
+      data:  { result: { ...result, bandMatch: resultBands } },
     })
 
     return Response.json({ bands: resultBands, cached: false })
