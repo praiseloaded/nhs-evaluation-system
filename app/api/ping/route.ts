@@ -1,0 +1,11 @@
+// app/api/ping/route.ts
+import { prisma } from "@/lib/prisma"
+
+export async function GET() {
+  try {
+    await prisma.$queryRaw`SELECT 1`
+    return Response.json({ ok: true })
+  } catch {
+    return Response.json({ ok: false })
+  }
+}

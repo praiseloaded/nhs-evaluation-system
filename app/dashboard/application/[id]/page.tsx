@@ -62,12 +62,7 @@ type AppData = {
   notes: string | null; deadlineDate: string | null; interviewDate: string | null; submittedAt: string | null
 }
 
-type StarQuestions = {
-  situationPrompt: string; taskPrompt: string; actionPrompt: string; resultPrompt: string
-  metricsPrompt: string; tip: string
-}
-
-type View = 'criteria' | 'statement' | 'score' | 'cv' | 'shortlist'
+type View = 'statement' | 'score' | 'cv' | 'shortlist'
 
 // ─── Status Config ────────────────────────────────────────────────────────────
 
@@ -230,100 +225,14 @@ function StatusPanel({ app, onStatusChange, onNotesChange, onDateChange, saving 
   )
 }
 
-// ─── STAR Form ────────────────────────────────────────────────────────────────
-
-function StarForm({ criterion, questions, onSave, saving }: {
-  criterion: Criterion; questions: StarQuestions | null; onSave: (data: any) => void; saving: boolean
-}) {
-  const [situation, setSituation] = useState(criterion.situation ?? '')
-  const [task, setTask] = useState(criterion.task ?? '')
-  const [action, setAction] = useState(criterion.action ?? '')
-  const [result, setResult] = useState(criterion.result ?? '')
-  const [metrics, setMetrics] = useState(criterion.metrics ?? '')
-  const [reflection, setReflection] = useState(criterion.reflection ?? '')
-  const [showAdvanced, setShowAdvanced] = useState(false)
-
-  useEffect(() => {
-    setSituation(criterion.situation ?? ''); setTask(criterion.task ?? '')
-    setAction(criterion.action ?? ''); setResult(criterion.result ?? '')
-    setMetrics(criterion.metrics ?? ''); setReflection(criterion.reflection ?? '')
-  }, [criterion.id])
-
-  const fields = [
-    { key: 'situation', label: 'Situation', icon: '📍', value: situation, setter: setSituation, prompt: questions?.situationPrompt, placeholder: 'Where were you working? What was the context?' },
-    { key: 'task',      label: 'Task',      icon: '🎯', value: task,      setter: setTask,      prompt: questions?.taskPrompt,      placeholder: 'What was YOUR specific responsibility?' },
-    { key: 'action',    label: 'Action',    icon: '⚡', value: action,    setter: setAction,    prompt: questions?.actionPrompt,    placeholder: 'What did YOU personally do? (Use "I", not "we")' },
-    { key: 'result',    label: 'Result',    icon: '📊', value: result,    setter: setResult,    prompt: questions?.resultPrompt,    placeholder: 'What was the measurable outcome?' },
-  ]
-  const filledCount = fields.filter(f => f.value.trim().length > 15).length
-
-  return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-border bg-card p-4">
-        <div className="flex items-start gap-3">
-          <span className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-bold uppercase ${criterion.type === 'essential' ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' : 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300'}`}>{criterion.type}</span>
-          <p className="text-sm font-medium text-foreground leading-relaxed">{criterion.criterionText}</p>
-        </div>
-        {questions?.tip && <p className="text-xs text-primary mt-3 bg-primary/5 rounded-lg px-3 py-2 flex gap-1.5"><Sparkles className="w-3 h-3 shrink-0 mt-0.5" /> {questions.tip}</p>}
-      </div>
-      {fields.map(f => (
-        <div key={f.key} className="space-y-1.5">
-          <label className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            <span>{f.icon}</span> {f.label}
-            {f.value.trim().length > 15 && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />}
-          </label>
-          {f.prompt && <p className="text-xs text-muted-foreground italic">{f.prompt}</p>}
-          <textarea value={f.value} onChange={e => f.setter(e.target.value)} placeholder={f.placeholder} rows={3}
-            className="w-full bg-muted border border-border rounded-xl p-3 text-sm text-foreground placeholder-muted-foreground/50 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30" />
-        </div>
-      ))}
-      <button onClick={() => setShowAdvanced(s => !s)} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
-        {showAdvanced ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />} {showAdvanced ? 'Hide' : 'Show'} optional enhancements
-      </button>
-      {showAdvanced && (
-        <div className="space-y-4 pl-3 border-l-2 border-primary/20">
-          <div className="space-y-1.5">
-            <label className="text-sm font-semibold text-foreground">📈 Metrics</label>
-            <input type="text" value={metrics} onChange={e => setMetrics(e.target.value)} placeholder="e.g., Reduced DNA rates by 22%"
-              className="w-full bg-muted border border-border rounded-xl p-3 text-sm text-foreground placeholder-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30" />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-semibold text-foreground">🔄 Reflection</label>
-            <textarea value={reflection} onChange={e => setReflection(e.target.value)} placeholder="What did you learn?" rows={2}
-              className="w-full bg-muted border border-border rounded-xl p-3 text-sm text-foreground placeholder-muted-foreground/50 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30" />
-          </div>
-        </div>
-      )}
-      <div className="flex items-center gap-3">
-        <div className="flex gap-1">
-          {['S','T','A','R'].map((l,i) => (
-            <span key={l} className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${fields[i].value.trim().length > 15 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-muted text-muted-foreground'}`}>{l}</span>
-          ))}
-        </div>
-        <span className="text-xs text-muted-foreground">{filledCount}/4</span>
-      </div>
-      <button onClick={() => onSave({ criterionId: criterion.id, situation, task, action, result, metrics, reflection })}
-        disabled={filledCount < 3 || saving}
-        className="w-full py-3 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-40 text-primary-foreground font-semibold flex items-center justify-center gap-2">
-        {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</> : <><Sparkles className="w-4 h-4" /> Generate NHS Paragraph</>}
-      </button>
-      {criterion.generatedParagraph && (
-        <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/30 p-4 space-y-2">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">Generated Paragraph</p>
-            {criterion.paragraphScore !== null && <span className="text-xs font-bold text-emerald-600">{criterion.paragraphScore}%</span>}
-          </div>
-          <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{criterion.generatedParagraph}</p>
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ─── Unified Statement View (all four nations — same UX, different limits) ────
 //
 // Scotland:         Q1 500w, Q2 500w, Q3 open → three separate copy buttons
 // England/Wales/NI: Q1/Q2/Q3 proportional share of total limit → one combined copy
+
+function StatementRouter({ app, onRefresh }: { app: AppData; onRefresh: () => void }) {
+  return <UnifiedStatementView app={app} onRefresh={onRefresh} />
+}
 
 function UnifiedStatementView({ app, onRefresh }: { app: AppData; onRefresh: () => void }) {
   const nation     = detectNation(app.employer)
@@ -719,11 +628,7 @@ export default function StatementBuilderPage() {
 
   const [app, setApp] = useState<AppData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [currentIndex, setCurrentIndex] = useState(0)
-  const [view, setView] = useState<View>('criteria')
-  const [questions, setQuestions] = useState<StarQuestions | null>(null)
-  const [loadingQuestions, setLoadingQuestions] = useState(false)
-  const [saving, setSaving] = useState(false)
+  const [view, setView] = useState<View>('statement')
   const [statusSaving, setStatusSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -739,27 +644,8 @@ export default function StatementBuilderPage() {
 
   useEffect(() => { load() }, [load])
 
-  const currentCriterion = app?.criteria?.[currentIndex]
 
-  useEffect(() => {
-    if (!currentCriterion) return
-    setLoadingQuestions(true)
-    fetch('/api/application/generate-questions', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ criterionId: currentCriterion.id }),
-    }).then(r => r.json()).then(data => setQuestions(data.questions ?? null))
-      .catch(() => setQuestions(null)).finally(() => setLoadingQuestions(false))
-  }, [currentCriterion?.id])
 
-  const saveStar = useCallback(async (data: any) => {
-    setSaving(true); setError(null)
-    try {
-      const res = await fetch('/api/application/submit-star', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
-      if (!res.ok) throw new Error('Save failed')
-      await load()
-    } catch (err: any) { setError(err.message) }
-    finally { setSaving(false) }
-  }, [load])
 
   const updateStatus = useCallback(async (status: string) => {
     setStatusSaving(true)
@@ -781,14 +667,10 @@ export default function StatementBuilderPage() {
   if (loading) return <div className="min-h-screen bg-background flex items-center justify-center"><Loader2 className="w-6 h-6 text-primary animate-spin" /></div>
   if (!app) return <div className="min-h-screen bg-background flex items-center justify-center"><p className="text-muted-foreground">Application not found</p></div>
 
-  const essential = app.criteria.filter(c => c.type === 'essential')
-  const desirable = app.criteria.filter(c => c.type === 'desirable')
   const completedCount = app.criteria.filter(c => c.generatedParagraph).length
   const score = app.liveScore as any
-  const isLocked = ['submitted', 'shortlisted', 'interview', 'offer', 'rejected'].includes(app.status)
 
   const views: { key: View; label: string; icon: any }[] = [
-    { key: 'criteria',  label: 'Build',          icon: Sparkles  },
     { key: 'statement', label: 'Statement',       icon: FileText  },
     { key: 'score',     label: 'Score',           icon: Target    },
     { key: 'cv',        label: 'CV Optimiser',    icon: User      },
@@ -821,104 +703,35 @@ export default function StatementBuilderPage() {
           </div>
         </div>
 
-        {/* Progress */}
-        <div className="grid lg:grid-cols-3 gap-4 mb-6">
-          <div className="lg:col-span-2">
-            <ProgressBar current={completedCount} total={app.criteria.length} completeness={app.completeness} />
-          </div>
-          <div className="flex items-center gap-2">
-            {(() => {
-              const s = STATUSES.find(x => x.value === app.status) ?? STATUSES[0]
-              const SIcon = s.icon
-              return <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${s.bg} ${s.cls}`}><SIcon className="w-3.5 h-3.5" /> {s.label}</span>
-            })()}
-            {app.deadlineDate && (() => {
-              const days = Math.ceil((new Date(app.deadlineDate).getTime() - Date.now()) / (1000*60*60*24))
-              if (days >= 0 && days <= 7) return <span className="text-[10px] font-semibold text-red-500 flex items-center gap-1"><AlertTriangle className="w-3 h-3" />{days === 0 ? 'Today!' : `${days}d left`}</span>
-              return null
-            })()}
-          </div>
+        {/* Status + progress strip */}
+        <div className="flex flex-wrap items-center gap-3 mb-6">
+          {(() => {
+            const s = STATUSES.find(x => x.value === app.status) ?? STATUSES[0]
+            const SIcon = s.icon
+            return <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${s.bg} ${s.cls}`}><SIcon className="w-3.5 h-3.5" /> {s.label}</span>
+          })()}
+          {completedCount > 0 && (
+            <span className="text-xs text-muted-foreground">{completedCount} of {app.criteria.length} criteria evidenced</span>
+          )}
+          {app.deadlineDate && (() => {
+            const days = Math.ceil((new Date(app.deadlineDate).getTime() - Date.now()) / (1000*60*60*24))
+            if (days >= 0 && days <= 7) return <span className="text-[10px] font-semibold text-red-500 flex items-center gap-1"><AlertTriangle className="w-3 h-3" />{days === 0 ? 'Today!' : `${days}d left`}</span>
+            return null
+          })()}
         </div>
 
         {error && <div className="mb-4 rounded-lg bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 p-3"><p className="text-xs text-red-600 dark:text-red-400">{error}</p></div>}
 
-        {/* ═══ BUILD VIEW ═══ */}
-        {view === 'criteria' && (
-          <div className="flex flex-col lg:flex-row gap-4">
-            <div className="lg:w-72 shrink-0 space-y-4">
-              <StatusPanel app={app} onStatusChange={updateStatus} onNotesChange={updateNotes} onDateChange={updateDate} saving={statusSaving} />
-              <div className="rounded-xl border border-border bg-card p-3 space-y-1 sticky top-4">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-2 mb-2">Essential ({essential.length})</p>
-                {essential.map(c => (
-                  <button key={c.id} onClick={() => setCurrentIndex(app.criteria.indexOf(c))}
-                    className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left text-xs transition-colors ${app.criteria.indexOf(c) === currentIndex ? 'bg-primary/10 border border-primary/20 text-foreground' : 'text-muted-foreground hover:bg-accent'}`}>
-                    {c.generatedParagraph ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" /> : <Circle className="w-3.5 h-3.5 shrink-0" />}
-                    <span className="truncate">{c.criterionText.slice(0, 35)}...</span>
-                  </button>
-                ))}
-                {desirable.length > 0 && (
-                  <>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-2 mt-3 mb-2">Desirable ({desirable.length})</p>
-                    {desirable.map(c => (
-                      <button key={c.id} onClick={() => setCurrentIndex(app.criteria.indexOf(c))}
-                        className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left text-xs transition-colors ${app.criteria.indexOf(c) === currentIndex ? 'bg-primary/10 border border-primary/20 text-foreground' : 'text-muted-foreground hover:bg-accent'}`}>
-                        {c.generatedParagraph ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" /> : <Circle className="w-3.5 h-3.5 shrink-0" />}
-                        <span className="truncate">{c.criterionText.slice(0, 35)}...</span>
-                      </button>
-                    ))}
-                  </>
-                )}
-              </div>
-
-              {/* Quick jump to statement */}
-              {completedCount > 0 && (
-                <button onClick={() => setView('statement')}
-                  className="w-full py-2.5 rounded-xl border border-primary/30 bg-primary/5 text-primary text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-primary/10 transition-colors">
-                  <FileText className="w-3.5 h-3.5" /> Go to Statement Builder
-                </button>
-              )}
-            </div>
-
-            <div className="flex-1 min-w-0">
-              {isLocked && (
-                <div className="mb-4 rounded-xl bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 p-3 flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-                  <p className="text-xs text-amber-700 dark:text-amber-300">This application is <strong>{app.status}</strong> — editing is locked. Change status to Draft to edit.</p>
-                </div>
-              )}
-              {currentCriterion && !isLocked ? (
-                <>
-                  {loadingQuestions && <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4"><Loader2 className="w-4 h-4 animate-spin" /> Loading guidance...</div>}
-                  <StarForm criterion={currentCriterion} questions={questions} onSave={saveStar} saving={saving} />
-                  <div className="flex justify-between mt-6">
-                    <button onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))} disabled={currentIndex === 0}
-                      className="px-4 py-2 rounded-lg bg-muted text-foreground text-sm font-medium disabled:opacity-40 flex items-center gap-1"><ArrowLeft className="w-4 h-4" /> Previous</button>
-                    {currentIndex < app.criteria.length - 1 ? (
-                      <button onClick={() => setCurrentIndex(currentIndex + 1)}
-                        className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium flex items-center gap-1">Next <ArrowRight className="w-4 h-4" /></button>
-                    ) : (
-                      <button onClick={() => setView('statement')} disabled={completedCount === 0}
-                        className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold disabled:opacity-40 flex items-center gap-1">
-                        <FileText className="w-4 h-4" /> Build Statement
-                      </button>
-                    )}
-                  </div>
-                </>
-              ) : currentCriterion && isLocked ? (
-                <div className="rounded-xl border border-border bg-card p-5">
-                  <p className="text-sm font-medium text-foreground mb-2">{currentCriterion.criterionText}</p>
-                  {currentCriterion.generatedParagraph && <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap bg-muted rounded-lg p-4">{currentCriterion.generatedParagraph}</p>}
-                </div>
-              ) : (
-                <p className="text-muted-foreground">Select a criterion from the sidebar</p>
-              )}
-            </div>
-          </div>
-        )}
-
         {/* ═══ STATEMENT VIEW ═══ */}
         {view === 'statement' && (
-          <StatementRouter app={app} onRefresh={load} />
+          <div className="flex flex-col lg:flex-row gap-6">
+            <div className="flex-1 min-w-0">
+              <StatementRouter app={app} onRefresh={load} />
+            </div>
+            <div className="lg:w-72 shrink-0">
+              <StatusPanel app={app} onStatusChange={updateStatus} onNotesChange={updateNotes} onDateChange={updateDate} saving={statusSaving} />
+            </div>
+          </div>
         )}
 
         {/* ═══ SCORE VIEW ═══ */}
