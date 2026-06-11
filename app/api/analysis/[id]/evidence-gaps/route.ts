@@ -1,0 +1,125 @@
+// app/api/analysis/[id]/evidence-gaps/route.ts
+// MOAT 4 — Missing Evidence Detector™
+// Analyses every essential and desirable criterion from the job spec,
+// shows which have zero/weak evidence, severity, and exact action to fix.
+
+import { prisma } from "@/lib/prisma"
+import { auth } from "@/auth"
+import { callGeminiJSON } from "@/lib/application/ai"
+
+function buildGapsPrompt(
+  statement: string,
+  cv: string,
+  jobDescription: string,
+  essentialCriteria: string,
+  desirableCriteria: string,
+): string {
+  return `
+You are an expert NHS shortlisting assessor. Your job is to identify evidence gaps in a candidate's application.
+
+ESSENTIAL CRITERIA:
+${essentialCriteria}
+
+DESIRABLE CRITERIA:
+${desirableCriteria}
+
+JOB DESCRIPTION:
+${jobDescription.slice(0, 1000)}
+
+CANDIDATE'S SUPPORTING STATEMENT:
+${statement.slice(0, 3000)}
+
+CANDIDATE'S CV:
+${cv.slice(0, 2000)}
+
+For EVERY criterion listed above, assess:
+1. evidence_status: "strong" | "moderate" | "weak" | "missing"
+2. severity (for missing/weak): "critical" | "moderate" | "low"
+3. what_was_found: brief description of evidence found (or "Nothing found")
+4. gap_description: exactly what is missing
+5. how_to_fix: specific, actionable instruction (1-2 sentences)
+6. example_language: a short example sentence the candidate could add
+
+SEVERITY GUIDE:
+- critical: essential criterion with no evidence — will likely cause rejection
+- moderate: essential criterion with weak evidence, or desirable with none
+- low: desirable criterion partially addressed
+
+Respond ONLY with JSON:
+{
+  "gaps": [
+    {
+      "criterion": "exact criterion text",
+      "type": "essential" | "desirable",
+      "evidenceStatus": "strong" | "moderate" | "weak" | "missing",
+      "severity": "critical" | "moderate" | "low" | "none",
+      "whatWasFound": "description or Nothing found",
+      "gapDescription": "what is missing",
+      "howToFix": "specific action",
+      "exampleLanguage": "example sentence to add"
+    }
+  ],
+  "overallGapScore": 72,
+  "criticalGapCount": 3,
+  "summary": "one sentence summary of the main gaps"
+}
+`.trim()
+}
+
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params
+
+    const session = await auth()
+    if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
+
+    const analysis = await prisma.analysis.findUnique({ where: { id } })
+    if (!analysis || analysis.userId !== session.user.id) {
+      return Response.json({ error: "Not found" }, { status: 404 })
+    }
+
+    const result = await callGeminiJSON(
+      buildGapsPrompt(
+        analysis.statement ?? "",
+        analysis.cv ?? "",
+        analysis.jobDescription ?? "",
+        analysis.essentialCriteria ?? "",
+        analysis.desirableCriteria ?? "",
+      ),
+      4000
+    )
+
+    const gaps = result.gaps ?? []
+
+    // Sort by severity: critical first
+    const severityOrder = { critical: 0, moderate: 1, low: 2, none: 3 }
+    gaps.sort((a: any, b: any) =>
+      (severityOrder[a.severity as keyof typeof severityOrder] ?? 3) -
+      (severityOrder[b.severity as keyof typeof severityOrder] ?? 3)
+    )
+
+    const critical = gaps.filter((g: any) => g.severity === "critical")
+    const moderate = gaps.filter((g: any) => g.severity === "moderate")
+    const low      = gaps.filter((g: any) => g.severity === "low")
+    const strong   = gaps.filter((g: any) => g.evidenceStatus === "strong")
+
+    return Response.json({
+      success: true,
+      overallGapScore: result.overallGapScore ?? 0,
+      summary: result.summary ?? "",
+      criticalGapCount: critical.length,
+      gaps,
+      grouped: { critical, moderate, low, strong },
+      counts: {
+        critical: critical.length,
+        moderate: moderate.length,
+        low: low.length,
+        strong: strong.length,
+        total: gaps.length,
+      },
+    })
+  } catch (error: any) {
+    console.error("EVIDENCE_GAPS_ERROR:", error)
+    return Response.json({ error: error?.message ?? "Failed" }, { status: 500 })
+  }
+}

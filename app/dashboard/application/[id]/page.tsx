@@ -235,16 +235,25 @@ function StatementRouter({ app, onRefresh }: { app: AppData; onRefresh: () => vo
 }
 
 function UnifiedStatementView({ app, onRefresh }: { app: AppData; onRefresh: () => void }) {
-  const nation     = detectNation(app.employer)
-  const nationMeta = NATION_VALUES[nation]
   const parsed     = app.parsedSpec as any
-  const isScotland = nation === 'scotland'
-  const totalLimit: number = parsed?.statementWordLimit ?? (nation === 'northern_ireland' ? 1200 : isScotland ? 500 : 1500)
 
-  // Per-question limits
-  const q1Hard = isScotland ? 500  : Math.round(totalLimit * 0.50)
-  const q2Hard = isScotland ? 500  : Math.round(totalLimit * 0.35)
-  const q3Hard = isScotland ? 250  : Math.round(totalLimit * 0.15)
+  // Detect nation — use employer first, fall back to parsedSpec stored nation
+  const rawNation  = detectNation(app.employer)
+  const nation: NHSNation = rawNation !== 'unknown'
+    ? rawNation
+    : (parsed?.detectedNation ?? detectNation(parsed?.resolvedBoard ?? ''))
+  const nationMeta = NATION_VALUES[nation] ?? NATION_VALUES['unknown']
+
+  // Scotland or unknown → treat as Scotland (primary platform use case = NHS Scotland Jobs)
+  const isScotland = nation === 'scotland' || nation === 'unknown'
+  const totalLimit: number = parsed?.statementWordLimit ?? (nation === 'northern_ireland' ? 1200 : !isScotland ? 1500 : 500)
+
+  // ── Word limits — exact NHS values, never proportional guesses ──────────────
+  // Scotland / Jobtrain:   Q1 500w (target 480), Q2 500w (target 450), Q3 no stated limit (target 200)
+  // England / Wales / NI:  proportional share of total statement word limit
+  const q1Hard   = isScotland ? 500 : Math.round(totalLimit * 0.50)
+  const q2Hard   = isScotland ? 500 : Math.round(totalLimit * 0.35)
+  const q3Hard   = isScotland ? 250 : Math.round(totalLimit * 0.15)
   const q1Target = isScotland ? 480 : Math.round(q1Hard * 0.96)
   const q2Target = isScotland ? 450 : Math.round(q2Hard * 0.96)
   const q3Target = isScotland ? 200 : Math.round(q3Hard * 0.90)
@@ -400,11 +409,11 @@ function UnifiedStatementView({ app, onRefresh }: { app: AppData; onRefresh: () 
             <span className="text-base">{nationMeta.flag}</span>
             <div>
               <p className="text-sm font-semibold text-foreground">
-                {nationMeta.label} — Supporting Statement
+                {isScotland ? 'NHS Scotland' : nationMeta.label} — Supporting Statement
               </p>
               <p className="text-xs text-muted-foreground">
                 {isScotland
-                  ? '3 separate Jobtrain boxes — paste each question individually'
+                  ? '3 separate Jobtrain boxes (Q1 · Q2 · Q3) — paste each individually into NHS Scotland Jobs'
                   : `Single statement · ${totalLimit} words total · paste as one combined block`}
               </p>
             </div>
@@ -424,9 +433,12 @@ function UnifiedStatementView({ app, onRefresh }: { app: AppData; onRefresh: () 
         </div>
 
         <div className="grid grid-cols-3 gap-3">
-          <WordCounter text={app.statementQ1} target={q1Target} hard={q1Hard} label={`Q1 (${q1Hard}w limit)`} />
-          <WordCounter text={app.statementQ2} target={q2Target} hard={q2Hard} label={`Q2 (${q2Hard}w limit)`} />
-          <WordCounter text={app.statementQ3} target={q3Target} hard={q3Hard} label={`Q3 (${q3Hard}w limit)`} />
+          <WordCounter text={app.statementQ1} target={q1Target} hard={q1Hard}
+            label={isScotland ? `Q1 · 500w limit (aim 400–480)` : `Q1 (${q1Hard}w)`} />
+          <WordCounter text={app.statementQ2} target={q2Target} hard={q2Hard}
+            label={isScotland ? `Q2 · 500w limit (aim 350–450)` : `Q2 (${q2Hard}w)`} />
+          <WordCounter text={app.statementQ3} target={q3Target} hard={q3Hard}
+            label={isScotland ? `Q3 · no stated limit (100–200)` : `Q3 (${q3Hard}w)`} />
         </div>
 
         {!app.employer && (
@@ -438,51 +450,76 @@ function UnifiedStatementView({ app, onRefresh }: { app: AppData; onRefresh: () 
 
       {/* ── Q1: Suitability ──────────────────────────────────────────────── */}
       <QPanel q="Q1" label="Why are you suitable for this role?"
-        limitLabel={`${q1Hard} words`} description="All STAR evidence goes here"
+        limitLabel={isScotland ? '500 words (aim 400–480)' : `${q1Hard} words`} description="All STAR evidence goes here"
         badge="bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
         status={q1Done ? 'done' : 'empty'} isOpen={q1Open} onToggle={() => setQ1Open(o => !o)}
         statement={app.statementQ1 ?? null} targetWords={q1Target} hardLimit={q1Hard}>
 
-        <div className="rounded-lg bg-blue-50 dark:bg-blue-950/50 border border-blue-100 dark:border-blue-900 p-3">
-          <p className="text-xs text-blue-700 dark:text-blue-300 flex items-start gap-1.5">
-            <Info className="w-3 h-3 shrink-0 mt-0.5" />
-            {essentialCount}/{totalEssential} essential criteria paragraphs ready.
-            {!isScotland && ` Q1 gets ${q1Hard} of your ${totalLimit} total words (~50%).`}
-          </p>
-        </div>
+        {essentialCount === 0 ? (
+          /* ── No evidence yet — guide user back to the wizard ── */
+          <div className="rounded-xl border-2 border-dashed border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/30 p-6 text-center space-y-4">
+            <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900 flex items-center justify-center mx-auto">
+              <Sparkles className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-foreground">No evidence collected yet</p>
+              <p className="text-xs text-muted-foreground max-w-xs mx-auto">
+                You need to answer the evidence questions for your {totalEssential} essential {totalEssential === 1 ? 'criterion' : 'criteria'} before Q1 can be generated. Each answer takes about 2 minutes.
+              </p>
+            </div>
+            <Link href={`/dashboard/application?id=${app.id}&step=4`}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-sm font-semibold transition-colors">
+              <ArrowLeft className="w-4 h-4" /> Answer Evidence Questions
+            </Link>
+            <p className="text-[10px] text-muted-foreground">
+              You'll be taken straight to the evidence questions for this application.
+            </p>
+          </div>
+        ) : (
+          /* ── Evidence ready — show progress and optional inputs ── */
+          <div className="space-y-4">
+            <div className="rounded-lg bg-blue-50 dark:bg-blue-950/50 border border-blue-100 dark:border-blue-900 p-3">
+              <p className="text-xs text-blue-700 dark:text-blue-300 flex items-start gap-1.5">
+                <Info className="w-3 h-3 shrink-0 mt-0.5" />
+                <span>
+                  <span className="font-semibold">{essentialCount} of {totalEssential}</span> essential criteria answered.
+                  {essentialCount < totalEssential && (
+                    <> <Link href={`/dashboard/application?id=${app.id}&step=4`} className="underline hover:no-underline font-semibold">Answer the remaining {totalEssential - essentialCount}</Link> for a stronger Q1.</>
+                  )}
+                  {isScotland && ` Target: 400–480 words.`}
+                  {!isScotland && ` Q1 gets ${q1Hard} of your ${totalLimit} total words.`}
+                </span>
+              </p>
+            </div>
 
-        {essentialCount === 0 && (
-          <div className="rounded-lg bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 p-3">
-            <p className="text-xs text-amber-700 dark:text-amber-300">Complete at least one essential criterion in the Build tab first.</p>
+            <div className="grid md:grid-cols-3 gap-3">
+              {[
+                { label: 'Qualifications / training', val: qualifications, set: setQualifications, ph: 'e.g. NMC registered, ILS trained...' },
+                { label: 'Systems / clinical skills',  val: systemsKnowledge, set: setSystemsKnowledge, ph: 'e.g. TRAKCARE, EMIS, SystmOne...' },
+                { label: 'Why this role / band?',       val: careerMotivation, set: setCareerMotivation, ph: 'e.g. Ready for Band 6 leadership...' },
+              ].map(f => (
+                <div key={f.label} className="space-y-1">
+                  <label className="text-xs font-medium text-foreground">{f.label}</label>
+                  <textarea value={f.val} onChange={e => f.set(e.target.value)} rows={2} placeholder={f.ph}
+                    className="w-full bg-muted border border-border rounded-lg p-2 text-xs text-foreground placeholder-muted-foreground/50 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                </div>
+              ))}
+            </div>
+
+            {q1Error   && <p className="text-xs text-red-500">{q1Error}</p>}
+            {q1Warning && <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> {q1Warning}</p>}
+
+            <button onClick={generateQ1} disabled={genQ1}
+              className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-semibold flex items-center justify-center gap-2">
+              {genQ1 ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating Q1...</> : q1Done ? <><RefreshCw className="w-4 h-4" /> Regenerate Q1</> : <><Sparkles className="w-4 h-4" /> Generate Q1 — Why You're Suitable</>}
+            </button>
           </div>
         )}
-
-        <div className="grid md:grid-cols-3 gap-3">
-          {[
-            { label: 'Qualifications / training', val: qualifications, set: setQualifications, ph: 'e.g. NMC registered, ILS trained...' },
-            { label: 'Systems / clinical skills',  val: systemsKnowledge, set: setSystemsKnowledge, ph: 'e.g. TRAKCARE, EMIS, SystmOne...' },
-            { label: 'Why this role / band?',       val: careerMotivation, set: setCareerMotivation, ph: 'e.g. Ready for Band 6 leadership...' },
-          ].map(f => (
-            <div key={f.label} className="space-y-1">
-              <label className="text-xs font-medium text-foreground">{f.label}</label>
-              <textarea value={f.val} onChange={e => f.set(e.target.value)} rows={2} placeholder={f.ph}
-                className="w-full bg-muted border border-border rounded-lg p-2 text-xs text-foreground placeholder-muted-foreground/50 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30" />
-            </div>
-          ))}
-        </div>
-
-        {q1Error   && <p className="text-xs text-red-500">{q1Error}</p>}
-        {q1Warning && <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> {q1Warning}</p>}
-
-        <button onClick={generateQ1} disabled={genQ1 || essentialCount === 0}
-          className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-semibold flex items-center justify-center gap-2">
-          {genQ1 ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating Q1...</> : q1Done ? <><RefreshCw className="w-4 h-4" /> Regenerate Q1</> : <><Sparkles className="w-4 h-4" /> Generate Q1 — Why You're Suitable</>}
-        </button>
       </QPanel>
 
       {/* ── Q2: Why this employer ─────────────────────────────────────────── */}
       <QPanel q="Q2" label={`Why do you want to work for ${app.employer ?? 'this organisation'}?`}
-        limitLabel={`${q2Hard} words`}
+        limitLabel={isScotland ? '500 words (aim 350–450)' : `${q2Hard} words`}
         description={hasValuesDoc ? `Using uploaded values doc · ${app.employer ?? 'NHS'}` : `Values registry · ${app.employer ?? 'NHS'}`}
         badge="bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300"
         status={q2Done ? 'done' : 'empty'} isOpen={q2Open} onToggle={() => setQ2Open(o => !o)}
@@ -525,7 +562,7 @@ function UnifiedStatementView({ app, onRefresh }: { app: AppData; onRefresh: () 
       {/* ── Q3: Other information ─────────────────────────────────────────── */}
       <QPanel q="Q3" label="Any other relevant information?"
         limitLabel={isScotland ? 'No stated limit' : `${q3Hard} words`}
-        description={isScotland ? '100–200 words or "None."' : `~${q3Hard} words or "None."  if nothing applies`}
+        description={isScotland ? 'Recommended 100–200 words, or "None." if nothing applies' : `~${q3Hard} words or "None." if nothing applies`}
         badge="bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
         status={q3Done ? 'done' : 'empty'} isOpen={q3Open} onToggle={() => setQ3Open(o => !o)}
         statement={app.statementQ3 ?? null} targetWords={q3Target} hardLimit={q3Hard}>
