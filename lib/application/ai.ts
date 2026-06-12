@@ -61,21 +61,23 @@ async function callModel(
     return { success: false, status: 200, error: `empty response — finishReason: ${reason}` }
   }
 
-  const parsed = tryParseJSON(text)
+  const finishReason = data?.candidates?.[0]?.finishReason
+  const parsed = tryParseJSON(text, finishReason === "MAX_TOKENS")
   if (parsed !== null) {
     return { success: true, data: parsed }
   }
 
-  console.warn(`[AI] ${model} — JSON parse failed. Raw (first 300 chars): ${text.slice(0, 300)}`)
+  console.warn(`[AI] ${model} — JSON parse failed (finishReason: ${finishReason}). Raw (first 300 chars): ${text.slice(0, 300)}`)
+  console.warn(`[AI] ${model} — Raw (last 300 chars): ${text.slice(-300)}`)
   return { success: false, status: 200, error: `JSON parse failed. Raw: ${text.slice(0, 200)}` }
 }
 
 // ─── Robust JSON extraction ─────────────────────────────────────────────────
 // Gemini occasionally wraps JSON in markdown fences, adds trailing commentary,
-// includes trailing commas, or leaves raw control characters inside strings —
-// all of which break a direct JSON.parse despite responseMimeType: "application/json".
+// includes trailing commas, leaves raw control characters inside strings, or —
+// if maxOutputTokens is hit — cuts the response off mid-object/array.
 // Try multiple recovery strategies before giving up.
-function tryParseJSON(raw: string): any | null {
+function tryParseJSON(raw: string, allowTruncationSalvage = false): any | null {
   let text = raw.trim()
 
   // 1. Direct parse
@@ -104,6 +106,58 @@ function tryParseJSON(raw: string): any | null {
       // 5. Strip control characters that break JSON.parse (raw newlines inside strings etc.)
       const cleaned = noTrailingCommas.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
       try { return JSON.parse(cleaned) } catch {}
+    }
+  }
+
+  // 6. Truncation salvage — the response was cut off mid-JSON (hit maxOutputTokens).
+  // Walk backwards from the end, repeatedly trimming to the last "}" or "]" and
+  // attempting to close any open braces/brackets, until something parses.
+  if (allowTruncationSalvage || true) {
+    const start = text.search(/[{\[]/)
+    if (start >= 0) {
+      let working = text.slice(start)
+      // Remove control chars and a dangling trailing comma up front
+      working = working.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
+
+      for (let cut = working.length; cut > 0; ) {
+        // Find the last closing brace/bracket at or before `cut`
+        const lastBrace   = working.lastIndexOf('}', cut - 1)
+        const lastBracket = working.lastIndexOf(']', cut - 1)
+        const lastClose   = Math.max(lastBrace, lastBracket)
+        if (lastClose <= 0) break
+
+        let candidate = working.slice(0, lastClose + 1)
+        // Drop a dangling trailing comma right before the cut point
+        candidate = candidate.replace(/,\s*$/, '')
+
+        // Count unmatched open braces/brackets (ignoring those inside strings, roughly)
+        const stack: string[] = []
+        let inString = false
+        let escape = false
+        for (const ch of candidate) {
+          if (escape) { escape = false; continue }
+          if (ch === '\\') { escape = true; continue }
+          if (ch === '"') { inString = !inString; continue }
+          if (inString) continue
+          if (ch === '{' || ch === '[') stack.push(ch)
+          else if (ch === '}' || ch === ']') stack.pop()
+        }
+
+        // Close any still-open structures in reverse order
+        let closed = candidate
+        for (let i = stack.length - 1; i >= 0; i--) {
+          closed += stack[i] === '{' ? '}' : ']'
+        }
+
+        try {
+          const result = JSON.parse(closed)
+          console.warn(`[AI] Recovered truncated JSON via salvage (kept ${closed.length}/${working.length} chars)`)
+          return result
+        } catch {}
+
+        // Try again from just before this closing char
+        cut = lastClose
+      }
     }
   }
 

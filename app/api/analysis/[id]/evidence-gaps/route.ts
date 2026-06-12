@@ -45,7 +45,12 @@ SEVERITY GUIDE:
 - moderate: essential criterion with weak evidence, or desirable with none
 - low: desirable criterion partially addressed
 
-Respond ONLY with JSON:
+IMPORTANT — output format:
+- Respond ONLY with JSON, no markdown, no commentary.
+- Keep every text field SHORT: criterion max 12 words, what_was_found max 15 words,
+  gap_description max 15 words, how_to_fix max 20 words, example_language max 20 words.
+- Be concise so the full response fits well within the token limit.
+
 {
   "gaps": [
     {
@@ -93,15 +98,15 @@ export async function POST(
         analysis.essentialCriteria ?? "",
         analysis.desirableCriteria ?? ""
       ),
-      4000
+      8000
     )
 
-    const gaps = result.gaps ?? []
+    const gaps = Array.isArray(result?.gaps) ? result.gaps : []
 
     const responseData = {
       success: true,
-      overallGapScore: result.overallGapScore ?? 0,
-      summary: result.summary ?? "",
+      overallGapScore: result?.overallGapScore ?? 0,
+      summary: result?.summary ?? "",
       gaps,
       updatedAt: new Date().toISOString(),
     }
