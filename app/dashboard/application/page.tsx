@@ -2,7 +2,7 @@
 // Statement Builder — 7-step wizard
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -194,7 +194,7 @@ function EvidenceCard({ criterion, index, total, value, noExp, onChange, onNoExp
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN WIZARD
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function StatementBuilderWizard() {
+function StatementBuilderWizardInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -1243,5 +1243,17 @@ export default function StatementBuilderWizard() {
 
       </div>
     </div>
+  )
+}
+
+export default function StatementBuilderWizard() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="w-6 h-6 text-primary animate-spin" />
+      </div>
+    }>
+      <StatementBuilderWizardInner />
+    </Suspense>
   )
 }
