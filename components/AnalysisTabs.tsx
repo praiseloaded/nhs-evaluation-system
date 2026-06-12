@@ -74,18 +74,15 @@ export function AnalysisTabs({ analysisId, isPro, jobTitle, result, record, chil
         )}
 
         {/* Tab 2 — Band Match DNA™ */}
-        {activeTab === 'band' && (
-          <BandMatchTab
-            analysisId={analysisId}
-            isPro={isPro}
-            jobTitle={jobTitle}
-            essentialCriteria={record.essentialCriteria}
-            desirableCriteria={record.desirableCriteria}
-            personSpec={record.personSpec}
-            jobDescription={record.jobDescription}
-            currentBand={record.band}
-          />
-        )}
+     {activeTab === 'band' && (
+  <BandMatchTab
+    analysisId={analysisId}
+    isPro={isPro}
+    jobTitle={jobTitle}
+    result={result}
+    record={record}
+  />
+)}
 
         {/* Tab 3 — NHS Keyword Intelligence™ (MOAT 7) */}
         {activeTab === 'keywords' && (

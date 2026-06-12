@@ -227,7 +227,7 @@ export function BandMatchTab({ analysisId, isPro, jobTitle, result, record }: Pr
   const [error,    setError]    = useState<string | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
 
-  const targetBand = record.band?.replace(/band\s*/i, '').trim() ?? null
+const targetBand = record?.band?.replace(/band\s*/i, '').trim() ?? null
 
   async function runAnalysis() {
     setLoading(true)
