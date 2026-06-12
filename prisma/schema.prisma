@@ -19,6 +19,7 @@ model User {
   tier          String    @default("free")
   analysisUsed  Int       @default(0)
   analysisLimit Int       @default(1)
+  careerGpsData   Json?
 
   accounts      Account[]
   sessions      Session[]
@@ -89,7 +90,8 @@ model Analysis {
   statement         String?
 
   result            Json
-
+  keywordIntel      Json?
+  evidenceGaps      Json?
   interviews        Interview[]
 
   createdAt         DateTime @default(now())

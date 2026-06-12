@@ -1,7 +1,7 @@
 // components/evidence-gaps.tsx
 // MOAT 4 — Missing Evidence Detector™ Tab Component
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Loader2, XCircle, AlertTriangle, CheckCircle2, Sparkles, Search, ChevronDown, ChevronUp } from 'lucide-react'
 
 type Severity = 'critical' | 'moderate' | 'low' | 'none'
@@ -15,20 +15,65 @@ interface Gap {
 
 interface GapResult {
   overallGapScore: number; summary: string; criticalGapCount: number
+  updatedAt?: string
   grouped: { critical: Gap[]; moderate: Gap[]; low: Gap[]; strong: Gap[] }
   counts: { critical: number; moderate: number; low: number; strong: number; total: number }
 }
 
 const SEVERITY_CONFIG: Record<Severity, { label: string; color: string; bg: string; icon: any; border: string }> = {
-  critical: { label: 'CRITICAL',  color: 'text-red-700 dark:text-red-300',    bg: 'bg-red-50 dark:bg-red-950/50',       border: 'border-red-200 dark:border-red-800',     icon: XCircle       },
-  moderate: { label: 'MODERATE',  color: 'text-amber-700 dark:text-amber-300',bg: 'bg-amber-50 dark:bg-amber-950/50',   border: 'border-amber-200 dark:border-amber-800', icon: AlertTriangle  },
-  low:      { label: 'LOW',       color: 'text-blue-700 dark:text-blue-300',  bg: 'bg-blue-50 dark:bg-blue-950/50',     border: 'border-blue-200 dark:border-blue-800',   icon: AlertTriangle  },
-  none:     { label: 'STRONG',    color: 'text-emerald-700 dark:text-emerald-300', bg: 'bg-emerald-50 dark:bg-emerald-950/50', border: 'border-emerald-200 dark:border-emerald-800', icon: CheckCircle2 },
+  critical: { label: 'CRITICAL', color: 'text-red-700 dark:text-red-300',         bg: 'bg-red-50 dark:bg-red-950/50',           border: 'border-red-200 dark:border-red-800',     icon: XCircle      },
+  moderate: { label: 'MODERATE', color: 'text-amber-700 dark:text-amber-300',     bg: 'bg-amber-50 dark:bg-amber-950/50',       border: 'border-amber-200 dark:border-amber-800', icon: AlertTriangle },
+  low:      { label: 'LOW',      color: 'text-blue-700 dark:text-blue-300',       bg: 'bg-blue-50 dark:bg-blue-950/50',         border: 'border-blue-200 dark:border-blue-800',   icon: AlertTriangle },
+  none:     { label: 'STRONG',   color: 'text-emerald-700 dark:text-emerald-300', bg: 'bg-emerald-50 dark:bg-emerald-950/50',   border: 'border-emerald-200 dark:border-emerald-800', icon: CheckCircle2 },
+}
+
+// Map evidenceStatus → severity so we can group without relying on the AI setting severity correctly
+function evidenceStatusToSeverity(gap: Gap): Severity {
+  // If AI already set a valid severity, trust it
+  if (gap.severity && gap.severity !== 'none') return gap.severity
+  // Otherwise derive from evidenceStatus
+  switch (gap.evidenceStatus) {
+    case 'missing':  return gap.type === 'essential' ? 'critical' : 'moderate'
+    case 'weak':     return gap.type === 'essential' ? 'moderate' : 'low'
+    case 'moderate': return 'low'
+    case 'strong':   return 'none'
+    default:         return 'low'
+  }
+}
+
+// Transform flat `gaps` array from API into the grouped shape the component expects
+function normalise(raw: any): GapResult {
+  const gaps: Gap[] = (raw.gaps ?? []).map((g: any) => ({
+    ...g,
+    severity: evidenceStatusToSeverity(g),
+  }))
+
+  const grouped = {
+    critical: gaps.filter(g => g.severity === 'critical'),
+    moderate: gaps.filter(g => g.severity === 'moderate'),
+    low:      gaps.filter(g => g.severity === 'low'),
+    strong:   gaps.filter(g => g.severity === 'none'),
+  }
+
+  return {
+    overallGapScore:  raw.overallGapScore  ?? raw.overall_gap_score ?? 0,
+    summary:          raw.summary          ?? '',
+    criticalGapCount: grouped.critical.length,
+    updatedAt:        raw.updatedAt,
+    grouped,
+    counts: {
+      critical: grouped.critical.length,
+      moderate: grouped.moderate.length,
+      low:      grouped.low.length,
+      strong:   grouped.strong.length,
+      total:    gaps.length,
+    },
+  }
 }
 
 function GapCard({ gap }: { gap: Gap }) {
   const [expanded, setExpanded] = useState(gap.severity === 'critical')
-  const cfg = SEVERITY_CONFIG[gap.severity]
+  const cfg = SEVERITY_CONFIG[gap.severity] ?? SEVERITY_CONFIG.low
   const Icon = cfg.icon
 
   return (
@@ -66,7 +111,7 @@ function GapCard({ gap }: { gap: Gap }) {
           )}
           {gap.howToFix && gap.severity !== 'none' && (
             <div className={`rounded-lg p-3 ${cfg.bg} border ${cfg.border}`}>
-              <p className="text-[10px] font-semibold uppercase tracking-wider mb-1 ${cfg.color}">→ How to fix</p>
+              <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${cfg.color}`}>→ How to fix</p>
               <p className={`text-xs font-medium ${cfg.color}`}>{gap.howToFix}</p>
             </div>
           )}
@@ -85,8 +130,24 @@ function GapCard({ gap }: { gap: Gap }) {
 export function EvidenceGaps({ analysisId }: { analysisId: string }) {
   const [result, setResult] = useState<GapResult | null>(null)
   const [loading, setLoading] = useState(false)
+  const [loadingSaved, setLoadingSaved] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'critical' | 'moderate' | 'strong'>('all')
+
+  // Load previously saved result on mount
+  useEffect(() => {
+    fetch(`/api/analysis/${analysisId}/evidence-gaps`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d) return
+        const raw = d.data ?? d
+        if (raw?.gaps || raw?.grouped) {
+          setResult(raw.gaps ? normalise(raw) : raw)
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingSaved(false))
+  }, [analysisId])
 
   const run = async () => {
     setLoading(true); setError(null)
@@ -94,10 +155,16 @@ export function EvidenceGaps({ analysisId }: { analysisId: string }) {
       const res = await fetch(`/api/analysis/${analysisId}/evidence-gaps`, { method: 'POST' })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed')
-      setResult(data)
+      setResult(normalise(data))
     } catch (e: any) { setError(e.message) }
     finally { setLoading(false) }
   }
+
+  if (loadingSaved) return (
+    <div className="flex items-center justify-center py-20">
+      <Loader2 className="w-5 h-5 text-primary animate-spin" />
+    </div>
+  )
 
   if (!result && !loading) return (
     <div className="rounded-2xl border border-dashed border-border bg-card/50 p-10 text-center space-y-4">
@@ -126,10 +193,28 @@ export function EvidenceGaps({ analysisId }: { analysisId: string }) {
 
   if (!result) return null
 
-  const allGaps = [...result.grouped.critical, ...result.grouped.moderate, ...result.grouped.low, ...result.grouped.strong]
+  // Safety guard
+  if (!result.grouped) return (
+    <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 p-4 space-y-2">
+      <p className="text-sm font-semibold text-red-700 dark:text-red-300">
+        Analysis returned an unexpected format. Please re-run.
+      </p>
+      <button onClick={run} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+        <Sparkles className="w-3 h-3" /> Re-run analysis
+      </button>
+    </div>
+  )
+
+  const allGaps = [
+    ...(result.grouped.critical ?? []),
+    ...(result.grouped.moderate ?? []),
+    ...(result.grouped.low      ?? []),
+    ...(result.grouped.strong   ?? []),
+  ]
+
   const displayed = filter === 'critical' ? result.grouped.critical
     : filter === 'moderate' ? result.grouped.moderate
-    : filter === 'strong' ? result.grouped.strong
+    : filter === 'strong'   ? result.grouped.strong
     : allGaps
 
   return (
@@ -142,16 +227,18 @@ export function EvidenceGaps({ analysisId }: { analysisId: string }) {
             <p className="text-sm text-muted-foreground mt-0.5">{result.summary}</p>
           </div>
           <div className="text-right shrink-0">
-            <p className="text-3xl font-bold text-foreground">{result.overallGapScore}<span className="text-base font-normal text-muted-foreground">/100</span></p>
+            <p className="text-3xl font-bold text-foreground">
+              {result.overallGapScore}<span className="text-base font-normal text-muted-foreground">/100</span>
+            </p>
             <p className="text-xs text-muted-foreground">Evidence coverage</p>
           </div>
         </div>
         <div className="grid grid-cols-4 gap-3">
           {[
-            { label: 'Critical gaps', count: result.counts.critical, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-950' },
-            { label: 'Moderate gaps', count: result.counts.moderate, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950' },
-            { label: 'Minor gaps', count: result.counts.low, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950' },
-            { label: 'Strong evidence', count: result.counts.strong, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950' },
+            { label: 'Critical gaps',   count: result.counts.critical, color: 'text-red-600 dark:text-red-400',     bg: 'bg-red-50 dark:bg-red-950'     },
+            { label: 'Moderate gaps',   count: result.counts.moderate, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950' },
+            { label: 'Minor gaps',      count: result.counts.low,      color: 'text-blue-600 dark:text-blue-400',   bg: 'bg-blue-50 dark:bg-blue-950'   },
+            { label: 'Strong evidence', count: result.counts.strong,   color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950' },
           ].map(s => (
             <div key={s.label} className={`rounded-xl ${s.bg} p-3 text-center`}>
               <p className={`text-2xl font-bold ${s.color}`}>{s.count}</p>
@@ -161,13 +248,13 @@ export function EvidenceGaps({ analysisId }: { analysisId: string }) {
         </div>
       </div>
 
-      {/* Filter */}
+      {/* Filter tabs */}
       <div className="flex gap-2 flex-wrap">
         {[
-          { key: 'all', label: `All (${allGaps.length})` },
+          { key: 'all',      label: `All (${allGaps.length})` },
           { key: 'critical', label: `Critical (${result.counts.critical})` },
           { key: 'moderate', label: `Moderate (${result.counts.moderate})` },
-          { key: 'strong', label: `Strong (${result.counts.strong})` },
+          { key: 'strong',   label: `Strong (${result.counts.strong})` },
         ].map(tab => (
           <button key={tab.key} onClick={() => setFilter(tab.key as any)}
             className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-colors ${filter === tab.key ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'}`}>
@@ -184,9 +271,16 @@ export function EvidenceGaps({ analysisId }: { analysisId: string }) {
         }
       </div>
 
-      <button onClick={run} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
-        <Sparkles className="w-3 h-3" /> Re-run analysis
-      </button>
+      <div className="flex items-center justify-between">
+        <button onClick={run} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+          <Sparkles className="w-3 h-3" /> Re-run analysis
+        </button>
+        {result.updatedAt && (
+          <p className="text-[10px] text-muted-foreground">
+            Saved {new Date(result.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+          </p>
+        )}
+      </div>
     </div>
   )
 }

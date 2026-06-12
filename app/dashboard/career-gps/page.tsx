@@ -18,7 +18,7 @@ const BAND_ROLES: Record<number, string[]> = {
 }
 
 interface Milestone { month: number; achievement: string }
-interface RouteStep { step: number; action: string; why: string; timeMonths: number; cost: string; provider: string; priority: string }
+interface RouteStep { step: number; action: string; why: string; timeMonths: number; cost: string; provider: string; providerUrl?: string; priority: string }
 interface TrainingRec { name: string; provider: string; duration: string; cost: string; url: string; bandImpact: string }
 interface GPSResult {
   currentBandScore: number; applicationReadiness: number; gapSummary: string
@@ -177,6 +177,12 @@ export default function CareerGPSPage() {
       {/* Results */}
       {result && (
         <div className="space-y-5">
+          {(result as any).updatedAt && (
+            <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+              <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+              Saved {new Date((result as any).updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+            </p>
+          )}
           {/* Summary */}
           <div className="rounded-2xl border border-border bg-card p-6">
             <div className="flex items-center gap-6 flex-wrap">
@@ -240,7 +246,15 @@ export default function CareerGPSPage() {
                     <div className="flex gap-3 flex-wrap text-xs text-muted-foreground">
                       <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {step.timeMonths} month{step.timeMonths !== 1 ? 's' : ''}</span>
                       <span>{step.cost}</span>
-                      {step.provider && <span className="text-primary">{step.provider}</span>}
+                      {step.provider && (
+                        (step as any).providerUrl ? (
+                          <a href={(step as any).providerUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium flex items-center gap-1">
+                            {step.provider} <ExternalLink className="w-3 h-3" />
+                          </a>
+                        ) : (
+                          <span className="text-primary">{step.provider}</span>
+                        )
+                      )}
                     </div>
                   </div>
                   {step.priority === 'critical' && (

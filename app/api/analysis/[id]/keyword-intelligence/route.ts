@@ -102,21 +102,28 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params  // ← await it
-
+    const { id } = await params
     const session = await auth()
-    if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
 
-    const analysis = await prisma.analysis.findUnique({ where: { id } })  // ← use id directly
+    if (!session?.user?.id)
+      return Response.json({ error: "Unauthorized" }, { status: 401 })
+
+    const analysis = await prisma.analysis.findUnique({
+      where: { id },
+    })
+
     if (!analysis || analysis.userId !== session.user.id) {
       return Response.json({ error: "Not found" }, { status: 404 })
     }
 
     const statement = (analysis.statement ?? "") + " " + (analysis.cv ?? "")
-    const jobDesc   = analysis.jobDescription ?? ""
+    const jobDesc = analysis.jobDescription ?? ""
 
     if (!statement.trim()) {
-      return Response.json({ error: "No statement found for this analysis" }, { status: 400 })
+      return Response.json(
+        { error: "No statement found for this analysis" },
+        { status: 400 }
+      )
     }
 
     const result = await callGeminiJSON(
@@ -124,40 +131,73 @@ export async function POST(
       3000
     )
 
-    // Enrich result with taxonomy metadata
     const enrichedKeywords = (result.keywords ?? []).map((k: any) => {
-      const meta = NHS_KEYWORD_TAXONOMY.find(t => t.keyword.toLowerCase() === k.keyword.toLowerCase())
-      return { ...k, weight: meta?.weight ?? 70, group: meta?.group ?? "General", definition: meta?.definition ?? "" }
+      const meta = NHS_KEYWORD_TAXONOMY.find(
+        t => t.keyword.toLowerCase() === k.keyword.toLowerCase()
+      )
+
+      return {
+        ...k,
+        weight: meta?.weight ?? 70,
+        group: meta?.group ?? "General",
+        definition: meta?.definition ?? "",
+      }
     })
 
-    // Group by status
-    const presentEvidenced = enrichedKeywords.filter((k: any) => k.status === "present_evidenced")
-    const presentMentioned = enrichedKeywords.filter((k: any) => k.status === "present_mentioned")
-    const absentRequired   = enrichedKeywords.filter((k: any) => k.status === "absent_required")
-    const absentOptional   = enrichedKeywords.filter((k: any) => k.status === "absent_optional")
-
-    return Response.json({
+    const responseData = {
       success: true,
       overallKeywordScore: result.overallKeywordScore ?? 0,
       criticalMissing: result.criticalMissing ?? [],
       quickWins: result.quickWins ?? [],
       keywords: enrichedKeywords,
-      summary: {
-        presentEvidenced: presentEvidenced.length,
-        presentMentioned: presentMentioned.length,
-        absentRequired: absentRequired.length,
-        absentOptional: absentOptional.length,
-        total: enrichedKeywords.length,
-      },
-      grouped: {
-        presentEvidenced,
-        presentMentioned,
-        absentRequired,
-        absentOptional,
-      },
+      updatedAt: new Date().toISOString(),
+    }
+
+    try {
+      await prisma.analysis.update({
+        where: { id },
+        data: { keywordIntel: responseData },
+      })
+    } catch (e) {
+      console.warn("Save skipped:", (e as any)?.message)
+    }
+
+    return Response.json(responseData)
+  } catch (error: any) {
+    return Response.json(
+      { error: error?.message ?? "Failed" },
+      { status: 500 }
+    )
+  }
+}
+
+export async function GET(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const session = await auth()
+
+    if (!session?.user?.id)
+      return Response.json({ error: "Unauthorized" }, { status: 401 })
+
+    const analysis = await prisma.analysis.findUnique({
+      where: { id },
+    })
+
+    if (!analysis || analysis.userId !== session.user.id) {
+      return Response.json({ error: "Not found" }, { status: 404 })
+    }
+
+    return Response.json({
+      success: true,
+      data: analysis.keywordIntel ?? null,
     })
   } catch (error: any) {
-    console.error("KEYWORD_INTELLIGENCE_ERROR:", error)
-    return Response.json({ error: error?.message ?? "Failed" }, { status: 500 })
+    return Response.json(
+      { error: error?.message ?? "Failed" },
+      { status: 500 }
+    )
   }
 }

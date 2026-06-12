@@ -66,14 +66,21 @@ Respond ONLY with JSON:
 `.trim()
 }
 
-export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const { id } = await params
 
     const session = await auth()
-    if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
+    if (!session?.user?.id)
+      return Response.json({ error: "Unauthorized" }, { status: 401 })
 
-    const analysis = await prisma.analysis.findUnique({ where: { id } })
+    const analysis = await prisma.analysis.findUnique({
+      where: { id },
+    })
+
     if (!analysis || analysis.userId !== session.user.id) {
       return Response.json({ error: "Not found" }, { status: 404 })
     }
@@ -84,42 +91,66 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         analysis.cv ?? "",
         analysis.jobDescription ?? "",
         analysis.essentialCriteria ?? "",
-        analysis.desirableCriteria ?? "",
+        analysis.desirableCriteria ?? ""
       ),
       4000
     )
 
     const gaps = result.gaps ?? []
 
-    // Sort by severity: critical first
-    const severityOrder = { critical: 0, moderate: 1, low: 2, none: 3 }
-    gaps.sort((a: any, b: any) =>
-      (severityOrder[a.severity as keyof typeof severityOrder] ?? 3) -
-      (severityOrder[b.severity as keyof typeof severityOrder] ?? 3)
-    )
-
-    const critical = gaps.filter((g: any) => g.severity === "critical")
-    const moderate = gaps.filter((g: any) => g.severity === "moderate")
-    const low      = gaps.filter((g: any) => g.severity === "low")
-    const strong   = gaps.filter((g: any) => g.evidenceStatus === "strong")
-
-    return Response.json({
+    const responseData = {
       success: true,
       overallGapScore: result.overallGapScore ?? 0,
       summary: result.summary ?? "",
-      criticalGapCount: critical.length,
       gaps,
-      grouped: { critical, moderate, low, strong },
-      counts: {
-        critical: critical.length,
-        moderate: moderate.length,
-        low: low.length,
-        strong: strong.length,
-        total: gaps.length,
-      },
+      updatedAt: new Date().toISOString(),
+    }
+
+    try {
+      await prisma.analysis.update({
+        where: { id },
+        data: { evidenceGaps: responseData },
+      })
+    } catch (e) {
+      console.warn("Save skipped:", (e as any)?.message)
+    }
+
+    return Response.json(responseData)
+  } catch (error: any) {
+    return Response.json(
+      { error: error?.message ?? "Failed" },
+      { status: 500 }
+    )
+  }
+}
+
+export async function GET(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+
+    const session = await auth()
+    if (!session?.user?.id)
+      return Response.json({ error: "Unauthorized" }, { status: 401 })
+
+    const analysis = await prisma.analysis.findUnique({
+      where: { id },
+    })
+
+    if (!analysis || analysis.userId !== session.user.id) {
+      return Response.json({ error: "Not found" }, { status: 404 })
+    }
+
+    return Response.json({
+      success: true,
+      data: analysis.evidenceGaps ?? null,
     })
   } catch (error: any) {
-    console.error("EVIDENCE_GAPS_ERROR:", error)
-    return Response.json({ error: error?.message ?? "Failed" }, { status: 500 })
+    return Response.json(
+      { error: error?.message ?? "Failed" },
+      { status: 500 }
+    )
   }
 }

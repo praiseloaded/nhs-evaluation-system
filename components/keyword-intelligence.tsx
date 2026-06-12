@@ -1,6 +1,6 @@
 
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Loader2, CheckCircle2, XCircle, AlertTriangle, Sparkles, TrendingUp, Info } from 'lucide-react'
 
 type KWStatus = 'present_evidenced' | 'present_mentioned' | 'absent_required' | 'absent_optional' | 'not_applicable'
@@ -14,16 +14,53 @@ interface KWResult {
   overallKeywordScore: number
   criticalMissing: string[]
   quickWins: string[]
+  updatedAt?: string
   summary: { presentEvidenced: number; presentMentioned: number; absentRequired: number; total: number }
   grouped: { presentEvidenced: Keyword[]; presentMentioned: Keyword[]; absentRequired: Keyword[]; absentOptional: Keyword[] }
 }
 
 const STATUS_CONFIG: Record<KWStatus, { label: string; color: string; bg: string; icon: any }> = {
-  present_evidenced: { label: 'Evidenced',    color: 'text-emerald-700 dark:text-emerald-300', bg: 'bg-emerald-50 dark:bg-emerald-950 border-emerald-200 dark:border-emerald-800', icon: CheckCircle2 },
-  present_mentioned: { label: 'Mentioned',    color: 'text-blue-700 dark:text-blue-300',       bg: 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800',             icon: Info         },
-  absent_required:   { label: 'Missing ⚠',   color: 'text-red-700 dark:text-red-300',         bg: 'bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800',                 icon: XCircle      },
-  absent_optional:   { label: 'Not present',  color: 'text-gray-600 dark:text-gray-400',       bg: 'bg-muted border-border',                                                       icon: AlertTriangle },
-  not_applicable:    { label: 'N/A',           color: 'text-gray-400',                          bg: 'bg-muted border-border',                                                       icon: Info         },
+  present_evidenced: { label: 'Evidenced',   color: 'text-emerald-700 dark:text-emerald-300', bg: 'bg-emerald-50 dark:bg-emerald-950 border-emerald-200 dark:border-emerald-800', icon: CheckCircle2 },
+  present_mentioned: { label: 'Mentioned',   color: 'text-blue-700 dark:text-blue-300',       bg: 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800',             icon: Info         },
+  absent_required:   { label: 'Missing ⚠',  color: 'text-red-700 dark:text-red-300',         bg: 'bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800',                 icon: XCircle      },
+  absent_optional:   { label: 'Not present', color: 'text-gray-600 dark:text-gray-400',       bg: 'bg-muted border-border',                                                       icon: AlertTriangle },
+  not_applicable:    { label: 'N/A',          color: 'text-gray-400',                          bg: 'bg-muted border-border',                                                       icon: Info         },
+}
+
+// Transform flat API response into the grouped shape the component expects
+function normalise(raw: any): KWResult {
+  const keywords: Keyword[] = raw.keywords ?? []
+
+  // Promote keywords listed in criticalMissing to absent_required if the AI
+  // returned them as absent_optional (common model inconsistency)
+  const criticalSet = new Set((raw.criticalMissing ?? []).map((k: string) => k.toLowerCase()))
+  const normalised = keywords.map(k => ({
+    ...k,
+    status: (
+      k.status === 'absent_optional' && criticalSet.has(k.keyword.toLowerCase())
+        ? 'absent_required'
+        : k.status
+    ) as KWStatus,
+  }))
+
+  return {
+    overallKeywordScore: raw.overallKeywordScore ?? 0,
+    criticalMissing: raw.criticalMissing ?? [],
+    quickWins: raw.quickWins ?? [],
+    updatedAt: raw.updatedAt,
+    summary: {
+      presentEvidenced: normalised.filter(k => k.status === 'present_evidenced').length,
+      presentMentioned:  normalised.filter(k => k.status === 'present_mentioned').length,
+      absentRequired:    normalised.filter(k => k.status === 'absent_required').length,
+      total: normalised.length,
+    },
+    grouped: {
+      presentEvidenced: normalised.filter(k => k.status === 'present_evidenced'),
+      presentMentioned:  normalised.filter(k => k.status === 'present_mentioned'),
+      absentRequired:    normalised.filter(k => k.status === 'absent_required'),
+      absentOptional:    normalised.filter(k => k.status === 'absent_optional'),
+    },
+  }
 }
 
 function ScoreRing({ score }: { score: number }) {
@@ -48,8 +85,25 @@ function ScoreRing({ score }: { score: number }) {
 export function KeywordIntelligence({ analysisId }: { analysisId: string }) {
   const [result, setResult] = useState<KWResult | null>(null)
   const [loading, setLoading] = useState(false)
+  const [loadingSaved, setLoadingSaved] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeGroup, setActiveGroup] = useState<'all' | 'missing' | 'present'>('all')
+
+  // Load previously saved result on mount
+  useEffect(() => {
+    fetch(`/api/analysis/${analysisId}/keyword-intelligence`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d) return
+        // Handle both { data: {...} } and flat response shapes
+        const raw = d.data ?? d
+        if (raw?.keywords || raw?.grouped) {
+          setResult(raw.keywords ? normalise(raw) : raw)
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingSaved(false))
+  }, [analysisId])
 
   const run = async () => {
     setLoading(true); setError(null)
@@ -57,10 +111,16 @@ export function KeywordIntelligence({ analysisId }: { analysisId: string }) {
       const res = await fetch(`/api/analysis/${analysisId}/keyword-intelligence`, { method: 'POST' })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed')
-      setResult(data)
+      setResult(normalise(data))
     } catch (e: any) { setError(e.message) }
     finally { setLoading(false) }
   }
+
+  if (loadingSaved) return (
+    <div className="flex items-center justify-center py-20">
+      <Loader2 className="w-5 h-5 text-primary animate-spin" />
+    </div>
+  )
 
   if (!result && !loading) return (
     <div className="space-y-6">
@@ -91,11 +151,24 @@ export function KeywordIntelligence({ analysisId }: { analysisId: string }) {
 
   if (!result) return null
 
+  // Safety guard — should not happen after normalise, but just in case
+  if (!result.grouped) return (
+    <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 p-4 space-y-2">
+      <p className="text-sm font-semibold text-red-700 dark:text-red-300">
+        Analysis returned an unexpected format. Please re-run.
+      </p>
+      {error && <p className="text-sm text-red-500">{error}</p>}
+      <button onClick={run} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+        <Sparkles className="w-3 h-3" /> Re-run analysis
+      </button>
+    </div>
+  )
+
   const allKeywords = [
-    ...result.grouped.absentRequired,
-    ...result.grouped.presentMentioned,
-    ...result.grouped.presentEvidenced,
-    ...result.grouped.absentOptional,
+    ...(result.grouped.absentRequired   ?? []),
+    ...(result.grouped.presentMentioned ?? []),
+    ...(result.grouped.presentEvidenced ?? []),
+    ...(result.grouped.absentOptional   ?? []),
   ]
 
   const displayed = activeGroup === 'missing'
@@ -120,13 +193,13 @@ export function KeywordIntelligence({ analysisId }: { analysisId: string }) {
           <div className="flex-1 space-y-3">
             <div>
               <p className="text-lg font-bold text-foreground">NHS Keyword Score</p>
-              <p className="text-sm text-muted-foreground">Based on 30 high-impact NHS terms</p>
+              <p className="text-sm text-muted-foreground">Based on {result.summary.total} high-impact NHS terms</p>
             </div>
             <div className="flex gap-3 flex-wrap">
               {[
-                { label: 'Evidenced', count: result.summary.presentEvidenced, color: 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300' },
-                { label: 'Mentioned only', count: result.summary.presentMentioned, color: 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300' },
-                { label: 'Missing (required)', count: result.summary.absentRequired, color: 'bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300' },
+                { label: 'Evidenced',        count: result.summary.presentEvidenced, color: 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300' },
+                { label: 'Mentioned only',   count: result.summary.presentMentioned,  color: 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300' },
+                { label: 'Missing (required)', count: result.summary.absentRequired,  color: 'bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300' },
               ].map(s => (
                 <span key={s.label} className={`text-xs font-semibold px-3 py-1.5 rounded-full ${s.color}`}>
                   {s.count} {s.label}
@@ -172,7 +245,7 @@ export function KeywordIntelligence({ analysisId }: { analysisId: string }) {
       {/* Filter tabs */}
       <div className="flex gap-2 flex-wrap">
         {[
-          { key: 'all', label: `All (${allKeywords.length})` },
+          { key: 'all',     label: `All (${allKeywords.length})` },
           { key: 'missing', label: `Missing (${result.grouped.absentRequired.length})` },
           { key: 'present', label: `Present (${result.grouped.presentEvidenced.length + result.grouped.presentMentioned.length})` },
         ].map(tab => (
@@ -221,9 +294,16 @@ export function KeywordIntelligence({ analysisId }: { analysisId: string }) {
         </div>
       ))}
 
-      <button onClick={run} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
-        <Sparkles className="w-3 h-3" /> Re-run analysis
-      </button>
+      <div className="flex items-center justify-between">
+        <button onClick={run} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+          <Sparkles className="w-3 h-3" /> Re-run analysis
+        </button>
+        {result.updatedAt && (
+          <p className="text-[10px] text-muted-foreground">
+            Saved {new Date(result.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+          </p>
+        )}
+      </div>
     </div>
   )
 }

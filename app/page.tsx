@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Check, ArrowRight, ChevronDown, BarChart3, Shield, Zap, Users, Lock, TrendingUp } from 'lucide-react'
+import { Check, ArrowRight, ChevronDown, BarChart3, Shield, Zap, Users, Lock, TrendingUp, Search } from 'lucide-react'
 import { useState } from 'react'
 import { ThemeSwitcher } from '@/components/theme-switcher'
 
@@ -155,6 +155,13 @@ export default function HomePage() {
 
             <div className="flex items-center gap-4">
               <Link
+                href="/jobs"
+                className="px-4 py-2 rounded-lg text-foreground hover:bg-accent dark:hover:bg-slate-800 transition-colors font-medium hidden sm:inline-flex items-center gap-1.5"
+              >
+                <Search className="h-4 w-4" />
+                Browse Jobs
+              </Link>
+              <Link
                 href="/dashboard"
                 className="px-4 py-2 rounded-lg text-foreground hover:bg-accent dark:hover:bg-slate-800 transition-colors font-medium"
               >
@@ -223,6 +230,34 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+      </section>
+
+      {/* ════════════════════════════════════════════════════════
+          NHS JOBS SEARCH BANNER — new section
+      ════════════════════════════════════════════════════════ */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8 sm:-mt-12 relative z-10">
+        <Link href="/jobs"
+          className="group block rounded-2xl border border-border bg-card shadow-lg hover:shadow-xl hover:border-blue-300 dark:hover:border-blue-700 p-6 sm:p-8 transition-all duration-300">
+          <div className="flex items-center justify-between gap-6 flex-wrap">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <Search className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <h3 className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2">
+                  Search Live NHS Jobs
+                  <span className="text-[10px] font-bold bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full">NEW</span>
+                </h3>
+                <p className="text-sm text-muted-foreground dark:text-slate-400 mt-0.5">
+                  Browse current vacancies across England, Wales, NI and London — then get an instant AI analysis.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 text-sm font-semibold text-blue-600 dark:text-blue-400 shrink-0">
+              Browse jobs <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </div>
+        </Link>
       </section>
 
       {/* Features Section */}
