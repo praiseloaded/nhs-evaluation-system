@@ -3,13 +3,6 @@
 // Shared AI caller for all Application Builder prompts.
 // Tries multiple Gemini models in order — if one is overloaded (503),
 // rate-limited (429), or unavailable (404), falls back to the next.
-//
-// Model name format for v1beta API:
-//   gemini-2.5-flash-preview-05-20   ← 2.5 flash (correct preview tag)
-//   gemini-2.0-flash-001             ← 2.0 flash stable
-//   gemini-2.0-flash-lite            ← 2.0 flash lite
-//   gemini-1.5-flash-latest          ← 1.5 flash (use -latest not bare name)
-//   gemini-1.5-flash-8b-latest       ← 1.5 flash 8b
 
 const GEMINI_MODELS = [
   "gemini-2.5-flash",
@@ -68,12 +61,53 @@ async function callModel(
     return { success: false, status: 200, error: `empty response — finishReason: ${reason}` }
   }
 
-  try {
-    return { success: true, data: JSON.parse(text) }
-  } catch {
-    console.warn(`[AI] ${model} — JSON parse failed. Raw: ${text.slice(0, 120)}`)
-    return { success: false, status: 200, error: "JSON parse failed" }
+  const parsed = tryParseJSON(text)
+  if (parsed !== null) {
+    return { success: true, data: parsed }
   }
+
+  console.warn(`[AI] ${model} — JSON parse failed. Raw (first 300 chars): ${text.slice(0, 300)}`)
+  return { success: false, status: 200, error: `JSON parse failed. Raw: ${text.slice(0, 200)}` }
+}
+
+// ─── Robust JSON extraction ─────────────────────────────────────────────────
+// Gemini occasionally wraps JSON in markdown fences, adds trailing commentary,
+// includes trailing commas, or leaves raw control characters inside strings —
+// all of which break a direct JSON.parse despite responseMimeType: "application/json".
+// Try multiple recovery strategies before giving up.
+function tryParseJSON(raw: string): any | null {
+  let text = raw.trim()
+
+  // 1. Direct parse
+  try { return JSON.parse(text) } catch {}
+
+  // 2. Strip markdown code fences (```json ... ``` or ``` ... ```)
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  if (fenced) {
+    try { return JSON.parse(fenced[1].trim()) } catch {}
+  }
+
+  // 3. Extract the largest {...} or [...] block (handles leading/trailing commentary)
+  const firstBrace = text.search(/[{\[]/)
+  if (firstBrace >= 0) {
+    const openChar  = text[firstBrace]
+    const closeChar = openChar === '{' ? '}' : ']'
+    const lastClose = text.lastIndexOf(closeChar)
+    if (lastClose > firstBrace) {
+      const candidate = text.slice(firstBrace, lastClose + 1)
+      try { return JSON.parse(candidate) } catch {}
+
+      // 4. Remove trailing commas before } or ] — common Gemini artifact
+      const noTrailingCommas = candidate.replace(/,(\s*[}\]])/g, '$1')
+      try { return JSON.parse(noTrailingCommas) } catch {}
+
+      // 5. Strip control characters that break JSON.parse (raw newlines inside strings etc.)
+      const cleaned = noTrailingCommas.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
+      try { return JSON.parse(cleaned) } catch {}
+    }
+  }
+
+  return null
 }
 
 export async function callGeminiJSON(prompt: string, maxTokens = 4000): Promise<any> {
