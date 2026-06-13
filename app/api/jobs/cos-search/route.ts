@@ -148,81 +148,77 @@ function stripTags(html: string): string {
   return decodeEntities(html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim())
 }
 
-// ─── Improved NHS Jobs HTML parser ───────────────────────────────────────────
-// NHS Jobs renders job cards with a consistent structure:
-// <li class="nhsuk-list nhsuk-list--border..."> ... </li>
-// Each card has the job title in an <a href="...jobadvert/REF..."> and
-// employer/location as definition list items (dt/dd pairs).
+// ─── NHS Jobs HTML parser ─────────────────────────────────────────────────────
+// NHS Jobs returns server-rendered HTML where each job card is an <article>
+// or <li> element. The reliable anchor is the jobadvert URL.
+// Structure around each job:
+//   <a href="/candidate/jobadvert/REF">Title</a>
+//   <p>Employer Name</p>
+//   <ul><li>Location postcode</li><li>Contract type: ...</li>...</ul>
+// We split on jobadvert anchors and parse the surrounding ~1500 chars.
 function parseJobsFromHtml(html: string) {
   const jobs: any[] = []
   const seen = new Set<string>()
 
-  // Split on list items that look like job cards
-  // NHS Jobs uses <li> elements for each search result
-  const liBlocks = html.split(/<li[^>]*class="[^"]*nhsuk-list[^"]*"/i)
+  // Find every jobadvert link
+  const anchorRegex = /<a[^>]*href="([^"]*\/candidate\/jobadvert\/([A-Za-z0-9\-]+)[^"]*)"[^>]*>([\/\s\S]*?)<\/a>/gi
+  let m: RegExpExecArray | null
 
-  for (const block of liBlocks) {
-    // Find job ref from jobadvert URL
-    const refMatch = block.match(/\/candidate\/jobadvert\/([A-Za-z0-9\-]+)/)
-    if (!refMatch) continue
-    const jobRef = refMatch[1].trim()
-    if (seen.has(jobRef)) continue
+  while ((m = anchorRegex.exec(html)) !== null) {
+    const jobRef = m[2].trim()
+    const rawTitle = stripTags(m[3])
+    if (!rawTitle || rawTitle.length < 3 || seen.has(jobRef)) continue
+    if (/save this job|sign in|create account/i.test(rawTitle)) continue
     seen.add(jobRef)
 
-    // Title — in an <a> tag linking to the jobadvert
-    const titleMatch = block.match(/href="[^"]*\/candidate\/jobadvert\/[^"]*"[^>]*>([\s\S]*?)<\/a>/i)
-    const title = titleMatch ? stripTags(titleMatch[1]) : ''
-    if (!title || title.length < 3 || /save this job/i.test(title)) continue
+    // Grab the 2000 chars after this anchor for field extraction
+    const afterAnchor = html.slice(m.index + m[0].length, m.index + m[0].length + 2000)
+    const cleanAfter  = stripTags(afterAnchor)
+    const lines       = cleanAfter.split(/\n/).map(l => l.trim()).filter(Boolean)
 
-    // Employer — look for <dd> after <dt> containing "Employer"
-    const employerDtMatch = block.match(/<dt[^>]*>[\s\S]*?employer[\s\S]*?<\/dt>\s*<dd[^>]*>([\s\S]*?)<\/dd>/i)
-    const employer = employerDtMatch ? stripTags(employerDtMatch[1]) : extractFieldFromText(block, 'Employer')
+    // Employer is typically the first non-empty line after the title anchor
+    // that isn't a postcode, list item marker, or meta field
+    let employer = ''
+    for (const line of lines.slice(0, 8)) {
+      if (!line) continue
+      if (/^[A-Z]{1,2}\d/.test(line)) break          // looks like a postcode — stop
+      if (/^(Contract|Working|Salary|Date|Closing|Location|Pay band)/i.test(line)) break
+      if (line.length > 3 && line.length < 120 && !/^[-•*]/.test(line)) {
+        employer = line; break
+      }
+    }
 
-    // Location
-    const locationDtMatch = block.match(/<dt[^>]*>[\s\S]*?location[\s\S]*?<\/dt>\s*<dd[^>]*>([\s\S]*?)<\/dd>/i)
-    const location = locationDtMatch ? stripTags(locationDtMatch[1]) : extractFieldFromText(block, 'Location')
+    // Extract labelled fields from clean text
+    const getText = (label: string) => {
+      const re = new RegExp(`${label}\\s*:?\\s*([^\\n]{2,120})`, 'i')
+      return cleanAfter.match(re)?.[1]?.trim() ?? ''
+    }
 
-    // Salary
-    const salaryDtMatch = block.match(/<dt[^>]*>[\s\S]*?salary[\s\S]*?<\/dt>\s*<dd[^>]*>([\s\S]*?)<\/dd>/i)
-    const salary = salaryDtMatch ? stripTags(salaryDtMatch[1]) : extractFieldFromText(block, 'Salary') || 'Not specified'
+    const salary         = getText('Salary') || 'Not specified'
+    const datePosted     = getText('Date posted')
+    const closingDate    = getText('Closing date')
+    const contractType   = getText('Contract type')
+    const workingPattern = getText('Working pattern')
 
-    // Dates
-    const closingDtMatch = block.match(/<dt[^>]*>[\s\S]*?closing date[\s\S]*?<\/dt>\s*<dd[^>]*>([\s\S]*?)<\/dd>/i)
-    const closingDate = closingDtMatch ? stripTags(closingDtMatch[1]) : extractFieldFromText(block, 'Closing date')
-
-    const postedDtMatch = block.match(/<dt[^>]*>[\s\S]*?date posted[\s\S]*?<\/dt>\s*<dd[^>]*>([\s\S]*?)<\/dd>/i)
-    const datePosted = postedDtMatch ? stripTags(postedDtMatch[1]) : extractFieldFromText(block, 'Date posted')
-
-    // Contract / working pattern
-    const contractDtMatch = block.match(/<dt[^>]*>[\s\S]*?contract type[\s\S]*?<\/dt>\s*<dd[^>]*>([\s\S]*?)<\/dd>/i)
-    const contractType = contractDtMatch ? stripTags(contractDtMatch[1]) : ''
-
-    const patternDtMatch = block.match(/<dt[^>]*>[\s\S]*?working pattern[\s\S]*?<\/dt>\s*<dd[^>]*>([\s\S]*?)<\/dd>/i)
-    const workingPattern = patternDtMatch ? stripTags(patternDtMatch[1]) : ''
+    // Location — first line that looks like a postcode area
+    const locationMatch = cleanAfter.match(/([A-Za-z][^\n]{2,60}\s[A-Z]{1,2}\d[\d\w]?\s*\d[A-Z]{2})/)
+    const location      = locationMatch ? locationMatch[1].trim() : getText('Location')
 
     jobs.push({
-      title,
+      title: rawTitle,
       employer: employer || 'NHS',
       location: location || '',
-      salary: salary || 'Not specified',
-      datePosted: datePosted || '',
-      closingDate: closingDate || '',
-      contractType: contractType || '',
-      workingPattern: workingPattern || '',
+      salary,
+      datePosted,
+      closingDate,
+      contractType,
+      workingPattern,
       jobRef,
       url: `https://www.jobs.nhs.uk/candidate/jobadvert/${jobRef}`,
     })
   }
 
   return jobs
-}
-
-// Fallback text extraction when dt/dd pattern doesn't match
-function extractFieldFromText(block: string, label: string): string {
-  const clean = stripTags(block)
-  const re = new RegExp(`${label}\\s*:?\\s*(.+?)(?=Salary|Location|Employer|Date posted|Closing date|Contract|Working pattern|$)`, 'i')
-  const m = clean.match(re)
-  return m?.[1]?.trim().slice(0, 120) ?? ''
 }
 
 function parseTotalCount(html: string): number {
@@ -237,6 +233,7 @@ export async function GET(req: Request) {
     const keyword  = searchParams.get('keyword')  ?? ''
     const location = searchParams.get('location') ?? ''
     const page     = searchParams.get('page')     ?? '1'
+    const debug    = searchParams.get('debug')    === '1'
 
     // Load UKVI sponsor register (may return null if still loading)
     const sponsorData = await getSponsorSet()
@@ -299,6 +296,14 @@ export async function GET(req: Request) {
       jobs: outputJobs,
       register: registerStatus,
       searchUrl: targetUrl,
+      ...(debug && {
+        debugInfo: {
+          rawJobCount: jobs.length,
+          rawJobs: jobs.slice(0, 5).map(j => ({ title: j.title, employer: j.employer, employerNormalised: normaliseName(j.employer) })),
+          sampleSponsors: sponsorData ? [...sponsorData.names].filter(n => n.includes('nhs') || n.includes('hospital')).slice(0, 10) : [],
+          htmlSample: html.slice(0, 2000),
+        }
+      })
     })
   } catch (error: any) {
     console.error("COS_SEARCH_ERROR:", error)
