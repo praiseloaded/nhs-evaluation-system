@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import {
   Menu, X, LayoutDashboard, Plus, Files,
   PenLine, ListChecks, Video, Settings,
+  FolderOpen,
 } from "lucide-react"
 import { useState } from "react"
 import { ThemeSwitcher } from "./theme-switcher"
@@ -21,10 +22,11 @@ const NAV_GROUPS = [
   {
     label: "Tools",
     items: [
-      { href: "/dashboard/application", label: "Statement Builder", icon: PenLine, badge: "AI" },
+      { href: "/dashboard/application", label: "Statement Builder", icon: PenLine },
       { href: "/dashboard/applications", label: "Track Applications", icon: ListChecks },
       { href: "/dashboard/interview", label: "Interview Simulator", icon: Video, badge: "AI" },
       { href: '/dashboard/career-gps', label: 'Career GPS™', icon: PenLine },
+      { href: '/dashboard/evidence-vault', label: 'EvidenceVault™', icon: FolderOpen }
     ],
   },
   {

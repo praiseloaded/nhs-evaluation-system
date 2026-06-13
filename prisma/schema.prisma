@@ -21,6 +21,14 @@ model User {
   analysisLimit Int       @default(1)
   careerGpsData   Json?
 
+
+  evidenceEntries   EvidenceEntry[]
+  certificates      Certificate[]
+  competencies      Competency[]
+  interviewVault    InterviewVaultEntry[]
+  referenceEntries  ReferenceEntry[]
+
+
   accounts      Account[]
   sessions      Session[]
   analyses      Analysis[]
@@ -260,3 +268,107 @@ model ApplicationDraft {
 
   @@index([applicationId])
 }
+
+model EvidenceEntry {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title         String              // short label, e.g. "Dementia patient research visit"
+  category      String              // clinical | patient_interaction | research | audit | training | leadership | other
+  situation     String   @db.Text
+  task          String   @db.Text
+  action        String   @db.Text
+  result        String   @db.Text
+
+  skillTags     String[]            // e.g. ["venepuncture", "consent", "communication"]
+  nhsValueTags  String[]            // e.g. ["Care and Compassion", "Dignity and Respect"]
+
+  dateOccurred  DateTime?
+  employer      String?             // where this happened
+  usageCount    Int      @default(0) // how many times used in statements
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+  @@index([category])
+}
+
+model Certificate {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name          String              // e.g. "Phlebotomy Certificate"
+  issuer        String?             // e.g. "Skills for Health"
+  certNumber    String?
+  dateIssued    DateTime?
+  expiryDate    DateTime?
+  fileUrl       String?             // uploaded document link
+  category      String   @default("training") // training | mandatory | professional_registration | qualification
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Competency {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  skillName     String              // e.g. "Venepuncture"
+  status        String   @default("training") // competent | training | not_started
+  evidenceId    String?             // optional link to EvidenceEntry
+  notes         String?  @db.Text
+  signedOffBy   String?             // assessor name
+  signedOffDate DateTime?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+  @@unique([userId, skillName])
+}
+
+model InterviewVaultEntry {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  question      String   @db.Text   // e.g. "Tell us about yourself"
+  category      String   @default("general") // general | teamwork | difficult_situation | values | leadership | clinical
+  answer        String   @db.Text
+  linkedEvidenceId String?          // optional link to EvidenceEntry used for this answer
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model ReferenceEntry {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  employer        String
+  jobTitle        String
+  startDate       DateTime?
+  endDate         DateTime?         // null = current role
+  responsibilities String  @db.Text
+  achievements    String?  @db.Text
+
+  refereeName     String?
+  refereeRole     String?
+  refereeEmail    String?
+  refereePhone    String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId])
+}
+

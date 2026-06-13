@@ -8,7 +8,7 @@ import Link from 'next/link'
 import {
   ArrowLeft, ArrowRight, CheckCircle2, Circle, Loader2,
   FileText, Upload, File, X, Heart, User, Globe,
-  Sparkles, AlertCircle, ChevronRight, Clock, Plus,
+  Sparkles, AlertCircle, ChevronRight, Clock, Plus, FolderOpen,
 } from 'lucide-react'
 
 // ─── Nation detection ─────────────────────────────────────────────────────────
@@ -137,10 +137,11 @@ function FileSlotInput({ slot, label, icon: Icon, optional, hint, onFile, onRemo
 }
 
 // ─── Evidence card (minimal STAR) ─────────────────────────────────────────────
-function EvidenceCard({ criterion, index, total, value, noExp, onChange, onNoExp, generating, generated }: {
+function EvidenceCard({ criterion, index, total, value, noExp, onChange, onNoExp, generating, generated, suggestions, loadingSuggestions, onUseSuggestion }: {
   criterion: Criterion; index: number; total: number
   value: string; noExp: boolean; onChange: (v: string) => void; onNoExp: (v: boolean) => void
   generating: boolean; generated: boolean
+  suggestions: any[]; loadingSuggestions: boolean; onUseSuggestion: (s: any) => void
 }) {
   return (
     <div className="space-y-4">
@@ -154,6 +155,30 @@ function EvidenceCard({ criterion, index, total, value, noExp, onChange, onNoExp
       <div className="rounded-xl border border-border bg-muted/30 p-4">
         <p className="text-sm font-semibold text-foreground leading-relaxed">{criterion.text}</p>
       </div>
+
+      {/* EvidenceVault suggestions */}
+      {!noExp && loadingSuggestions && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="w-3 h-3 animate-spin" /> Checking EvidenceVault™ for matching examples...
+        </div>
+      )}
+      {!noExp && !loadingSuggestions && suggestions.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+            <FolderOpen className="w-3.5 h-3.5 text-primary" /> From your EvidenceVault™
+          </p>
+          {suggestions.map(s => (
+            <button key={s.id} onClick={() => onUseSuggestion(s)}
+              className="w-full text-left rounded-lg border border-primary/20 bg-primary/5 hover:bg-primary/10 p-3 transition-colors">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-foreground">{s.title}</p>
+                <span className="text-[10px] text-primary font-medium shrink-0">Use this →</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">{s.situation}</p>
+            </button>
+          ))}
+        </div>
+      )}
 
       {!noExp ? (
         <div className="space-y-2">
@@ -459,6 +484,29 @@ function StatementBuilderWizardInner() {
       })
     } catch {}
     setStep(4)
+  }
+
+  // ── Fetch EvidenceVault suggestions for the current criterion ────────────
+  useEffect(() => {
+    if (step !== 4) return
+    const c = criteria[evidenceIndex]
+    if (!c) return
+    setLoadingSuggestions(true)
+    fetch('/api/evidence-vault/suggest', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ criterionText: c.text }),
+    }).then(r => r.json()).then(d => setVaultSuggestions(d.suggestions ?? []))
+      .catch(() => setVaultSuggestions([]))
+      .finally(() => setLoadingSuggestions(false))
+  }, [step, evidenceIndex, criteria])
+
+  const useVaultSuggestion = (suggestion: any) => {
+    const c = criteria[evidenceIndex]
+    if (!c) return
+    const text = `Situation: ${suggestion.situation}\nTask: ${suggestion.task}\nAction: ${suggestion.action}\nResult: ${suggestion.result}`
+    setEvidenceValues(p => ({ ...p, [c.id]: text }))
+    // Track usage
+    fetch('/api/evidence-vault/suggest', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: suggestion.id }) }).catch(() => {})
   }
 
   // ── Step 4: Save evidence for current criterion ───────────────────────────
@@ -977,6 +1025,9 @@ function StatementBuilderWizardInner() {
             onNoExp={v => setNoExpFlags(p => ({ ...p, [currentCriterion.id]: v }))}
             generating={savingEvidence}
             generated={savedEvidence[currentCriterion.id] ?? false}
+            suggestions={vaultSuggestions}
+            loadingSuggestions={loadingSuggestions}
+            onUseSuggestion={useVaultSuggestion}
           />
 
           <div className="flex gap-3">
