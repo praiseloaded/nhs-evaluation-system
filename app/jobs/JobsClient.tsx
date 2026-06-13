@@ -7,10 +7,133 @@ import {
   Search, MapPin, Stethoscope, Loader2, ExternalLink, Sparkles,
   Calendar, PoundSterling, AlertCircle, ChevronLeft, ChevronRight,
   Clock, FileText, Building2, Car, Award, HeartPulse, Globe,
+  ArrowRight,
 } from 'lucide-react'
 import { ThemeSwitcher } from '@/components/theme-switcher'
+import { useSession } from 'next-auth/react'
 
 const COS_KEYWORD = 'Skilled Worker Visa Sponsorship'
+
+function Navbar() {
+  const { data: session, status } = useSession()
+  const isLoading = status === 'loading'
+
+  const initials =
+    session?.user?.name
+      ?.split(' ')
+      .map((n) => n[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() ?? ''
+
+  return (
+    <nav className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="flex h-14 items-center justify-between">
+
+          {/* Logo */}
+          <Link href="/" className="flex items-center gap-2.5 shrink-0">
+            <div className="h-8 w-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-semibold text-[11px] tracking-wide select-none">
+              NHS
+            </div>
+            <span className="font-semibold text-[15px] text-foreground leading-none">
+              JobReady
+              <span className="ml-1.5 text-[10px] font-normal text-muted-foreground bg-accent dark:bg-slate-800 px-1.5 py-0.5 rounded border border-border align-middle">
+                AI
+              </span>
+            </span>
+          </Link>
+
+          {/* Right side */}
+          <div className="flex items-center gap-1">
+
+            {/* Browse Jobs — always visible */}
+            <Link
+              href="/jobs"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-slate-800 transition-colors"
+            >
+              <Search className="h-3.5 w-3.5" />
+              Browse jobs
+            </Link>
+
+            {/* Loading skeleton */}
+            {isLoading && (
+              <div className="flex items-center gap-2 ml-2">
+                <div className="h-7 w-14 rounded-md bg-accent dark:bg-slate-800 animate-pulse" />
+                <div className="h-7 w-28 rounded-lg bg-accent dark:bg-slate-800 animate-pulse" />
+              </div>
+            )}
+
+            {/* Authenticated */}
+            {!isLoading && session && (
+              <>
+            
+               <div className="hidden sm:block w-px h-5 bg-border mx-1.5" />
+
+                <ThemeSwitcher />
+
+                {/* Avatar */}
+                <div
+                  title={session.user?.name ?? ''}
+                  className="h-8 w-8 rounded-full bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 flex items-center justify-center ml-1 cursor-default select-none"
+                >
+                  <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">
+                    {initials || '?'}
+                  </span>
+                </div>
+
+                <Link
+                  href="/dashboard"
+                  className="hidden sm:flex items-center gap-1.5 ml-1.5 px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-[13px] font-semibold transition-colors"
+                >
+                  Dashboard
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </>
+            )}
+
+            {/* Unauthenticated */}
+            {!isLoading && !session && (
+              <>
+                <Link
+                  href="/#features"
+                  className="hidden md:block px-3 py-1.5 rounded-md text-[13px] text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-slate-800 transition-colors"
+                >
+                  Features
+                </Link>
+                <Link
+                  href="/#pricing"
+                  className="hidden md:block px-3 py-1.5 rounded-md text-[13px] text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-slate-800 transition-colors"
+                >
+                  Pricing
+                </Link>
+
+                <div className="hidden sm:block w-px h-5 bg-border mx-1.5" />
+
+                <ThemeSwitcher />
+
+                <Link
+                  href="/login"
+                  className="px-3 py-1.5 rounded-lg text-[13px] font-medium text-foreground border border-border hover:bg-accent dark:hover:bg-slate-800 transition-colors"
+                >
+                  Sign in
+                </Link>
+
+                <Link
+                  href="/register"
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-[13px] font-semibold transition-colors"
+                >
+                  Get started free
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </nav>
+  )
+}
 
 interface Job {
   title: string; employer: string; location: string; salary: string
@@ -470,41 +593,7 @@ export function JobsClient({ isLoggedIn = false, cosMode = false }: { isLoggedIn
   return (
     <div className="min-h-screen bg-background">
 
-      <nav className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex h-16 items-center justify-between">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-600 to-blue-700 text-white flex items-center justify-center font-bold text-sm">
-                NHS
-              </div>
-              <span className="font-bold text-lg">Evaluation Engine</span>
-            </Link>
-
-            <div className="flex items-center gap-4">
-              <Link
-                href="/jobs"
-                className="px-4 py-2 rounded-lg text-foreground hover:bg-accent dark:hover:bg-slate-800 transition-colors font-medium hidden sm:inline-flex items-center gap-1.5"
-              >
-                <Search className="h-4 w-4" />
-                Browse Jobs
-              </Link>
-              <Link
-                href="/dashboard"
-                className="px-4 py-2 rounded-lg text-foreground hover:bg-accent dark:hover:bg-slate-800 transition-colors font-medium"
-              >
-                Dashboard
-              </Link>
-              <ThemeSwitcher />
-              <Link
-                href="/dashboard"
-                className="px-6 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-opacity font-semibold"
-              >
-                Sign In
-              </Link>
-            </div>
-          </div>
-        </div>
-      </nav>
+     <Navbar />
 
       <div className="max-w-5xl mx-auto px-4 py-10">
         <div className="mb-8">
