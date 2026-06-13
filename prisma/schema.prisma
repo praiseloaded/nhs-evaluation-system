@@ -101,6 +101,7 @@ model Analysis {
   keywordIntel      Json?
   evidenceGaps      Json?
   interviews        Interview[]
+  interviewProbability  Json?  
 
   createdAt         DateTime @default(now())
 

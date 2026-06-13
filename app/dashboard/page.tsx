@@ -6,8 +6,8 @@ import {
   Plus, FileText, AlertCircle, RefreshCw,
   TrendingUp, Target, BarChart3, Lock,
   ShieldAlert, AlertTriangle, CheckCircle2,
-  Users, Wifi, WifiOff, Sparkles,
-  ChevronRight, Activity, ArrowUpRight,
+  Users, WifiOff, Sparkles,
+  ChevronRight, Activity, ArrowUpRight, Award, MapPin,
 } from 'lucide-react'
 import { useSession } from 'next-auth/react'
 
@@ -131,11 +131,6 @@ const VERDICT_CONFIG: Record<string, {
   ringColor: string
   ringTrack: string
   glowColor: string
-  scoreGradientStart: string
-  scoreGradientEnd: string
-  accentBorder: string
-  badgeBg: string
-  badgeText: string
   dot: string
   bar: string
 }> = {
@@ -144,12 +139,7 @@ const VERDICT_CONFIG: Record<string, {
     pill: 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700',
     ringColor: '#10b981',
     ringTrack: '#d1fae5',
-    glowColor: 'rgba(16,185,129,0.12)',
-    scoreGradientStart: '#10b981',
-    scoreGradientEnd: '#059669',
-    accentBorder: 'border-t-4 border-t-emerald-400',
-    badgeBg: 'bg-emerald-500',
-    badgeText: 'text-white',
+    glowColor: 'rgba(16,185,129,0.10)',
     dot: 'bg-emerald-400',
     bar: 'bg-emerald-400',
   },
@@ -158,12 +148,7 @@ const VERDICT_CONFIG: Record<string, {
     pill: 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700',
     ringColor: '#3b82f6',
     ringTrack: '#dbeafe',
-    glowColor: 'rgba(59,130,246,0.12)',
-    scoreGradientStart: '#3b82f6',
-    scoreGradientEnd: '#2563eb',
-    accentBorder: 'border-t-4 border-t-blue-400',
-    badgeBg: 'bg-blue-500',
-    badgeText: 'text-white',
+    glowColor: 'rgba(59,130,246,0.10)',
     dot: 'bg-blue-400',
     bar: 'bg-blue-400',
   },
@@ -172,12 +157,7 @@ const VERDICT_CONFIG: Record<string, {
     pill: 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700',
     ringColor: '#f59e0b',
     ringTrack: '#fef3c7',
-    glowColor: 'rgba(245,158,11,0.12)',
-    scoreGradientStart: '#f59e0b',
-    scoreGradientEnd: '#d97706',
-    accentBorder: 'border-t-4 border-t-amber-400',
-    badgeBg: 'bg-amber-500',
-    badgeText: 'text-white',
+    glowColor: 'rgba(245,158,11,0.10)',
     dot: 'bg-amber-400',
     bar: 'bg-amber-400',
   },
@@ -186,21 +166,16 @@ const VERDICT_CONFIG: Record<string, {
     pill: 'bg-red-50 text-red-700 border border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700',
     ringColor: '#ef4444',
     ringTrack: '#fee2e2',
-    glowColor: 'rgba(239,68,68,0.12)',
-    scoreGradientStart: '#ef4444',
-    scoreGradientEnd: '#dc2626',
-    accentBorder: 'border-t-4 border-t-red-400',
-    badgeBg: 'bg-red-500',
-    badgeText: 'text-white',
+    glowColor: 'rgba(239,68,68,0.10)',
     dot: 'bg-red-400',
     bar: 'bg-red-400',
   },
 }
 
 const RISK_CONFIG = {
-  high:   { icon: ShieldAlert,   cls: 'text-red-500',     bg: 'bg-red-50 dark:bg-red-950/50',       label: 'High rejection risk',   border: 'border-red-200 dark:border-red-800'   },
-  medium: { icon: AlertTriangle, cls: 'text-amber-500',   bg: 'bg-amber-50 dark:bg-amber-950/50',   label: 'Medium rejection risk', border: 'border-amber-200 dark:border-amber-800' },
-  low:    { icon: CheckCircle2,  cls: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-950/50', label: 'Low rejection risk',  border: 'border-emerald-200 dark:border-emerald-800' },
+  high:   { icon: ShieldAlert,   cls: 'text-red-600 dark:text-red-400',     bg: 'bg-red-50 dark:bg-red-950/40',      label: 'High risk'   },
+  medium: { icon: AlertTriangle, cls: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/40',  label: 'Medium risk' },
+  low:    { icon: CheckCircle2,  cls: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/40', label: 'Low risk' },
 }
 
 const VALUE_LABEL: Record<string, { label: string; cls: string }> = {
@@ -221,20 +196,18 @@ function formatDate(value?: string): string {
   catch { return '—' }
 }
 
-// ─── Large Score Ring (TubeBuddy-style) ───────────────────────────────────────
+// ─── Compact Score Ring ────────────────────────────────────────────────────────
 
-function LargeScoreRing({
+function ScoreRing({
   score,
   config,
-  size = 120,
-  label,
+  size = 72,
 }: {
   score: number
   config: typeof VERDICT_CONFIG[string]
   size?: number
-  label?: string
 }) {
-  const strokeWidth = 10
+  const strokeWidth = 6
   const r = (size - strokeWidth * 2) / 2
   const circ = 2 * Math.PI * r
   const offset = circ - (score / 100) * circ
@@ -242,99 +215,37 @@ function LargeScoreRing({
   const cy = size / 2
 
   return (
-    <div className="flex flex-col items-center gap-2">
-      <div className="relative" style={{ width: size, height: size }}>
-        {/* Glow behind ring */}
-        <div
-          className="absolute inset-0 rounded-full blur-xl opacity-60"
-          style={{ background: config.glowColor }}
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90" viewBox={`0 0 ${size} ${size}`}>
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke={config.ringTrack} strokeWidth={strokeWidth} className="dark:opacity-20" />
+        <circle
+          cx={cx} cy={cy} r={r} fill="none"
+          stroke={config.ringColor} strokeWidth={strokeWidth}
+          strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
+          style={{ transition: 'stroke-dashoffset 0.8s cubic-bezier(0.4,0,0.2,1)' }}
         />
-        <svg
-          width={size}
-          height={size}
-          className="relative -rotate-90 drop-shadow-sm"
-          viewBox={`0 0 ${size} ${size}`}
-        >
-          {/* Track */}
-          <circle
-            cx={cx} cy={cy} r={r}
-            fill="none"
-            stroke={config.ringTrack}
-            strokeWidth={strokeWidth}
-            className="dark:opacity-20"
-          />
-          {/* Progress arc */}
-          <circle
-            cx={cx} cy={cy} r={r}
-            fill="none"
-            stroke={config.ringColor}
-            strokeWidth={strokeWidth}
-            strokeDasharray={circ}
-            strokeDashoffset={offset}
-            strokeLinecap="round"
-            style={{ transition: 'stroke-dashoffset 0.8s cubic-bezier(0.4,0,0.2,1)' }}
-          />
-        </svg>
-        {/* Center text */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span
-            className="font-black tabular-nums leading-none"
-            style={{
-              fontSize: size * 0.22,
-              color: config.ringColor,
-              fontVariantNumeric: 'tabular-nums',
-            }}
-          >
-            {score}
-          </span>
-          <span
-            className="font-semibold tracking-wider text-muted-foreground uppercase"
-            style={{ fontSize: size * 0.085 }}
-          >
-            / 100
-          </span>
-        </div>
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="font-black tabular-nums leading-none" style={{ fontSize: size * 0.28, color: config.ringColor }}>
+          {score}
+        </span>
       </div>
-      {label && (
-        <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{label}</span>
-      )}
     </div>
   )
 }
 
-// ─── Sub-score bar ─────────────────────────────────────────────────────────────
+// ─── Sub-score pill (compact) ───────────────────────────────────────────────────
 
-function SubScoreBar({
-  label,
-  value,
-  color,
-  locked = false,
-}: {
-  label: string
-  value?: number
-  color: string
-  locked?: boolean
-}) {
+function SubScorePill({ label, value, color, locked = false }: { label: string; value?: number; color: string; locked?: boolean }) {
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
-        {locked ? (
-          <Lock className="w-3 h-3 text-muted-foreground/30" />
-        ) : (
-          <span className="text-[11px] font-mono font-bold" style={{ color }}>{value}%</span>
-        )}
-      </div>
-      <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-        {locked ? (
-          <div className="h-full w-3/5 rounded-full bg-muted-foreground/15" />
-        ) : (
-          <div
-            className="h-full rounded-full transition-all duration-700"
-            style={{ width: `${value}%`, background: color }}
-          />
-        )}
-      </div>
+    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-muted/60 border border-border/60">
+      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: locked ? undefined : color }} />
+      <span className="text-[10px] font-semibold text-muted-foreground">{label}</span>
+      {locked ? (
+        <Lock className="w-2.5 h-2.5 text-muted-foreground/30" />
+      ) : (
+        <span className="text-[10px] font-bold tabular-nums" style={{ color }}>{value}%</span>
+      )}
     </div>
   )
 }
@@ -345,40 +256,35 @@ function KpiCard({
   icon: Icon,
   label,
   value,
-  sub,
   accent = false,
   trend,
 }: {
   icon: React.ElementType
   label: string
   value: string | number
-  sub?: React.ReactNode
   accent?: boolean
   trend?: string
 }) {
   return (
-    <div className={`rounded-2xl border p-6 shadow-sm transition-all duration-200 hover:shadow-md ${
-      accent
-        ? 'bg-foreground text-background border-foreground'
-        : 'bg-card border-border'
+    <div className={`rounded-2xl border p-5 shadow-sm transition-all duration-200 hover:shadow-md ${
+      accent ? 'bg-foreground text-background border-foreground' : 'bg-card border-border'
     }`}>
-      <div className="flex items-start justify-between mb-5">
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${accent ? 'bg-background/10' : 'bg-muted'}`}>
-          <Icon className={`w-5 h-5 ${accent ? 'text-background/80' : 'text-muted-foreground'}`} />
+      <div className="flex items-center justify-between mb-3">
+        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${accent ? 'bg-background/10' : 'bg-muted'}`}>
+          <Icon className={`w-4 h-4 ${accent ? 'text-background/80' : 'text-muted-foreground'}`} />
         </div>
         {trend && (
-          <span className="flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-1 rounded-full border border-emerald-200 dark:border-emerald-700">
-            <ArrowUpRight className="w-3 h-3" />{trend}
+          <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-700">
+            <ArrowUpRight className="w-2.5 h-2.5" />{trend}
           </span>
         )}
       </div>
-      <p className={`text-4xl font-black tracking-tight tabular-nums mb-1 ${accent ? 'text-background' : 'text-foreground'}`}>
+      <p className={`text-3xl font-black tracking-tight tabular-nums mb-0.5 ${accent ? 'text-background' : 'text-foreground'}`}>
         {value}
       </p>
-      <p className={`text-xs font-semibold uppercase tracking-widest ${accent ? 'text-background/50' : 'text-muted-foreground'}`}>
+      <p className={`text-[11px] font-semibold uppercase tracking-widest ${accent ? 'text-background/50' : 'text-muted-foreground'}`}>
         {label}
       </p>
-      {sub && <div className="mt-4">{sub}</div>}
     </div>
   )
 }
@@ -396,11 +302,11 @@ function DistributionBar({ analyses }: { analyses: Analysis[] }) {
   }
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-      <div className="flex items-center justify-between mb-6">
+    <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
-            <Activity className="w-5 h-5 text-muted-foreground" />
+          <div className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center">
+            <Activity className="w-4 h-4 text-muted-foreground" />
           </div>
           <div>
             <p className="text-sm font-bold text-foreground">Score Distribution</p>
@@ -409,7 +315,7 @@ function DistributionBar({ analyses }: { analyses: Analysis[] }) {
         </div>
         <BarChart3 className="w-4 h-4 text-muted-foreground/40" />
       </div>
-      <div className="flex h-3 w-full rounded-full overflow-hidden gap-0.5">
+      <div className="flex h-2.5 w-full rounded-full overflow-hidden gap-0.5">
         {(Object.entries(counts) as [string, number][]).map(([verdict, count]) => {
           if (count === 0) return null
           return (
@@ -422,12 +328,12 @@ function DistributionBar({ analyses }: { analyses: Analysis[] }) {
           )
         })}
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4">
         {(Object.entries(counts) as [string, number][]).map(([verdict, count]) => (
           <div key={verdict} className="flex items-center gap-2">
-            <span className={`w-2.5 h-2.5 rounded-full ${VERDICT_CONFIG[verdict].dot} shrink-0`} />
+            <span className={`w-2 h-2 rounded-full ${VERDICT_CONFIG[verdict].dot} shrink-0`} />
             <div>
-              <p className="text-xs text-muted-foreground">{VERDICT_CONFIG[verdict].label}</p>
+              <p className="text-[11px] text-muted-foreground">{VERDICT_CONFIG[verdict].label}</p>
               <p className="text-sm font-bold text-foreground tabular-nums">{count}</p>
             </div>
           </div>
@@ -437,9 +343,10 @@ function DistributionBar({ analyses }: { analyses: Analysis[] }) {
   )
 }
 
-// ─── Analysis Card ─────────────────────────────────────────────────────────────
+// ─── Analysis Row ───────────────────────────────────────────────────────────────
+// Horizontal, scannable list-row design — replaces the dense card grid.
 
-function AnalysisCard({ a, isPro }: { a: Analysis; isPro: boolean }) {
+function AnalysisRow({ a, isPro }: { a: Analysis; isPro: boolean }) {
   const score         = deriveScore(a)
   const atsScore      = deriveAtsScore(a)
   const config        = getConfig(score, a.verdict)
@@ -448,237 +355,116 @@ function AnalysisCard({ a, isPro }: { a: Analysis; isPro: boolean }) {
   const scan          = result?.statementScan
   const seniority     = result?.seniority
   const rejectionRisk = result?.rejectionRisk
-  const bandCoaching  = result?.bandCoaching
-  const nhsValues     = result?.nhsValues ?? []
   const strengths     = result?.strengths?.slice(0, 1) ?? []
   const weaknesses    = result?.weaknesses?.slice(0, 1) ?? []
-
-  const riskConfig = rejectionRisk?.overall ? RISK_CONFIG[rejectionRisk.overall] : null
+  const riskConfig    = rejectionRisk?.overall ? RISK_CONFIG[rejectionRisk.overall] : null
 
   const subScores = [
-    { label: 'Criteria',   value: sb?.criteriaCoverage,  color: '#3b82f6', free: true  },
-    { label: 'STAR',       value: sb?.starCompleteness,  color: '#8b5cf6', free: false },
-    { label: 'Values',     value: sb?.valuesAlignment,   color: '#10b981', free: true  },
-    { label: 'Language',   value: sb?.languageMirroring, color: '#ec4899', free: false },
-    { label: 'Specificity',value: sb?.specificity,       color: '#f59e0b', free: false },
-  ].filter(s => isPro ? typeof s.value === 'number' : (typeof s.value === 'number' || !s.free))
+    { label: 'Criteria',    value: sb?.criteriaCoverage,  color: '#3b82f6', free: true  },
+    { label: 'Values',      value: sb?.valuesAlignment,   color: '#10b981', free: true  },
+    { label: 'STAR',        value: sb?.starCompleteness,  color: '#8b5cf6', free: false },
+    { label: 'Language',    value: sb?.languageMirroring, color: '#ec4899', free: false },
+    { label: 'Specificity', value: sb?.specificity,       color: '#f59e0b', free: false },
+  ]
+
+  const flags: string[] = []
+  if (scan?.usesWeLanguage) flags.push('"We" language')
+  if (scan && !scan.resultsPresent) flags.push('No results stated')
+  if (scan && !scan.hasExamples) flags.push('No examples')
 
   return (
     <Link
       href={`/dashboard/analysis/${a.id}`}
-      className={`group relative bg-card border border-border rounded-2xl overflow-hidden hover:shadow-xl hover:border-foreground/20 transition-all duration-300 flex flex-col ${config.accentBorder}`}
+      className="group block rounded-2xl border border-border bg-card hover:border-foreground/15 hover:shadow-md transition-all duration-200 overflow-hidden"
     >
-      <div className="p-6 flex flex-col gap-5">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-5 p-4 sm:p-5">
 
-        {/* ── Header: Large ring + title ── */}
-        <div className="flex items-start gap-5">
-          {/* Large ring — the hero element */}
-          <div className="shrink-0">
-            <LargeScoreRing score={score} config={config} size={100} />
-          </div>
+        {/* Score ring */}
+        <ScoreRing score={score} config={config} size={64} />
 
-          {/* Title block */}
-          <div className="flex-1 min-w-0 pt-1">
-            <div className="flex items-start justify-between gap-2 mb-2">
-              <h3 className="font-bold text-foreground text-sm leading-snug group-hover:text-primary transition-colors line-clamp-3">
+        {/* Main info */}
+        <div className="flex-1 min-w-0 space-y-2">
+          {/* Title row */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="font-bold text-foreground text-sm leading-snug group-hover:text-primary transition-colors line-clamp-1">
                 {a.jobTitle}
               </h3>
+              <div className="flex flex-wrap items-center gap-2 mt-1">
+                <span className={`inline-flex items-center text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${config.pill}`}>
+                  {config.label}
+                </span>
+                {a.band && (
+                  <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <Award className="w-3 h-3" /> {a.band}
+                  </span>
+                )}
+                {a.location && (
+                  <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground truncate max-w-[140px]">
+                    <MapPin className="w-3 h-3 shrink-0" /> {a.location}
+                  </span>
+                )}
+                <span className="text-[11px] font-mono text-muted-foreground/70">{formatDate(a.createdAt)}</span>
+              </div>
             </div>
-            <span className={`inline-flex items-center text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full ${config.pill}`}>
-              {config.label}
-            </span>
-            <div className="flex flex-wrap items-center gap-2 mt-2">
-              {a.band && (
-                <span className="text-[10px] font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded-md border border-border">
-                  {a.band}
+            <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0 mt-1" />
+          </div>
+
+          {/* Sub-score pills */}
+          <div className="flex flex-wrap gap-1.5">
+            {subScores.map(s => {
+              const hasValue = typeof s.value === 'number'
+              const locked = !isPro && !s.free
+              if (!hasValue && !locked) return null
+              return <SubScorePill key={s.label} label={s.label} value={s.value} color={s.color} locked={locked || !hasValue} />
+            })}
+            {atsScore !== null && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-muted/60 border border-border/60">
+                <Target className="w-2.5 h-2.5 text-muted-foreground" />
+                <span className="text-[10px] font-semibold text-muted-foreground">ATS</span>
+                <span className="text-[10px] font-bold tabular-nums" style={{ color: config.ringColor }}>{atsScore}%</span>
+              </div>
+            )}
+            {riskConfig && isPro && (
+              <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${riskConfig.bg}`}>
+                <riskConfig.icon className={`w-2.5 h-2.5 ${riskConfig.cls}`} />
+                <span className={`text-[10px] font-bold ${riskConfig.cls}`}>{riskConfig.label}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Flags + band gap */}
+          {(flags.length > 0 || (seniority && seniority.bandGap > 0)) && (
+            <div className="flex flex-wrap gap-1.5">
+              {seniority && seniority.bandGap > 0 && (
+                <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-md flex items-center gap-1">
+                  <AlertTriangle className="w-2.5 h-2.5" /> Band gap B{seniority.demonstratedBand}→B{seniority.targetBand}
                 </span>
               )}
-              {a.location && (
-                <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">{a.location}</span>
+              {flags.map(f => (
+                <span key={f} className="text-[10px] font-semibold text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 px-2 py-0.5 rounded-md flex items-center gap-1">
+                  <WifiOff className="w-2.5 h-2.5" /> {f}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Strength / weakness one-liners */}
+          {(strengths.length > 0 || weaknesses.length > 0) && (
+            <div className="grid sm:grid-cols-2 gap-2 pt-1">
+              {strengths.length > 0 && (
+                <p className="text-[11px] text-foreground/70 leading-relaxed line-clamp-1">
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400">↑ </span>{strengths[0].claim}
+                </p>
+              )}
+              {weaknesses.length > 0 && (
+                <p className={`text-[11px] text-foreground/70 leading-relaxed line-clamp-1 ${!isPro ? 'blur-[3px] select-none' : ''}`}>
+                  <span className="font-bold text-muted-foreground">↓ </span>{weaknesses[0]}
+                </p>
               )}
             </div>
-          </div>
+          )}
         </div>
-
-        {/* ── ATS + confidence quick stats ── */}
-        {(atsScore !== null || result?.confidence || scan?.wordCount) && (
-          <div className="grid grid-cols-3 gap-3 p-3 bg-muted/50 rounded-xl border border-border">
-            {atsScore !== null && (
-              <div className="text-center">
-                <p className="text-base font-black tabular-nums" style={{ color: config.ringColor }}>{atsScore}%</p>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mt-0.5">ATS Match</p>
-              </div>
-            )}
-            {typeof result?.confidence === 'number' && (
-              <div className="text-center">
-                <p className="text-base font-black tabular-nums text-foreground">{result.confidence}%</p>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mt-0.5">Confidence</p>
-              </div>
-            )}
-            {scan?.wordCount > 0 && (
-              <div className="text-center">
-                <p className="text-base font-black tabular-nums text-foreground">{scan.wordCount}</p>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mt-0.5">Words</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── Statement flags ── */}
-        {scan && (scan.usesWeLanguage || !scan.resultsPresent || !scan.hasExamples) && (
-          <div className="flex flex-wrap gap-1.5">
-            {scan.usesWeLanguage && (
-              <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-700 px-2 py-1 rounded-lg flex items-center gap-1">
-                <WifiOff className="w-3 h-3" /> "We" language
-              </span>
-            )}
-            {!scan.resultsPresent && (
-              <span className="text-[10px] font-semibold text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-700 px-2 py-1 rounded-lg">
-                No results stated
-              </span>
-            )}
-            {!scan.hasExamples && (
-              <span className="text-[10px] font-semibold text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-700 px-2 py-1 rounded-lg">
-                No examples
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* ── Band gap warning ── */}
-        {seniority && seniority.bandGap > 0 && (
-          <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-            <span className="text-[11px] font-semibold text-amber-800 dark:text-amber-300">
-              Band gap: B{seniority.demonstratedBand} → B{seniority.targetBand} (−{seniority.bandGap * 10} pts)
-            </span>
-          </div>
-        )}
-
-        {/* ── Sub-score breakdown ── */}
-        {(sb || !isPro) && (
-          <div className="pt-4 border-t border-border space-y-3">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Score Breakdown</p>
-            <div className="space-y-2.5">
-              {isPro ? (
-                [
-                  { label: 'Criteria',    value: sb?.criteriaCoverage,  color: '#3b82f6' },
-                  { label: 'STAR',        value: sb?.starCompleteness,  color: '#8b5cf6' },
-                  { label: 'Values',      value: sb?.valuesAlignment,   color: '#10b981' },
-                  { label: 'Language',    value: sb?.languageMirroring, color: '#ec4899' },
-                  { label: 'Specificity', value: sb?.specificity,       color: '#f59e0b' },
-                ].filter(s => typeof s.value === 'number').map(s => (
-                  <SubScoreBar key={s.label} label={s.label} value={s.value} color={s.color} />
-                ))
-              ) : (
-                <>
-                  {typeof sb?.criteriaCoverage === 'number' && (
-                    <SubScoreBar label="Criteria" value={sb.criteriaCoverage} color="#3b82f6" />
-                  )}
-                  {typeof sb?.valuesAlignment === 'number' && (
-                    <SubScoreBar label="Values" value={sb.valuesAlignment} color="#10b981" />
-                  )}
-                  <SubScoreBar label="STAR" locked color="#8b5cf6" />
-                  <SubScoreBar label="Language" locked color="#ec4899" />
-                  <SubScoreBar label="Specificity" locked color="#f59e0b" />
-                </>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ── NHS Values ── */}
-        {nhsValues.length > 0 && (
-          <div className="pt-4 border-t border-border">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2.5 flex items-center gap-1.5">
-              <Users className="w-3 h-3" /> NHS Values
-            </p>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-              {nhsValues.slice(0, isPro ? 6 : 3).map(v => {
-                const vc = VALUE_LABEL[v.classification] ?? { label: v.classification, cls: 'text-muted-foreground' }
-                return (
-                  <div key={v.name} className="flex items-center justify-between gap-1">
-                    <span className="text-[11px] text-foreground/60 truncate">{v.name.split(' ')[0]}</span>
-                    <span className={`text-[10px] font-semibold shrink-0 ${vc.cls}`}>{vc.label}</span>
-                  </div>
-                )
-              })}
-            </div>
-            {!isPro && nhsValues.length > 3 && (
-              <p className="text-[10px] font-semibold text-muted-foreground/50 flex items-center gap-1 mt-1.5">
-                <Lock className="w-2.5 h-2.5" /> +{nhsValues.length - 3} more values hidden
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* ── Rejection risk ── */}
-        {isPro && riskConfig ? (
-          <div className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border ${riskConfig.bg} ${riskConfig.border}`}>
-            <riskConfig.icon className={`w-4 h-4 shrink-0 ${riskConfig.cls}`} />
-            <span className={`text-[11px] font-bold ${riskConfig.cls}`}>{riskConfig.label}</span>
-          </div>
-        ) : !isPro ? (
-          <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-muted border border-border">
-            <Lock className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0" />
-            <span className="text-[11px] font-semibold text-muted-foreground/60 flex-1">Rejection risk analysis</span>
-            <button
-              onClick={e => { e.preventDefault(); e.stopPropagation(); window.location.href = '/upgrade?reason=rejection_risk' }}
-              className="text-[10px] font-bold text-primary hover:underline bg-transparent border-0 p-0 cursor-pointer"
-            >
-              Unlock Pro →
-            </button>
-          </div>
-        ) : null}
-
-        {/* ── Band coaching ── */}
-        {isPro && bandCoaching?.mostCriticalBandGap && (
-          <div className="pt-1">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
-              Band {bandCoaching.targetBand} critical gap
-            </p>
-            <p className="text-xs text-foreground/70 line-clamp-2 leading-relaxed">{bandCoaching.mostCriticalBandGap}</p>
-          </div>
-        )}
-
-        {/* ── Strength / Weakness ── */}
-        {(strengths.length > 0 || weaknesses.length > 0) && (
-          <div className="pt-4 border-t border-border space-y-3">
-            {strengths.length > 0 && (
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 mb-1">↑ Top Strength</p>
-                <p className="text-xs text-foreground/70 line-clamp-2 leading-relaxed">{strengths[0].claim}</p>
-              </div>
-            )}
-            {weaknesses.length > 0 && (
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1 flex items-center gap-1">
-                  ↓ Key Gap {!isPro && <Lock className="w-2.5 h-2.5" />}
-                </p>
-                <p className={`text-xs text-foreground/70 line-clamp-2 leading-relaxed ${!isPro ? 'blur-sm select-none pointer-events-none' : ''}`}>
-                  {weaknesses[0]}
-                </p>
-                {!isPro && (
-                  <button
-                    onClick={e => { e.preventDefault(); e.stopPropagation(); window.location.href = '/upgrade?reason=weaknesses' }}
-                    className="inline-flex items-center gap-1 text-[10px] font-bold text-primary hover:underline mt-1.5 bg-transparent border-0 p-0 cursor-pointer"
-                  >
-                    <Lock className="w-2.5 h-2.5" /> Unlock with Pro
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── Footer ── */}
-        <div className="flex items-center justify-between pt-3 border-t border-border">
-          <span className="text-[10px] font-mono text-muted-foreground">{formatDate(a.createdAt)}</span>
-          <span className="text-[11px] font-bold text-muted-foreground group-hover:text-primary transition-colors flex items-center gap-1">
-            View full report <ChevronRight className="w-3.5 h-3.5" />
-          </span>
-        </div>
-
       </div>
     </Link>
   )
@@ -716,12 +502,6 @@ export default function DashboardPage() {
 
   useEffect(() => { load() }, [load])
 
-  useEffect(() => {
-  const url = new URL(window.location.href)
-  if (url.searchParams.get("login") === "success") {
-    toast.success("Signed in successfully 🎉")
-  }
-}, [])
   const total    = pagination?.total ?? analyses.length
   const avgScore = analyses.length > 0
     ? Math.round(analyses.reduce((acc, a) => acc + deriveScore(a), 0) / analyses.length)
@@ -808,9 +588,9 @@ export default function DashboardPage() {
       {/* ── Distribution ── */}
       <DistributionBar analyses={analyses} />
 
-      {/* ── Analyses grid ── */}
+      {/* ── Analyses list ── */}
       <div>
-        <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center justify-between mb-4">
           <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">
             Recent Analyses
           </p>
@@ -820,8 +600,8 @@ export default function DashboardPage() {
             </p>
           )}
         </div>
-        <div className="grid md:grid-cols-2 gap-5">
-          {recent.map(a => <AnalysisCard key={a.id} a={a} isPro={isPro} />)}
+        <div className="space-y-3">
+          {recent.map(a => <AnalysisRow key={a.id} a={a} isPro={isPro} />)}
         </div>
       </div>
 
