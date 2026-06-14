@@ -7,138 +7,21 @@ import {
   Search, MapPin, Stethoscope, Loader2, ExternalLink, Sparkles,
   Calendar, PoundSterling, AlertCircle, ChevronLeft, ChevronRight,
   Clock, FileText, Building2, Car, Award, HeartPulse, Globe,
-  ArrowRight,
 } from 'lucide-react'
 import { ThemeSwitcher } from '@/components/theme-switcher'
-import { useSession } from 'next-auth/react'
-
-const COS_KEYWORD = 'Skilled Worker Visa Sponsorship'
-
-function Navbar() {
-  const { data: session, status } = useSession()
-  const isLoading = status === 'loading'
-
-  const initials =
-    session?.user?.name
-      ?.split(' ')
-      .map((n) => n[0])
-      .slice(0, 2)
-      .join('')
-      .toUpperCase() ?? ''
-
-  return (
-    <nav className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-14 items-center justify-between">
-
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-2.5 shrink-0">
-            <div className="h-8 w-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-semibold text-[11px] tracking-wide select-none">
-              NHS
-            </div>
-            <span className="font-semibold text-[15px] text-foreground leading-none">
-              JobReady
-              <span className="ml-1.5 text-[10px] font-normal text-muted-foreground bg-accent dark:bg-slate-800 px-1.5 py-0.5 rounded border border-border align-middle">
-                AI
-              </span>
-            </span>
-          </Link>
-
-          {/* Right side */}
-          <div className="flex items-center gap-1">
-
-            {/* Browse Jobs — always visible */}
-            <Link
-              href="/jobs"
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-slate-800 transition-colors"
-            >
-              <Search className="h-3.5 w-3.5" />
-              Browse jobs
-            </Link>
-
-            {/* Loading skeleton */}
-            {isLoading && (
-              <div className="flex items-center gap-2 ml-2">
-                <div className="h-7 w-14 rounded-md bg-accent dark:bg-slate-800 animate-pulse" />
-                <div className="h-7 w-28 rounded-lg bg-accent dark:bg-slate-800 animate-pulse" />
-              </div>
-            )}
-
-            {/* Authenticated */}
-            {!isLoading && session && (
-              <>
-            
-               <div className="hidden sm:block w-px h-5 bg-border mx-1.5" />
-
-                <ThemeSwitcher />
-
-                {/* Avatar */}
-                <div
-                  title={session.user?.name ?? ''}
-                  className="h-8 w-8 rounded-full bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 flex items-center justify-center ml-1 cursor-default select-none"
-                >
-                  <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">
-                    {initials || '?'}
-                  </span>
-                </div>
-
-                <Link
-                  href="/dashboard"
-                  className="hidden sm:flex items-center gap-1.5 ml-1.5 px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-[13px] font-semibold transition-colors"
-                >
-                  Dashboard
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              </>
-            )}
-
-            {/* Unauthenticated */}
-            {!isLoading && !session && (
-              <>
-                <Link
-                  href="/#features"
-                  className="hidden md:block px-3 py-1.5 rounded-md text-[13px] text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-slate-800 transition-colors"
-                >
-                  Features
-                </Link>
-                <Link
-                  href="/#pricing"
-                  className="hidden md:block px-3 py-1.5 rounded-md text-[13px] text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-slate-800 transition-colors"
-                >
-                  Pricing
-                </Link>
-
-                <div className="hidden sm:block w-px h-5 bg-border mx-1.5" />
-
-                <ThemeSwitcher />
-
-                <Link
-                  href="/login"
-                  className="px-3 py-1.5 rounded-lg text-[13px] font-medium text-foreground border border-border hover:bg-accent dark:hover:bg-slate-800 transition-colors"
-                >
-                  Sign in
-                </Link>
-
-                <Link
-                  href="/register"
-                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-[13px] font-semibold transition-colors"
-                >
-                  Get started free
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-    </nav>
-  )
-}
 
 interface Job {
   title: string; employer: string; location: string; salary: string
   datePosted: string; closingDate: string; contractType: string
   workingPattern: string; jobRef: string; url: string
+}
+
+interface SponsorInfo {
+  isMatch: boolean
+  confidence: 'high' | 'medium' | 'low' | 'none'
+  matchedName?: string
+  rating?: string
+  townCity?: string
 }
 
 function getInitials(name: string) {
@@ -182,7 +65,7 @@ function isNew(datePosted: string) {
   } catch { return false }
 }
 
-function JobCard({ job, isLoggedIn, cosMode }: { job: Job; isLoggedIn: boolean; cosMode: boolean }) {
+function JobCard({ job, isLoggedIn, cosMode, sponsorInfo }: { job: Job; isLoggedIn: boolean; cosMode: boolean; sponsorInfo?: SponsorInfo }) {
   const router = useRouter()
   const soon = isClosingSoon(job.closingDate)
   const fresh = isNew(job.datePosted)
@@ -239,9 +122,13 @@ function JobCard({ job, isLoggedIn, cosMode }: { job: Job; isLoggedIn: boolean; 
                     Closes soon
                   </span>
                 )}
-                {cosMode && (
-                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[#E1F5EE] text-[#085041] border border-[#9FE1CB] dark:bg-[#085041] dark:text-[#9FE1CB] dark:border-[#0F6E56] inline-flex items-center gap-1">
-                    <Globe className="w-2.5 h-2.5" /> Visa Sponsorship
+                {sponsorInfo?.isMatch && (
+                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${
+                    sponsorInfo.confidence === 'high'
+                      ? 'bg-[#E1F5EE] text-[#085041] border border-[#9FE1CB] dark:bg-[#085041] dark:text-[#9FE1CB] dark:border-[#0F6E56]'
+                      : 'bg-[#FAEEDA] text-[#854F0B] border border-[#FAC775] dark:bg-[#633806] dark:text-[#FAC775] dark:border-[#854F0B]'
+                  }`}>
+                    <Globe className="w-2.5 h-2.5" /> {sponsorInfo.confidence === 'high' ? 'Licensed UKVI Sponsor' : 'Possible UKVI Sponsor'}
                   </span>
                 )}
               </div>
@@ -329,7 +216,7 @@ function JobsPageContent({ isLoggedIn, cosMode = false }: { isLoggedIn: boolean;
   const searchParams = useSearchParams()
   const router = useRouter()
 
-  const [keyword,    setKeyword]    = useState(cosMode ? '' : (searchParams.get('keyword')  ?? ''))
+  const [keyword,    setKeyword]    = useState(searchParams.get('keyword')  ?? '')
   const [location,   setLocation]   = useState(searchParams.get('location') ?? '')
   const [page,       setPage]       = useState(Number(searchParams.get('page') ?? '1'))
   const [jobs,       setJobs]       = useState<Job[]>([])
@@ -338,19 +225,36 @@ function JobsPageContent({ isLoggedIn, cosMode = false }: { isLoggedIn: boolean;
   const [error,      setError]      = useState<string | null>(null)
   const [hasSearched, setHasSearched] = useState(false)
 
+  // COS mode: map of employer name -> sponsor check result, looked up after search results arrive
+  const [sponsorInfo, setSponsorInfo] = useState<Record<string, SponsorInfo>>({})
+  const [checkingSponsors, setCheckingSponsors] = useState(false)
+
   const basePath = cosMode ? '/job/cos' : '/jobs'
 
+  const checkSponsors = async (jobsList: Job[]) => {
+    if (!cosMode) return
+    setCheckingSponsors(true)
+    const uniqueEmployers = Array.from(new Set(jobsList.map(j => j.employer).filter(Boolean)))
+    const results: Record<string, SponsorInfo> = {}
+    // Check sequentially in small batches to avoid hammering the DB
+    for (const employer of uniqueEmployers) {
+      try {
+        const res = await fetch(`/api/sponsors/check?employer=${encodeURIComponent(employer)}`)
+        const data = await res.json()
+        results[employer] = data
+      } catch {
+        results[employer] = { isMatch: false, confidence: 'none' }
+      }
+    }
+    setSponsorInfo(results)
+    setCheckingSponsors(false)
+  }
+
   const runSearch = async (k = keyword, l = location, p = page) => {
-    setLoading(true); setError(null)
+    setLoading(true); setError(null); setSponsorInfo({})
     try {
       const params = new URLSearchParams()
-
-      // In COS mode, always combine the sponsorship keyword with the optional role keyword
-      const effectiveKeyword = cosMode
-        ? [COS_KEYWORD, k].filter(Boolean).join(' ')
-        : k
-
-      if (effectiveKeyword) params.set('keyword', effectiveKeyword)
+      if (k) params.set('keyword', k)
       if (l) params.set('location', l)
       if (p > 1) params.set('page', String(p))
 
@@ -358,20 +262,15 @@ function JobsPageContent({ isLoggedIn, cosMode = false }: { isLoggedIn: boolean;
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Search failed')
 
-      setJobs(data.jobs ?? [])
-      setTotal(Number(data.total ?? data.jobs?.length ?? 0))
+      const jobsList = data.jobs ?? []
+      setJobs(jobsList)
+      setTotal(Number(data.total ?? jobsList.length ?? 0))
       setHasSearched(true)
 
-      // Update URL — keep the visible "role" param separate from the hidden COS keyword
-      const urlParams = new URLSearchParams()
-      if (cosMode) {
-        if (k) urlParams.set('role', k)
-      } else if (k) {
-        urlParams.set('keyword', k)
-      }
-      if (l) urlParams.set('location', l)
-      if (p > 1) urlParams.set('page', String(p))
-      router.push(`${basePath}?${urlParams.toString()}`, { scroll: false })
+      router.push(`${basePath}?${params.toString()}`, { scroll: false })
+
+      // After results load, cross-check employers against the UKVI register (COS mode only)
+      if (cosMode) checkSponsors(jobsList)
     } catch (e: any) {
       setError(e.message)
       setJobs([])
@@ -379,15 +278,7 @@ function JobsPageContent({ isLoggedIn, cosMode = false }: { isLoggedIn: boolean;
   }
 
   useEffect(() => {
-    if (cosMode) {
-      // COS mode always searches immediately — the sponsorship filter is always active
-      setKeyword(searchParams.get('role') ?? '')
-      runSearch(
-        searchParams.get('role') ?? '',
-        searchParams.get('location') ?? '',
-        Number(searchParams.get('page') ?? '1')
-      )
-    } else if (searchParams.get('keyword') || searchParams.get('location')) {
+    if (searchParams.get('keyword') || searchParams.get('location')) {
       runSearch(
         searchParams.get('keyword')  ?? '',
         searchParams.get('location') ?? '',
@@ -423,7 +314,7 @@ function JobsPageContent({ isLoggedIn, cosMode = false }: { isLoggedIn: boolean;
             <input
               value={keyword}
               onChange={e => setKeyword(e.target.value)}
-              placeholder={cosMode ? "Role (optional, e.g. Nurse, Radiographer)" : "Job title or keyword"}
+              placeholder="Job title or keyword"
               className="w-full bg-muted border border-border rounded-lg pl-9 pr-4 py-2 text-[13px] text-foreground placeholder-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
           </div>
@@ -432,17 +323,11 @@ function JobsPageContent({ isLoggedIn, cosMode = false }: { isLoggedIn: boolean;
             <input
               value={location}
               onChange={e => setLocation(e.target.value)}
-              placeholder="Location (e.g. London)"
+              placeholder="City or postcode (e.g. London, SW1)"
               className="w-full bg-muted border border-border rounded-lg pl-9 pr-4 py-2 text-[13px] text-foreground placeholder-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
           </div>
         </div>
-
-        {cosMode && (
-          <div className="flex items-center gap-1.5 text-[12px] text-[#0F6E56] dark:text-[#5DCAA5] font-medium">
-            <Globe className="w-3.5 h-3.5" /> Filtering for: "Skilled Worker Visa Sponsorship" roles
-          </div>
-        )}
 
         <div className="flex items-center gap-3 flex-wrap">
           <button
@@ -452,38 +337,47 @@ function JobsPageContent({ isLoggedIn, cosMode = false }: { isLoggedIn: boolean;
           >
             {loading
               ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Searching…</>
-              : <><Search className="w-3.5 h-3.5" /> {cosMode ? 'Search sponsorship jobs' : 'Search NHS jobs'}</>
+              : <><Search className="w-3.5 h-3.5" /> Search NHS jobs</>
             }
           </button>
-          {!cosMode && (
-            <div className="flex flex-wrap gap-2">
-              {['Phlebotomist', 'Staff Nurse', 'Healthcare Assistant', 'Radiographer'].map(s => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => { setKeyword(s); runSearch(s, location, 1) }}
-                  className="text-[12px] px-3 py-1.5 rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-border/80 transition-colors"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          )}
+          <div className="flex flex-wrap gap-2">
+            {['Phlebotomist', 'Staff Nurse', 'Healthcare Assistant', 'Radiographer'].map(s => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => { setKeyword(s); runSearch(s, location, 1) }}
+                className="text-[12px] px-3 py-1.5 rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-border/80 transition-colors"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
         </div>
       </form>
 
-      {/* ── COS cross-link / NHS Scotland callout ── */}
+      {/* ── COS explanation / NHS Scotland callout ── */}
       {cosMode ? (
-        <div className="rounded-lg border border-border bg-muted/40 px-4 py-2.5 flex items-center justify-between gap-4 flex-wrap">
-          <p className="text-[12px] text-muted-foreground">
-            Looking for <strong className="text-foreground font-medium">all NHS jobs</strong>, not just sponsorship roles?
-          </p>
-          <Link
-            href="/jobs"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-[12px] font-medium text-foreground hover:border-border/80 transition-colors shrink-0"
-          >
-            All NHS jobs <ExternalLink className="w-3 h-3" />
-          </Link>
+        <div className="space-y-2">
+          <div className="rounded-lg border border-[#9FE1CB] dark:border-[#0F6E56] bg-[#E1F5EE]/40 dark:bg-[#085041]/20 px-4 py-3 space-y-1">
+            <p className="text-[12px] text-foreground font-medium flex items-center gap-1.5">
+              <Globe className="w-3.5 h-3.5 shrink-0 text-[#0F6E56] dark:text-[#5DCAA5]" />
+              Results are cross-checked against the official UKVI Register of Licensed Sponsors
+            </p>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              A badge means the <strong>employer organisation</strong> holds a valid Skilled Worker sponsor licence — it does not guarantee this specific role meets salary or skill-level requirements for sponsorship. Always confirm directly with the employer before applying.
+            </p>
+          </div>
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <p className="text-[12px] text-muted-foreground">
+              Looking for <strong className="text-foreground font-medium">all NHS jobs</strong>, not just sponsorship roles?
+            </p>
+            <Link
+              href="/jobs"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-[12px] font-medium text-foreground hover:border-border/80 transition-colors shrink-0"
+            >
+              All NHS jobs <ExternalLink className="w-3 h-3" />
+            </Link>
+          </div>
         </div>
       ) : (
         <div className="rounded-lg border border-[#9FE1CB] dark:border-[#0F6E56] bg-[#E1F5EE]/40 dark:bg-[#085041]/20 px-4 py-2.5 flex items-center justify-between gap-4 flex-wrap">
@@ -539,21 +433,27 @@ function JobsPageContent({ isLoggedIn, cosMode = false }: { isLoggedIn: boolean;
         ) : (
           <div className="space-y-3">
 
-            <p className="text-[12px] text-muted-foreground">
-              Showing {jobs.length}
-              {total > jobs.length && (
-                <>
-                  {' '}of{' '}
-                  <strong className="text-foreground font-medium">
-                    {Number(total).toLocaleString()}
-                  </strong>
-                </>
-              )} jobs
-              {cosMode && <span className="ml-1.5 text-[#0F6E56] dark:text-[#5DCAA5] font-medium">with visa sponsorship</span>}
+            <p className="text-[12px] text-muted-foreground flex items-center gap-2">
+              <span>
+                Showing {jobs.length}
+                {total > jobs.length && (
+                  <>
+                    {' '}of{' '}
+                    <strong className="text-foreground font-medium">
+                      {Number(total).toLocaleString()}
+                    </strong>
+                  </>
+                )} jobs
+              </span>
+              {cosMode && checkingSponsors && (
+                <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <Loader2 className="w-3 h-3 animate-spin" /> Checking UKVI register...
+                </span>
+              )}
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {jobs.map(job => <JobCard key={job.jobRef} job={job} isLoggedIn={isLoggedIn} cosMode={cosMode} />)}
+              {jobs.map(job => <JobCard key={job.jobRef} job={job} isLoggedIn={isLoggedIn} cosMode={cosMode} sponsorInfo={sponsorInfo[job.employer]} />)}
             </div>
 
             {total > jobs.length && (
@@ -593,7 +493,41 @@ export function JobsClient({ isLoggedIn = false, cosMode = false }: { isLoggedIn
   return (
     <div className="min-h-screen bg-background">
 
-     <Navbar />
+      <nav className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex h-16 items-center justify-between">
+            <Link href="/" className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-600 to-blue-700 text-white flex items-center justify-center font-bold text-sm">
+                NHS
+              </div>
+              <span className="font-bold text-lg">Evaluation Engine</span>
+            </Link>
+
+            <div className="flex items-center gap-4">
+              <Link
+                href="/jobs"
+                className="px-4 py-2 rounded-lg text-foreground hover:bg-accent dark:hover:bg-slate-800 transition-colors font-medium hidden sm:inline-flex items-center gap-1.5"
+              >
+                <Search className="h-4 w-4" />
+                Browse Jobs
+              </Link>
+              <Link
+                href="/dashboard"
+                className="px-4 py-2 rounded-lg text-foreground hover:bg-accent dark:hover:bg-slate-800 transition-colors font-medium"
+              >
+                Dashboard
+              </Link>
+              <ThemeSwitcher />
+              <Link
+                href="/dashboard"
+                className="px-6 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-opacity font-semibold"
+              >
+                Sign In
+              </Link>
+            </div>
+          </div>
+        </div>
+      </nav>
 
       <div className="max-w-5xl mx-auto px-4 py-10">
         <div className="mb-8">

@@ -316,8 +316,21 @@ export async function GET(req: Request) {
     }
 
     if (!html) return Response.json({ error: 'Could not fetch NHS Jobs results' }, { status: 502 })
-    const jobs  = parseJobsFromHtml(html)
-    const total = parseTotalCount(html) || jobs.length
+    const allJobs = parseJobsFromHtml(html)
+
+    // NHS Jobs ignores ?location= in GET params (it uses JS/form POST internally).
+    // Filter client-side by matching location string against job's location field.
+    const jobs = location
+      ? allJobs.filter(j => {
+          const loc = (j.location + ' ' + j.employer).toLowerCase()
+          const search = location.toLowerCase()
+          // Match city name, partial postcode (e.g. "E1", "SW"), or full postcode
+          return loc.includes(search) ||
+            search.split(/[,\s]+/).filter(Boolean).some(part => part.length >= 2 && loc.includes(part))
+        })
+      : allJobs
+
+    const total = parseTotalCount(html) || allJobs.length
 
     // Cross-reference with UKVI register
     const enrichedJobs = jobs.map(job => ({
