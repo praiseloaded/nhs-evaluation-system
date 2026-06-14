@@ -149,65 +149,98 @@ function stripTags(html: string): string {
 }
 
 // ─── NHS Jobs HTML parser ─────────────────────────────────────────────────────
-// NHS Jobs returns server-rendered HTML where each job card is an <article>
-// or <li> element. The reliable anchor is the jobadvert URL.
-// Structure around each job:
-//   <a href="/candidate/jobadvert/REF">Title</a>
-//   <p>Employer Name</p>
-//   <ul><li>Location postcode</li><li>Contract type: ...</li>...</ul>
-// We split on jobadvert anchors and parse the surrounding ~1500 chars.
+// Actual NHS Jobs structure (confirmed from live HTML):
+//
+//   <li>
+//     <h2><a href="/candidate/jobadvert/REF?language=">Job Title</a></h2>
+//     <a ...>Save this job</a>
+//     <h3>Employer Name Location POSTCODE</h3>
+//     <ul>
+//       <li>Salary: <strong>£xx,xxx</strong></li>
+//       <li>Date posted: <strong>...</strong></li>
+//       <li>Closing date: <strong>...</strong></li>
+//       <li>Contract type: <strong>...</strong></li>
+//       <li>Working pattern: <strong>...</strong></li>
+//     </ul>
+//   </li>
+//
+// Employer + location are combined in <h3> — we split on the UK postcode.
 function parseJobsFromHtml(html: string) {
   const jobs: any[] = []
   const seen = new Set<string>()
 
-  // Find every jobadvert link
-  const anchorRegex = /<a[^>]*href="([^"]*\/candidate\/jobadvert\/([A-Za-z0-9\-]+)[^"]*)"[^>]*>([\/\s\S]*?)<\/a>/gi
-  let m: RegExpExecArray | null
+  // Split on each job card using the jobadvert URL as anchor
+  const blocks = html.split(/(?=<li[^>]*>(?:(?!<\/li>)[\s\S]){0,300}?\/candidate\/jobadvert\/)/i)
 
-  while ((m = anchorRegex.exec(html)) !== null) {
-    const jobRef = m[2].trim()
-    const rawTitle = stripTags(m[3])
-    if (!rawTitle || rawTitle.length < 3 || seen.has(jobRef)) continue
-    if (/save this job|sign in|create account/i.test(rawTitle)) continue
+  for (const block of blocks) {
+    const refMatch = block.match(/\/candidate\/jobadvert\/([A-Za-z0-9\-]+)/)
+    if (!refMatch) continue
+    const jobRef = refMatch[1]
+    if (seen.has(jobRef)) continue
     seen.add(jobRef)
 
-    // Grab the 2000 chars after this anchor for field extraction
-    const afterAnchor = html.slice(m.index + m[0].length, m.index + m[0].length + 2000)
-    const cleanAfter  = stripTags(afterAnchor)
-    const lines       = cleanAfter.split(/\n/).map(l => l.trim()).filter(Boolean)
+    // Title — in <h2><a href="...jobadvert...">Title</a></h2>
+    const titleMatch = block.match(/<h2[^>]*>[\s\S]*?<a[^>]*\/candidate\/jobadvert\/[^>]*>([\s\S]*?)<\/a>/i)
+    const title = titleMatch ? stripTags(titleMatch[1]).trim() : ''
+    if (!title || title.length < 3) continue
+    if (/save this job|sign in|create account/i.test(title)) continue
 
-    // Employer is typically the first non-empty line after the title anchor
-    // that isn't a postcode, list item marker, or meta field
-    let employer = ''
-    for (const line of lines.slice(0, 8)) {
-      if (!line) continue
-      if (/^[A-Z]{1,2}\d/.test(line)) break          // looks like a postcode — stop
-      if (/^(Contract|Working|Salary|Date|Closing|Location|Pay band)/i.test(line)) break
-      if (line.length > 3 && line.length < 120 && !/^[-•*]/.test(line)) {
-        employer = line; break
+    // Employer + location — in <h3>Employer Name Town POSTCODE</h3>
+    const h3Match = block.match(/<h3[^>]*>([\s\S]*?)<\/h3>/i)
+    const h3Text  = h3Match ? stripTags(h3Match[1]).trim() : ''
+
+    // UK postcode at the end e.g. "TN34 1BA" or "HU3 2JZ"
+    const postcodeRe = /\b([A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2})\b/i
+    const postcodeMatch = h3Text.match(postcodeRe)
+
+    let employer = h3Text
+    let location = ''
+
+    if (postcodeMatch) {
+      const postcode = postcodeMatch[1]
+      const idx = h3Text.indexOf(postcode)
+      const beforePostcode = h3Text.slice(0, idx).trim()
+      // Everything before postcode split: employer ends before the town
+      // Town is usually the last 1-2 capitalised words before the postcode
+      // Strategy: remove trailing town word(s) from employer
+      const parts = beforePostcode.split(/\s+/)
+      // Find where the town starts — usually after the trust/org name
+      // Conservative: take last word before postcode as city if it starts with uppercase
+      let townStart = parts.length
+      for (let i = parts.length - 1; i >= 0; i--) {
+        const word = parts[i]
+        if (/^[A-Z][a-z]/.test(word) && i > 0) {
+          // Check if previous word also looks like a town word
+          const prev = parts[i - 1]
+          if (/^[A-Z][a-z]/.test(prev) && !/\b(Trust|NHS|Health|Care|Hospital|Medical|Board|Hospitals|Services|Foundation|University|Centre|Center)\b/.test(prev)) {
+            townStart = i - 1
+          } else {
+            townStart = i
+          }
+          break
+        }
       }
+      employer = parts.slice(0, townStart).join(' ').trim() || beforePostcode
+      location = parts.slice(townStart).join(' ') + ' ' + postcode
     }
 
-    // Extract labelled fields from clean text
-    const getText = (label: string) => {
-      const re = new RegExp(`${label}\\s*:?\\s*([^\\n]{2,120})`, 'i')
-      return cleanAfter.match(re)?.[1]?.trim() ?? ''
+    // Extract fields from <strong> tags after label text
+    const getField = (label: string): string => {
+      const re = new RegExp(label + '[^<]*<strong[^>]*>([\\s\\S]*?)<\\/strong>', 'i')
+      const m = block.match(re)
+      return m ? stripTags(m[1]).trim() : ''
     }
 
-    const salary         = getText('Salary') || 'Not specified'
-    const datePosted     = getText('Date posted')
-    const closingDate    = getText('Closing date')
-    const contractType   = getText('Contract type')
-    const workingPattern = getText('Working pattern')
-
-    // Location — first line that looks like a postcode area
-    const locationMatch = cleanAfter.match(/([A-Za-z][^\n]{2,60}\s[A-Z]{1,2}\d[\d\w]?\s*\d[A-Z]{2})/)
-    const location      = locationMatch ? locationMatch[1].trim() : getText('Location')
+    const salary         = getField('Salary')         || 'Not specified'
+    const datePosted     = getField('Date posted')
+    const closingDate    = getField('Closing date')
+    const contractType   = getField('Contract type')
+    const workingPattern = getField('Working pattern')
 
     jobs.push({
-      title: rawTitle,
-      employer: employer || 'NHS',
-      location: location || '',
+      title,
+      employer: employer || h3Text || 'NHS',
+      location: location.trim(),
       salary,
       datePosted,
       closingDate,
@@ -220,6 +253,7 @@ function parseJobsFromHtml(html: string) {
 
   return jobs
 }
+
 
 function parseTotalCount(html: string): number {
   const m = html.match(/([\d,]+)\s+jobs?\s+found/i)
@@ -238,24 +272,50 @@ export async function GET(req: Request) {
     // Load UKVI sponsor register (may return null if still loading)
     const sponsorData = await getSponsorSet()
 
-    // Search NHS Jobs
+    // Search NHS Jobs via proxy (Vercel outbound blocks jobs.nhs.uk directly)
     const params = new URLSearchParams()
     if (keyword)  params.set('keyword', keyword)
     if (location) params.set('location', location)
     if (page !== '1') params.set('page', page)
 
     const targetUrl = `${NHS_JOBS_BASE}?${params.toString()}`
-    const nhsRes = await fetch(targetUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'text/html,application/xhtml+xml',
-        'Accept-Language': 'en-GB,en;q=0.9',
-      },
-      signal: AbortSignal.timeout(12000),
-    })
-    if (!nhsRes.ok) return Response.json({ error: `NHS Jobs returned HTTP ${nhsRes.status}` }, { status: 502 })
 
-    const html = await nhsRes.text()
+    // Try direct fetch first, fall back to proxy
+    let html = ''
+    let fetchedVia = 'direct'
+    try {
+      const directRes = await fetch(targetUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'text/html,application/xhtml+xml',
+          'Accept-Language': 'en-GB,en;q=0.9',
+        },
+        signal: AbortSignal.timeout(8000),
+      })
+      if (directRes.ok) {
+        const text = await directRes.text()
+        // Verify we got actual job results, not a redirect/cookie page
+        if (text.includes('/candidate/jobadvert/') && text.includes('jobs found')) {
+          html = text
+        } else {
+          throw new Error('Direct fetch returned non-results page')
+        }
+      } else {
+        throw new Error(`Direct fetch ${directRes.status}`)
+      }
+    } catch (directErr: any) {
+      console.log('[COS] Direct fetch failed, trying proxy:', directErr.message)
+      fetchedVia = 'proxy'
+      // Route via Express server on oyonews.com.ng/fetch-html
+      const proxyUrl = `https://oyonews.com.ng/fetch-html?url=${encodeURIComponent(targetUrl)}`
+      const proxyRes = await fetch(proxyUrl, { signal: AbortSignal.timeout(15000) })
+      if (!proxyRes.ok) return Response.json({ error: `Proxy returned ${proxyRes.status}` }, { status: 502 })
+      const proxyData = await proxyRes.json()
+      html = proxyData.html ?? ''
+      if (!html) return Response.json({ error: `Proxy returned no HTML. Status: ${proxyData.status}` }, { status: 502 })
+    }
+
+    if (!html) return Response.json({ error: 'Could not fetch NHS Jobs results' }, { status: 502 })
     const jobs  = parseJobsFromHtml(html)
     const total = parseTotalCount(html) || jobs.length
 
@@ -298,6 +358,7 @@ export async function GET(req: Request) {
       searchUrl: targetUrl,
       ...(debug && {
         debugInfo: {
+          fetchedVia,
           rawJobCount: jobs.length,
           rawJobs: jobs.slice(0, 5).map(j => ({ title: j.title, employer: j.employer, employerNormalised: normaliseName(j.employer) })),
           sampleSponsors: sponsorData ? [...sponsorData.names].filter(n => n.includes('nhs') || n.includes('hospital')).slice(0, 10) : [],
