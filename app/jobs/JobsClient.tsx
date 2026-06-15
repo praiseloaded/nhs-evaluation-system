@@ -10,6 +10,7 @@ import {
   ArrowRight,
 } from 'lucide-react'
 import { ThemeSwitcher } from '@/components/theme-switcher'
+import { useSession } from 'next-auth/react'
 
 
 function Navbar() {
