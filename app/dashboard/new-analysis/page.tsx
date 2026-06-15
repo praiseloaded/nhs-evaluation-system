@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import Link from 'next/link'
-import { ChevronRight, ChevronLeft, Sparkles, CheckCircle2, ArrowLeft, Upload, X, FileText } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { ChevronRight, ChevronLeft, Sparkles, CheckCircle2, ArrowLeft, Upload, X, FileText, Loader2 } from 'lucide-react'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 type ExtractionStatus = 'idle' | 'extracting' | 'success' | 'error'
 
@@ -108,20 +108,43 @@ const STEPS = [
   { number: 4, title: 'Criteria & CV' },
 ]
 
-export default function NewAnalysisPage() {
-  const router = useRouter()
-  const [step, setStep] = useState(1)
-  const [loading, setLoading] = useState(false)
+function NewAnalysisForm() {
+  const router       = useRouter()
+  const searchParams = useSearchParams()
+
+  // ── Read params from /jobs or /job/cos "Analyse this job" button ─────────
+  const urlJobUrl   = searchParams.get('jobUrl')   ?? ''
+  const urlJobTitle = searchParams.get('jobTitle') ?? ''
+
+  const [step, setStep]                     = useState(1)
+  const [loading, setLoading]               = useState(false)
   const [extractionStatus, setExtractionStatus] = useState<ExtractionStatus>('idle')
-  const [error, setError] = useState<string | null>(null)
-  const [jobDescFile, setJobDescFile] = useState<UploadedFile | null>(null)
+  const [error, setError]                   = useState<string | null>(null)
+  const [jobDescFile, setJobDescFile]       = useState<UploadedFile | null>(null)
   const [personSpecFile, setPersonSpecFile] = useState<UploadedFile | null>(null)
 
   const [formData, setFormData] = useState<FormData>({
-    sourceUrl: '', jobTitle: '', band: '', location: '',
-    jobDescription: '', personSpec: '', essentialCriteria: '',
-    desirableCriteria: '', skills: '', statement: '', cv: '',
+    sourceUrl:         urlJobUrl,
+    jobTitle:          urlJobTitle,
+    band:              '',
+    location:          '',
+    jobDescription:    '',
+    personSpec:        '',
+    essentialCriteria: '',
+    desirableCriteria: '',
+    skills:            '',
+    statement:         '',
+    cv:                '',
   })
+
+  // ── Auto-extract when jobUrl is in the URL ────────────────────────────────
+  useEffect(() => {
+    if (!urlJobUrl) return
+    // Small delay so form state is settled
+    const t = setTimeout(() => { extractFromSource(urlJobUrl) }, 300)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlJobUrl])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
@@ -131,15 +154,14 @@ export default function NewAnalysisPage() {
 
   const handleNext = () => setStep(s => Math.min(s + 1, 4))
   const handlePrev = () => setStep(s => Math.max(s - 1, 1))
-
-const handleKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
-  if (e.key === 'Enter') e.preventDefault()
-}
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => { if (e.key === 'Enter') e.preventDefault() }
 
   const canExtract = !!formData.sourceUrl || !!jobDescFile || !!personSpecFile
 
-  const extractFromUrl = async () => {
-    if (!canExtract) return
+  // Shared extraction logic — called both manually and on mount
+  const extractFromSource = async (overrideUrl?: string) => {
+    const urlToUse = overrideUrl ?? formData.sourceUrl
+    if (!urlToUse && !jobDescFile && !personSpecFile) return
     setExtractionStatus('extracting')
     setError(null)
     try {
@@ -147,8 +169,8 @@ const handleKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          url: formData.sourceUrl || undefined,
-          jobDescFile: jobDescFile ?? undefined,
+          url:            urlToUse || undefined,
+          jobDescFile:    jobDescFile    ?? undefined,
           personSpecFile: personSpecFile ?? undefined,
         }),
       })
@@ -159,11 +181,12 @@ const handleKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
       const data = await res.json()
       setFormData(prev => ({
         ...prev,
-        jobTitle: data.jobTitle || prev.jobTitle,
-        band: data.band || prev.band,
-        location: data.location || prev.location,
-        jobDescription: data.jobDescription || prev.jobDescription,
-        personSpec: data.personSpec || prev.personSpec,
+        sourceUrl:         urlToUse || prev.sourceUrl,
+        jobTitle:          data.jobTitle          || prev.jobTitle,
+        band:              data.band              || prev.band,
+        location:          data.location          || prev.location,
+        jobDescription:    data.jobDescription    || prev.jobDescription,
+        personSpec:        data.personSpec        || prev.personSpec,
         essentialCriteria: data.essentialCriteria || prev.essentialCriteria,
         desirableCriteria: data.desirableCriteria || prev.desirableCriteria,
       }))
@@ -199,52 +222,38 @@ ${formData.sourceUrl}
     `.trim()
 
     return {
-      jobTitle: formData.jobTitle,
+      jobTitle:          formData.jobTitle,
       jobSpec,
-      personSpec: formData.personSpec,
+      personSpec:        formData.personSpec,
       essentialCriteria: formData.essentialCriteria,
       desirableCriteria: formData.desirableCriteria,
-      skills: formData.skills,
-      values: '',
-      sourceUrl: formData.sourceUrl,
-      cv: formData.cv,
-      statement: formData.statement,
+      skills:            formData.skills,
+      values:            '',
+      sourceUrl:         formData.sourceUrl,
+      cv:                formData.cv,
+      statement:         formData.statement,
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    // Guard: only submit on step 4 and only when user explicitly clicked
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault()
     if (step !== 4) return
-
     setLoading(true)
     setError(null)
-
     if (!formData.jobTitle || !formData.jobDescription) {
       setError('Job title and job description are required')
       setLoading(false)
       return
     }
-
     try {
       const res = await fetch('/api/analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildPayload()),
       })
-
       const data = await res.json()
-
-      if (data.blocked && data.upgradeRequired) {
-        router.push(`/upgrade?reason=${data.reason}`)
-        return
-      }
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error ?? 'Analysis failed')
-      }
-
-      // ── Redirect to detail page — ?new=1 triggers the shortlist popup ──
+      if (data.blocked && data.upgradeRequired) { router.push(`/upgrade?reason=${data.reason}`); return }
+      if (!res.ok || !data.success) throw new Error(data.error ?? 'Analysis failed')
       router.push(`/dashboard/analysis/${data.id}?new=1`)
     } catch (err: any) {
       setError(err.message)
@@ -270,15 +279,38 @@ ${formData.sourceUrl}
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
       <Link href="/dashboard/saved-analyses" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors mb-6">
-        <ArrowLeft className="w-4 h-4" />
-        Back to saved analyses
+        <ArrowLeft className="w-4 h-4" /> Back to saved analyses
       </Link>
 
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900 tracking-tight">New NHS Job Analysis</h1>
-        <p className="text-sm text-gray-500 mt-1">Paste a job URL, upload documents, or fill in the steps manually.</p>
+        <p className="text-sm text-gray-500 mt-1">
+          {urlJobTitle
+            ? <>Analysing: <strong className="text-gray-700">{urlJobTitle}</strong></>
+            : 'Paste a job URL, upload documents, or fill in the steps manually.'
+          }
+        </p>
+        {/* Auto-extraction progress banner */}
+        {extractionStatus === 'extracting' && urlJobUrl && (
+          <div className="mt-3 flex items-center gap-2 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-sm text-blue-700">
+            <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+            Fetching job details from NHS Jobs…
+          </div>
+        )}
+        {extractionStatus === 'success' && urlJobUrl && (
+          <div className="mt-3 flex items-center gap-2 rounded-lg bg-green-50 border border-green-200 px-3 py-2 text-sm text-green-700">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            Job details extracted — review below, then run your analysis.
+          </div>
+        )}
+        {extractionStatus === 'error' && urlJobUrl && (
+          <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-700">
+            ⚠ Couldn't auto-extract from this URL — please fill in the details manually.
+          </div>
+        )}
       </div>
 
+      {/* Step indicator */}
       <div className="mb-8">
         <div className="flex items-center">
           {STEPS.map((s, i) => (
@@ -289,9 +321,7 @@ ${formData.sourceUrl}
                 }`}>
                   {s.number < step ? '✓' : s.number}
                 </div>
-                <span className={`text-[10px] font-medium whitespace-nowrap ${s.number === step ? 'text-blue-600' : 'text-gray-400'}`}>
-                  {s.title}
-                </span>
+                <span className={`text-[10px] font-medium whitespace-nowrap ${s.number === step ? 'text-blue-600' : 'text-gray-400'}`}>{s.title}</span>
               </div>
               {i < STEPS.length - 1 && (
                 <div className={`h-px flex-1 mx-2 mb-4 transition-colors ${s.number < step ? 'bg-blue-600' : 'bg-gray-200'}`} />
@@ -303,8 +333,7 @@ ${formData.sourceUrl}
 
       {error && (
         <div className="mb-5 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          <span className="mt-0.5 shrink-0">⚠</span>
-          <span>{error}</span>
+          <span className="mt-0.5 shrink-0">⚠</span><span>{error}</span>
         </div>
       )}
 
@@ -329,9 +358,9 @@ ${formData.sourceUrl}
               <FileUploadZone label="Job Description" hint="Upload the job description (PDF, DOCX or TXT)." file={jobDescFile} onFile={setJobDescFile} onClear={() => { setJobDescFile(null); setExtractionStatus('idle') }} />
               <FileUploadZone label="Person Specification" hint="Upload the person spec — essentials & desirables will be extracted automatically." file={personSpecFile} onFile={setPersonSpecFile} onClear={() => { setPersonSpecFile(null); setExtractionStatus('idle') }} />
             </div>
-            <button type="button" onClick={extractFromUrl} disabled={extractionStatus === 'extracting' || !canExtract}
+            <button type="button" onClick={() => extractFromSource()} disabled={extractionStatus === 'extracting' || !canExtract}
               className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${extractionStatus === 'success' ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}>
-              {extractionStatus === 'extracting' ? (<><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Extracting…</>)
+              {extractionStatus === 'extracting' ? (<><Loader2 className="w-4 h-4 animate-spin" />Extracting…</>)
                 : extractionStatus === 'success' ? (<><CheckCircle2 className="w-4 h-4" />Extracted! Click Next to review</>)
                 : (<><Sparkles className="w-4 h-4" />Extract Job Details</>)}
             </button>
@@ -342,7 +371,6 @@ ${formData.sourceUrl}
               </div>
             )}
             <div className="border-t border-dashed border-gray-200 pt-4 space-y-1">
-              <p className="text-xs text-gray-500 text-center"><span className="font-semibold text-gray-700">URL is optional</span> if you upload documents above.</p>
               <p className="text-xs text-gray-400 text-center">You need at least one of: a URL, a Job Description file, or a Person Specification file.</p>
               <p className="text-xs text-gray-400 text-center">Prefer to fill everything in manually? Hit <strong>Next</strong> to skip this step entirely.</p>
             </div>
@@ -391,22 +419,19 @@ ${formData.sourceUrl}
             className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
             <ChevronLeft className="w-4 h-4" /> Previous
           </button>
-
           <span className="text-xs text-gray-400">Step {step} of {STEPS.length}</span>
-
           {step < 4 ? (
             <button type="button" onClick={handleNext}
               className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors">
               Next <ChevronRight className="w-4 h-4" />
             </button>
           ) : (
-            <button type="button" disabled={loading} onClick={handleSubmit}
+            <button type="button" disabled={loading} onClick={() => handleSubmit()}
               className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
-              {loading ? (
-                <><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Analysing…</>
-              ) : (
-                <><Sparkles className="w-4 h-4" />Run NHS Analysis</>
-              )}
+              {loading
+                ? <><Loader2 className="w-4 h-4 animate-spin" />Analysing…</>
+                : <><Sparkles className="w-4 h-4" />Run NHS Analysis</>
+              }
             </button>
           )}
         </div>
@@ -415,8 +440,14 @@ ${formData.sourceUrl}
   )
 }
 
-
-
-
-
-
+export default function NewAnalysisPage() {
+  return (
+    <Suspense fallback={
+      <div className="max-w-2xl mx-auto px-4 py-8 flex justify-center">
+        <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
+      </div>
+    }>
+      <NewAnalysisForm />
+    </Suspense>
+  )
+}

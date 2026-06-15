@@ -42,10 +42,7 @@ function stripTags(html: string): string {
   )
 }
 
-// Extract the inner content of an element identified by a data-test attribute.
-// Handles nested tags by counting open/close tags of the same element type.
 function extractByDataTest(html: string, dataTest: string): string {
-  // Find the opening tag that has this data-test attribute
   const openTagRe = new RegExp(`<([a-z0-9]+)[^>]*data-test=["']${dataTest}["'][^>]*>`, 'i')
   const openMatch = html.match(openTagRe)
   if (!openMatch) return ''
@@ -53,7 +50,6 @@ function extractByDataTest(html: string, dataTest: string): string {
   const tagName = openMatch[1]
   const startIdx = openMatch.index! + openMatch[0].length
 
-  // Walk forward counting nested open/close tags of the same name to find the matching close
   const tagRe = new RegExp(`<(/?)${tagName}\\b[^>]*>`, 'gi')
   tagRe.lastIndex = startIdx
 
@@ -64,26 +60,19 @@ function extractByDataTest(html: string, dataTest: string): string {
   while ((m = tagRe.exec(html)) !== null) {
     if (m[1] === '/') {
       depth--
-      if (depth === 0) {
-        endIdx = m.index
-        break
-      }
+      if (depth === 0) { endIdx = m.index; break }
     } else {
       depth++
     }
   }
 
   if (endIdx === -1) return ''
-
   return stripTags(html.slice(startIdx, endIdx))
 }
 
-// Extract a labelled value from inside a "search-result-*" <li> block, e.g.
-// "Salary: £32,073 to £39,043 a year" -> "£32,073 to £39,043 a year"
 function extractListValue(html: string, dataTest: string): string {
   const raw = extractByDataTest(html, dataTest)
   if (!raw) return ''
-  // Remove a leading "Label:" prefix if present (e.g. "Salary:", "Date posted:", "Closing date:")
   return raw.replace(/^[A-Za-z][A-Za-z\s]*:\s*/, '').trim()
 }
 
@@ -91,45 +80,28 @@ function parseJobsFromHtml(html: string): JobResult[] {
   const jobs: JobResult[] = []
   const seen = new Set<string>()
 
-  // Split the page into chunks, one per job advert link occurrence.
   const cards = html.split('/candidate/jobadvert/')
 
-  // Skip the first chunk (everything before the first job link — page header etc.)
   for (let i = 1; i < cards.length; i++) {
     const card = cards[i]
 
     const refMatch = card.match(/^([A-Za-z0-9-]+)/)
     if (!refMatch) continue
     const jobRef = refMatch[1]
-
     if (seen.has(jobRef)) continue
 
-    // Only treat this as a new job card if it's a real job title link
-    // (the "save this job" links also start with /candidate/jobadvert/... but
-    // the title link carries data-test="search-result-job-title")
     const isTitleLink = /^[A-Za-z0-9-]+[^>]*data-test=["']search-result-job-title["']/i.test(card.slice(0, 300))
-      || /^[A-Za-z0-9-]+\?[^"]*"\s*\n?\s*id=["']first-result-title["']/i.test(card.slice(0, 300))
       || /data-test=["']search-result-job-title["']/i.test(card.slice(0, 400))
-
     if (!isTitleLink) continue
 
     seen.add(jobRef)
-
-    // The full card extends until the next job link or a reasonable cutoff.
-    const nextCardIdx = cards[i + 1] ? card.length : card.length
     const block = card.slice(0, Math.min(card.length, 6000))
 
-    // Title: the visible text content of the anchor tag, i.e. everything
-    // after the opening <a ...> tag's closing ">" and before its </a>.
     let title = ''
     const titleBlockMatch = block.match(/^[A-Za-z0-9-]+[^>]*>([\s\S]*?)<\/a>/i)
-    if (titleBlockMatch) {
-      title = stripTags(titleBlockMatch[1])
-    }
+    if (titleBlockMatch) title = stripTags(titleBlockMatch[1])
     if (!title) continue
 
-    // Employer / Location live inside the search-result-location block:
-    // <h3>Employer Name <div class="location-font-size">Location</div></h3>
     let employer = 'NHS'
     let location = ''
     const locBlockRaw = (() => {
@@ -137,7 +109,6 @@ function parseJobsFromHtml(html: string): JobResult[] {
       const m = block.match(openRe)
       if (!m) return ''
       const start = m.index! + m[0].length
-      // grab a generous chunk after the opening div
       return block.slice(start, start + 1000)
     })()
 
@@ -145,12 +116,10 @@ function parseJobsFromHtml(html: string): JobResult[] {
       const innerLocMatch = locBlockRaw.match(/<div[^>]*class="[^"]*location-font-size[^"]*"[^>]*>([\s\S]*?)<\/div>/i)
       if (innerLocMatch) {
         location = stripTags(innerLocMatch[1])
-        // Employer is whatever text comes before the location div, inside the <h3>
         const beforeLoc = locBlockRaw.slice(0, locBlockRaw.indexOf(innerLocMatch[0]))
         const employerText = stripTags(beforeLoc)
         if (employerText) employer = employerText
       } else {
-        // Fallback: just strip everything inside the location block
         const wholeMatch = locBlockRaw.match(/<h3[^>]*>([\s\S]*?)<\/h3>/i)
         if (wholeMatch) {
           const text = stripTags(wholeMatch[1])
@@ -163,11 +132,11 @@ function parseJobsFromHtml(html: string): JobResult[] {
       title,
       employer,
       location,
-      salary: extractListValue(block, 'search-result-salary') || 'Not specified',
-      datePosted: extractListValue(block, 'search-result-date') || extractListValue(block, 'search-result-date-posted') || '',
-      closingDate: extractListValue(block, 'search-result-closing-date') || '',
-      contractType: extractListValue(block, 'search-result-contract-type') || '',
-      workingPattern: extractListValue(block, 'search-result-work-hours') || extractListValue(block, 'search-result-working-pattern') || '',
+      salary:         extractListValue(block, 'search-result-salary')         || 'Not specified',
+      datePosted:     extractListValue(block, 'search-result-date')            || extractListValue(block, 'search-result-date-posted') || '',
+      closingDate:    extractListValue(block, 'search-result-closing-date')    || '',
+      contractType:   extractListValue(block, 'search-result-contract-type')   || '',
+      workingPattern: extractListValue(block, 'search-result-work-hours')      || extractListValue(block, 'search-result-working-pattern') || '',
       jobRef,
       url: `https://www.jobs.nhs.uk/candidate/jobadvert/${jobRef}`,
     })
@@ -177,11 +146,7 @@ function parseJobsFromHtml(html: string): JobResult[] {
 }
 
 function parseTotalCount(html: string): number {
-  // aria-label="5707 jobs found for nurse. Sorted by: Best Match ..."
-  const patterns = [
-    /([\d,]+)\s+jobs?\s+found/i,
-    /<h1[^>]*>\s*([\d,]+)/i,
-  ]
+  const patterns = [/([\d,]+)\s+jobs?\s+found/i, /<h1[^>]*>\s*([\d,]+)/i]
   for (const re of patterns) {
     const m = html.match(re)
     if (m) {
@@ -196,7 +161,10 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url)
     const keyword  = searchParams.get('keyword')  ?? ''
-    const location = searchParams.get('location') ?? ''
+    const locationRaw = searchParams.get('location') ?? ''
+    // Normalise location to title case for NHS Jobs URL (they may be case-sensitive)
+    // e.g. "london" → "London", "south london" → "South London"
+    const location = locationRaw.replace(/\b\w/g, c => c.toUpperCase())
     const page     = searchParams.get('page')     ?? '1'
     const debug    = searchParams.get('debug')    === '1'
 
@@ -221,8 +189,21 @@ export async function GET(req: Request) {
     }
 
     const html = await res.text()
-    const jobs  = parseJobsFromHtml(html)
-    const total = parseTotalCount(html) || jobs.length
+    const allJobs = parseJobsFromHtml(html)
+    const total   = parseTotalCount(html) || allJobs.length
+
+    // ── Location filter ───────────────────────────────────────────────────────
+    // NHS Jobs ignores ?location= in GET params (it uses JS form submission).
+    // We filter after parsing — fully case-insensitive.
+    // Splits the location input on spaces/commas so "south london", "SW1",
+    // "MANCHESTER", "sw1a 2aa" all match correctly.
+    const jobs = location
+      ? allJobs.filter(j => {
+          const haystack = (j.location + ' ' + j.employer).toLowerCase()
+          const tokens = location.toLowerCase().trim().split(/[\s,]+/).filter(w => w.length >= 2)
+          return tokens.some(token => haystack.includes(token))
+        })
+      : allJobs
 
     const response: any = {
       success: true,
@@ -233,11 +214,12 @@ export async function GET(req: Request) {
       searchUrl: targetUrl,
     }
 
-    // If parsing found nothing, include a snippet so we can debug the markup
     if (jobs.length === 0 || debug) {
       response.debugInfo = {
         htmlLength: html.length,
         containsJobAdvert: html.includes('/jobadvert/'),
+        rawJobCount: allJobs.length,
+        rawJobs: allJobs.slice(0, 3).map(j => ({ title: j.title, employer: j.employer, location: j.location })),
         sample: html.slice(0, 3000),
       }
     }

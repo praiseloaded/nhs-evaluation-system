@@ -6,6 +6,7 @@ import {
   Menu, X, LayoutDashboard, Plus, Files,
   PenLine, ListChecks, Video, Settings,
   FolderOpen, Target, MapPin, Sparkles, ChevronLeft, ChevronRight,
+  BarChart3,
 } from "lucide-react"
 import { useState, useEffect } from "react"
 import { ThemeSwitcher } from "./theme-switcher"
@@ -24,6 +25,8 @@ const NAV_GROUPS = [
     items: [
       { href: "/dashboard/application", label: "Statement Builder", icon: PenLine },
       { href: "/dashboard/applications", label: "Track Applications", icon: ListChecks },
+      { href: '/dashboard/shortlist-probability', label: 'Shortlist Probability™', icon: Target },
+      { href: '/dashboard/momentum', label: 'Momentum Score™', icon: BarChart3 },
       { href: "/dashboard/interview", label: "Interview Simulator", icon: Video, badge: "AI" },
       { href: '/dashboard/career-gps', label: 'Career GPS™', icon: MapPin },
       { href: '/dashboard/evidence-vault', label: 'EvidenceVault™', icon: FolderOpen },
@@ -85,7 +88,7 @@ export function Sidebar() {
       >
         {/* Brand header */}
         <Link
-          href="/dashboard"
+          href="/"
           className={`h-16 flex items-center gap-3 border-b border-border shrink-0 hover:bg-accent/40 transition-colors relative overflow-hidden ${collapsed ? "justify-center px-0" : "px-5"}`}
         >
           {/* subtle gradient accent */}

@@ -189,6 +189,10 @@ model Application {
   fullStatement   String?
   wordCount       Int?
 
+  outcome         String?   // 'pending' | 'shortlisted' | 'interview' | 'offer' | 'rejected' | 'withdrawn'
+  outcomeDate     DateTime?
+  outcomeNotes    String?   @db.Text
+
   // ── Three-question statement fields (Scotland = 3 separate boxes) ─────────
   // For England/Wales/NI these are the three sections combined into one paste
   statementQ1     String?   // Q1: Why are you suitable? (suitability + STAR evidence)
