@@ -9,7 +9,7 @@ export async function POST() {
       return Response.json({ success: false, error: "Unauthorized" }, { status: 401 })
     }
 
-    const baseUrl = "http://localhost:3000"
+    const baseUrl = "https://nhs-evaluation-system.vercel.app"
 
     const checkout = await stripe.checkout.sessions.create({
       mode: "subscription",
