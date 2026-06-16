@@ -7,6 +7,7 @@ import {
   PenLine, ListChecks, Video, Settings,
   FolderOpen, Target, MapPin, Sparkles, ChevronLeft, ChevronRight,
   BarChart3,
+  FileText,
 } from "lucide-react"
 import { useState, useEffect } from "react"
 import { ThemeSwitcher } from "./theme-switcher"
@@ -31,6 +32,7 @@ const NAV_GROUPS = [
       { href: '/dashboard/career-gps', label: 'Career GPS™', icon: MapPin },
       { href: '/dashboard/evidence-vault', label: 'EvidenceVault™', icon: FolderOpen },
       { href: '/dashboard/interview-probability', label: 'Interview Probability™', icon: Target, badge: "NEW" },
+    { href: '/dashboard/cv-builder', label: 'CV Builder', icon: FileText },
     ],
   },
   {

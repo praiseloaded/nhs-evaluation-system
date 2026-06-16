@@ -34,6 +34,7 @@ model User {
   analyses      Analysis[]
   interviews    Interview[]
   applications  Application[]
+  cvProfiles      CvProfile[]
 
   stripeCustomerId     String?
   stripeSubscriptionId String?
@@ -377,3 +378,31 @@ model ReferenceEntry {
   @@index([userId])
 }
 
+
+model CvProfile {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title       String   @default("My CV")        // user-facing label, e.g. "Nursing CV"
+  template    String   @default("clinical")      // 'clinical' | 'nonClinical' | 'newToNhs'
+
+  // Personal details
+  fullName    String?
+  email       String?
+  phone       String?
+  location    String?
+  professionalRegistration String?  // e.g. NMC PIN, HCPC number — shown if present
+
+  // Sections stored as JSON — flexible, ordered arrays
+  personalStatement String?  @db.Text
+  workExperience    Json?    // [{ jobTitle, employer, location, startDate, endDate, current, bullets: string[] }]
+  education         Json?    // [{ qualification, institution, location, startDate, endDate, grade }]
+  skills            Json?    // [{ category, items: string[] }] or string[]
+  certifications    Json?    // [{ name, issuer, date, expiryDate }]
+  additionalInfo    String?  @db.Text
+  references        Json?    // [{ name, role, organisation, relationship, email, phone }] — usually "available on request"
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
