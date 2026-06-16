@@ -5,140 +5,139 @@ import {
   Check,
   ArrowRight,
   ChevronDown,
-  BarChart3,
-  Shield,
-  Zap,
-  Users,
-  Lock,
-  TrendingUp,
   Search,
-  LayoutDashboard,
+  Lock,
+  Sparkles,
+  Menu,
+  X,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { ThemeSwitcher } from '@/components/theme-switcher'
+import { Navbar } from '@/components/navbar'
 
 // ─────────────────────────────────────────────
-// Auth-aware Navbar
+// Auth-aware Navbar — unchanged from your existing pattern
 // ─────────────────────────────────────────────
-function Navbar() {
-  const { data: session, status } = useSession()
-  const isLoading = status === 'loading'
 
-  const initials =
-    session?.user?.name
-      ?.split(' ')
-      .map((n) => n[0])
-      .slice(0, 2)
-      .join('')
-      .toUpperCase() ?? ''
+
+// ─────────────────────────────────────────────
+// Hero signature — live scoring strip
+// Demonstrates the actual product mechanism rather than
+// a generic "dashboard preview" placeholder block.
+// ─────────────────────────────────────────────
+
+const SAMPLE_STATEMENT =
+  "In my current role I led the safeguarding response for a complex paediatric case, working closely with the MDT to ensure the family's needs were met within 48 hours."
+
+const SCORING_LINES = [
+  { label: 'Essential criteria', detail: 'Safeguarding experience — matched against person spec', status: 'pass' as const },
+  { label: 'STAR completeness', detail: 'Situation, Task, Action present — Result is implied, not stated', status: 'warn' as const },
+  { label: 'NHS values alignment', detail: '"Working with the MDT" evidences Compassion and Teamwork', status: 'pass' as const },
+  { label: 'Language mirroring', detail: '"Safeguarding response" lifted directly from the job description', status: 'pass' as const },
+  { label: 'Specificity', detail: 'No outcome stated — what happened after the 48 hours?', status: 'fail' as const },
+]
+
+function ScoringHero() {
+  const [activeLine, setActiveLine] = useState(-1)
+  const [typedChars, setTypedChars] = useState(0)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [hasStarted, setHasStarted] = useState(false)
+
+  useEffect(() => {
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) setHasStarted(true) },
+      { threshold: 0.2 }
+    )
+    if (containerRef.current) obs.observe(containerRef.current)
+    return () => obs.disconnect()
+  }, [])
+
+  useEffect(() => {
+    if (!hasStarted) return
+    const typeInterval = setInterval(() => {
+      setTypedChars((c) => {
+        if (c >= SAMPLE_STATEMENT.length) {
+          clearInterval(typeInterval)
+          return c
+        }
+        return c + 2
+      })
+    }, 16)
+    return () => clearInterval(typeInterval)
+  }, [hasStarted])
+
+  useEffect(() => {
+    if (!hasStarted || typedChars < SAMPLE_STATEMENT.length) return
+    const lineInterval = setInterval(() => {
+      setActiveLine((l) => {
+        if (l >= SCORING_LINES.length - 1) {
+          clearInterval(lineInterval)
+          return l
+        }
+        return l + 1
+      })
+    }, 500)
+    return () => clearInterval(lineInterval)
+  }, [hasStarted, typedChars])
+
+  const statusClasses = (s: 'pass' | 'warn' | 'fail') =>
+    s === 'pass'
+      ? 'bg-emerald-500'
+      : s === 'warn'
+        ? 'bg-amber-500'
+        : 'bg-red-500'
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-14 items-center justify-between">
-
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-2.5 shrink-0">
-            <div className="h-8 w-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-semibold text-[11px] tracking-wide select-none">
-              NHS
-            </div>
-            <span className="font-semibold text-[15px] text-foreground leading-none">
-              JobReady
-              <span className="ml-1.5 text-[10px] font-normal text-muted-foreground bg-accent dark:bg-slate-800 px-1.5 py-0.5 rounded border border-border align-middle">
-                AI
-              </span>
-            </span>
-          </Link>
-
-          {/* Right side */}
-          <div className="flex items-center gap-1">
-
-            {/* Browse Jobs — always visible */}
-            <Link
-              href="/jobs"
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-slate-800 transition-colors"
-            >
-              <Search className="h-3.5 w-3.5" />
-              Browse jobs
-            </Link>
-
-            {/* Loading skeleton */}
-            {isLoading && (
-              <div className="flex items-center gap-2 ml-2">
-                <div className="h-7 w-14 rounded-md bg-accent dark:bg-slate-800 animate-pulse" />
-                <div className="h-7 w-28 rounded-lg bg-accent dark:bg-slate-800 animate-pulse" />
-              </div>
-            )}
-
-            {/* Authenticated */}
-            {!isLoading && session && (
-              <>
-            
-               <div className="hidden sm:block w-px h-5 bg-border mx-1.5" />
-
-                <ThemeSwitcher />
-
-                {/* Avatar */}
-                <div
-                  title={session.user?.name ?? ''}
-                  className="h-8 w-8 rounded-full bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 flex items-center justify-center ml-1 cursor-default select-none"
-                >
-                  <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">
-                    {initials || '?'}
-                  </span>
-                </div>
-
-                <Link
-                  href="/dashboard"
-                  className="hidden sm:flex items-center gap-1.5 ml-1.5 px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-[13px] font-semibold transition-colors"
-                >
-                  Dashboard
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              </>
-            )}
-
-            {/* Unauthenticated */}
-            {!isLoading && !session && (
-              <>
-                <Link
-                  href="/#features"
-                  className="hidden md:block px-3 py-1.5 rounded-md text-[13px] text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-slate-800 transition-colors"
-                >
-                  Features
-                </Link>
-                <Link
-                  href="/#pricing"
-                  className="hidden md:block px-3 py-1.5 rounded-md text-[13px] text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-slate-800 transition-colors"
-                >
-                  Pricing
-                </Link>
-
-                <div className="hidden sm:block w-px h-5 bg-border mx-1.5" />
-
-                <ThemeSwitcher />
-
-                <Link
-                  href="/login"
-                  className="px-3 py-1.5 rounded-lg text-[13px] font-medium text-foreground border border-border hover:bg-accent dark:hover:bg-slate-800 transition-colors"
-                >
-                  Sign in
-                </Link>
-
-                <Link
-                  href="/register"
-                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-[13px] font-semibold transition-colors"
-                >
-                  Get started free
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              </>
-            )}
-          </div>
-        </div>
+    <div ref={containerRef} className="rounded-2xl border border-border bg-card shadow-xl dark:shadow-slate-900 ring-1 ring-black/5 dark:ring-white/5 overflow-hidden">
+      {/* Form header bar */}
+      <div className="flex items-center justify-between px-6 py-3.5 border-b border-border bg-muted/40">
+        <span className="text-[11px] font-mono tracking-wide text-muted-foreground uppercase">
+          Supporting Statement — Q2 of 3
+        </span>
+        <span className="text-[11px] font-mono text-muted-foreground">
+          Band 6 · Safeguarding Lead
+        </span>
       </div>
-    </nav>
+
+      {/* Statement being typed */}
+      <div className="px-6 pt-6 pb-5 min-h-[108px]">
+        <p className="text-[16px] text-foreground leading-relaxed">
+          {SAMPLE_STATEMENT.slice(0, typedChars)}
+          {typedChars < SAMPLE_STATEMENT.length && (
+            <span className="inline-block w-[2px] h-[18px] bg-blue-600 ml-0.5 align-middle animate-pulse" />
+          )}
+        </p>
+      </div>
+
+      {/* Scoring lines */}
+      <div className="border-t border-border">
+        {SCORING_LINES.map((line, i) => (
+          <div
+            key={line.label}
+            className={`flex items-start gap-3.5 px-6 py-3.5 border-b border-border/60 last:border-b-0 transition-all duration-500 ${
+              i <= activeLine ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-2'
+            }`}
+          >
+            <span className={`mt-[5px] h-[7px] w-[7px] rounded-full shrink-0 ${statusClasses(line.status)}`} />
+            <div className="flex-1 min-w-0">
+              <span className="text-[10.5px] font-mono uppercase tracking-wide text-muted-foreground">
+                {line.label}
+              </span>
+              <p className="text-[13.5px] text-foreground mt-0.5 leading-snug">
+                {line.detail}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Score footer */}
+      <div className={`flex items-center justify-between px-6 py-5 border-t border-border bg-muted/40 transition-opacity duration-700 ${activeLine >= SCORING_LINES.length - 1 ? 'opacity-100' : 'opacity-0'}`}>
+        <span className="text-[13.5px] text-muted-foreground">Shortlist probability</span>
+        <span className="text-[24px] font-bold font-mono text-amber-600 dark:text-amber-400">62%</span>
+      </div>
+    </div>
   )
 }
 
@@ -147,156 +146,87 @@ function Navbar() {
 // ─────────────────────────────────────────────
 export default function HomePage() {
   const [openFaq, setOpenFaq] = useState<number | null>(0)
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => { setLoaded(true) }, [])
 
   const faqItems = [
     {
-      question: 'How does the evaluation engine work?',
+      question: 'How is the score actually calculated?',
       answer:
-        'Our system uses advanced clinical methodology to evaluate candidates across five key dimensions: Essential Criteria, STAR examples, Values Alignment, Language & Clarity, and Specificity. Each dimension is scored and weighted to provide a comprehensive assessment.',
+        'Five dimensions, each weighted: essential criteria coverage, STAR completeness, NHS values alignment, language mirroring against the person specification, and specificity of evidence. No single AI guess — a deterministic breakdown you can audit line by line.',
     },
     {
-      question: 'Is my data secure and GDPR compliant?',
+      question: 'Will this write my statement for me?',
       answer:
-        'Yes. The NHS Evaluation Engine is built with healthcare compliance standards in mind. All data is encrypted in transit and at rest, with role-based access control and comprehensive audit trails.',
+        'It drafts from your real evidence, stored in your EvidenceVault, but the final statement is yours to edit. We score honestly — including telling you when a claim has no evidence behind it.',
     },
     {
-      question: 'Can I customise evaluation criteria?',
+      question: 'Is my data secure?',
       answer:
-        'Absolutely. You can configure your own evaluation criteria, weightings, and competency frameworks to match your specific organisational requirements.',
+        'Encrypted in transit and at rest. We do not sell or share applicant data. Your CV, statements, and evidence stay private to your account.',
     },
     {
-      question: 'How long does an evaluation take?',
+      question: 'Does this work for NHS Scotland, Wales, and Northern Ireland?',
       answer:
-        'Our system can complete a full evaluation in 5–10 minutes, compared to 30+ minutes with manual review processes. This saves significant time while improving consistency.',
+        'Yes. The Statement Builder auto-detects the nation from the employer name and adjusts the question format, values framework, and word limits — including the three-question Jobtrain format used in Scotland.',
     },
     {
-      question: 'What support is available?',
+      question: 'What if this is my first NHS application?',
       answer:
-        'We offer comprehensive support including email, phone, and dedicated account managers for enterprise customers. Full training and onboarding is included with every plan.',
+        'Career GPS maps the fastest route to your target band, including which certificates and experience you are missing — useful whether this is your first application or your fifth promotion.',
     },
   ]
 
-  const subscriptionPlans = [
+  const pricingPlans = [
     {
-      name: 'Starter',
-      price: '£299',
-      period: 'per month',
-      description: 'Perfect for small teams getting started',
+      name: 'Free',
+      price: '£0',
+      period: 'forever',
+      description: 'One full analysis, no card required',
       features: [
-        'Up to 10 concurrent evaluations',
-        '5 users',
-        'Basic reporting',
-        'Email support',
-        'Standard templates',
+        '1 job analysis',
+        'Criteria & values scoring',
+        'Basic shortlist probability',
+        'NHS jobs search',
       ],
     },
     {
-      name: 'Professional',
-      price: '£799',
+      name: 'Pro',
+      price: '£19',
       period: 'per month',
-      description: 'For growing recruitment operations',
+      description: 'For active applicants',
       featured: true,
       features: [
-        'Unlimited evaluations',
-        '25 users',
-        'Advanced analytics & reporting',
-        'Priority email & phone support',
-        'Custom evaluation frameworks',
-        'API access',
-        'Single sign-on (SSO)',
+        'Unlimited analyses',
+        'Full 5-dimension breakdown',
+        'EvidenceVault & STAR builder',
+        'Interview simulator',
+        'Career GPS & band mapping',
+        'PDF reports',
       ],
     },
     {
-      name: 'Enterprise',
+      name: 'Trust',
       price: 'Custom',
-      period: 'Custom pricing',
-      description: 'For large-scale NHS operations',
+      period: 'for organisations',
+      description: 'For recruitment teams and colleges',
       features: [
-        'Unlimited everything',
-        'Unlimited users',
-        'Advanced compliance & audit tools',
-        '24/7 dedicated support',
-        'Custom integrations',
-        'White-label option',
-        'SLA guarantee',
-        'Onsite training',
+        'Bulk candidate evaluation',
+        'Custom scoring frameworks',
+        'Cohort analytics',
+        'Dedicated support',
+        'SSO & audit trails',
       ],
     },
   ]
 
-  const features = [
-    {
-      icon: BarChart3,
-      title: 'Dimensional Evaluation',
-      description:
-        'Comprehensive assessment across 5 key dimensions with evidence-based scoring.',
-    },
-    {
-      icon: Shield,
-      title: 'Clinical Methodology',
-      description:
-        'Built on best practices from healthcare and recruitment expertise.',
-    },
-    {
-      icon: Zap,
-      title: 'Lightning Fast',
-      description: 'Complete evaluations in minutes instead of hours.',
-    },
-    {
-      icon: Users,
-      title: 'Collaborative',
-      description:
-        'Share evaluations, add comments, and reach consensus with your team.',
-    },
-    {
-      icon: Lock,
-      title: 'Secure & Compliant',
-      description: 'NHS-grade security with full GDPR and compliance support.',
-    },
-    {
-      icon: TrendingUp,
-      title: 'Data-Driven',
-      description:
-        'Advanced analytics to identify trends and improve your hiring process.',
-    },
-  ]
-
-  const processSteps = [
-    {
-      number: 1,
-      title: 'Input information',
-      description:
-        'Upload job specifications, person specs, and CVs into the system.',
-    },
-    {
-      number: 2,
-      title: 'Automated analysis',
-      description: 'System analyses against your configured evaluation criteria.',
-    },
-    {
-      number: 3,
-      title: 'Dimensional assessment',
-      description:
-        'Candidate evaluated across 5 key dimensions with evidence collection.',
-    },
-    {
-      number: 4,
-      title: 'Scoring & verdicts',
-      description:
-        'Automated scoring with clinical verdict — Excellent, Good, Acceptable, or Needs Work.',
-    },
-    {
-      number: 5,
-      title: 'Generate report',
-      description: 'Professional evaluation report ready for stakeholder review.',
-    },
-  ]
-
-  const stats = [
-    { value: '94%', label: 'Shortlisting accuracy' },
-    { value: '8×', label: 'Faster than manual review' },
-    { value: '120+', label: 'NHS trusts onboarded' },
-    { value: '£0', label: 'Cost to get started' },
+  const dimensions = [
+    { n: '1', name: 'Essential criteria', desc: 'Every mandatory requirement checked against your statement, line by line.' },
+    { n: '2', name: 'STAR completeness', desc: 'Situation, Task, Action, Result — flagged when any element is missing or implied.' },
+    { n: '3', name: 'NHS values alignment', desc: 'Compassion, respect, teamwork — matched to specific, evidenced examples.' },
+    { n: '4', name: 'Language mirroring', desc: 'Terminology lifted directly from the person specification, not paraphrased.' },
+    { n: '5', name: 'Specificity', desc: 'Vague claims are surfaced and challenged — "improved patient care" is not evidence.' },
   ]
 
   return (
@@ -304,74 +234,68 @@ export default function HomePage() {
       <Navbar />
 
       {/* ── Hero ── */}
-      <section className="relative overflow-hidden py-20 sm:py-32">
+      <section className="relative overflow-hidden py-20 sm:py-28">
         <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-slate-50 dark:from-slate-900 dark:to-slate-800" />
         <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-blue-200 dark:bg-blue-900 rounded-full blur-3xl opacity-10 pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-slate-200 dark:bg-slate-700 rounded-full blur-3xl opacity-10 pointer-events-none" />
 
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto mb-14">
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 mb-6">
+
+          <div className={`max-w-2xl mb-14 transition-all duration-700 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}>
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 mb-7">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
               <span className="text-[13px] font-semibold text-blue-600 dark:text-blue-400">
-                Trusted by NHS teams across all four nations
+                Built on NHS shortlisting methodology
               </span>
             </div>
 
-            <h1 className="text-5xl sm:text-6xl font-bold text-foreground mb-6 leading-[1.08] tracking-tight">
-              Intelligent Candidate{' '}
-              <span className="text-blue-600 dark:text-blue-400">
-                Evaluation Engine
-              </span>
+            <h1 className="text-5xl sm:text-6xl font-bold text-foreground mb-6 leading-[1.06] tracking-tight">
+              Know your score{' '}
+              <span className="text-blue-600 dark:text-blue-400">before</span>{' '}
+              the panel does.
             </h1>
 
-            <p className="text-lg text-muted-foreground dark:text-slate-400 mb-10 max-w-2xl mx-auto leading-relaxed">
-              Score NHS job applications consistently, fairly, and efficiently
-              across five clinical dimensions — in minutes, not hours.
+            <p className="text-lg text-muted-foreground dark:text-slate-400 mb-9 max-w-xl leading-relaxed">
+              We score your NHS supporting statement the way a real shortlisting panel would — five dimensions, evidence-checked, with the exact gaps named.
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <div className="flex flex-col sm:flex-row gap-3">
               <Link
                 href="/register"
                 className="px-8 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold text-[15px] transition-colors flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"
               >
-                Get started — it's free
+                Score your first statement — free
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
-                href="#features"
+                href="#method"
                 className="px-8 py-3.5 rounded-xl border border-border text-foreground font-semibold text-[15px] hover:bg-accent dark:hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
               >
-                See how it works
+                See the method
                 <ChevronDown className="h-4 w-4" />
               </Link>
             </div>
           </div>
 
-          {/* Stats row */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-3xl mx-auto mb-14">
-            {stats.map((s, i) => (
-              <div
-                key={i}
-                className="rounded-xl border border-border bg-background/80 backdrop-blur px-4 py-4 text-center"
-              >
-                <p className="text-2xl font-bold text-foreground mb-0.5">{s.value}</p>
-                <p className="text-[12px] text-muted-foreground">{s.label}</p>
-              </div>
-            ))}
-          </div>
+          {/* Scoring strip + stat rail */}
+          <div className={`grid lg:grid-cols-[minmax(0,560px)_1fr] gap-10 lg:gap-14 items-start transition-all duration-700 delay-150 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}>
+            <ScoringHero />
 
-          {/* Dashboard mockup */}
-          <div className="rounded-2xl border border-border bg-card/80 p-2 shadow-2xl dark:shadow-slate-900 ring-1 ring-black/5 dark:ring-white/5">
-            <div className="rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700 aspect-[16/7] flex items-center justify-center">
-              <div className="text-center">
-                <BarChart3 className="h-12 w-12 text-slate-400 dark:text-slate-500 mx-auto mb-3" />
-                <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
-                  Live dashboard preview
-                </p>
+            <div className="grid grid-cols-3 lg:grid-cols-1 gap-6 lg:gap-8 lg:pt-3">
+              <div className="rounded-xl border border-border bg-background/80 backdrop-blur px-4 py-4 lg:px-5 lg:py-5 lg:flex lg:items-center lg:gap-4">
+                <p className="text-2xl lg:text-3xl font-bold text-foreground mb-0.5 lg:mb-0">5</p>
+                <p className="text-[12px] text-muted-foreground leading-snug">scored dimensions, run on every statement</p>
+              </div>
+              <div className="rounded-xl border border-border bg-background/80 backdrop-blur px-4 py-4 lg:px-5 lg:py-5 lg:flex lg:items-center lg:gap-4">
+                <p className="text-2xl lg:text-3xl font-bold text-foreground mb-0.5 lg:mb-0">4</p>
+                <p className="text-[12px] text-muted-foreground leading-snug">UK nations, including NHS Scotland's Jobtrain format</p>
+              </div>
+              <div className="rounded-xl border border-border bg-background/80 backdrop-blur px-4 py-4 lg:px-5 lg:py-5 lg:flex lg:items-center lg:gap-4">
+                <p className="text-2xl lg:text-3xl font-bold text-foreground mb-0.5 lg:mb-0">2–8a</p>
+                <p className="text-[12px] text-muted-foreground leading-snug">Agenda for Change bands, mapped end to end</p>
               </div>
             </div>
           </div>
+
         </div>
       </section>
 
@@ -406,112 +330,66 @@ export default function HomePage() {
         </Link>
       </section>
 
-      {/* ── Features ── */}
-      <section id="features" className="py-20 sm:py-32 bg-slate-50 dark:bg-slate-900/50">
+      {/* ── Method / Five dimensions ── */}
+      <section id="method" className="py-20 sm:py-32">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-14">
-            <h2 className="text-4xl sm:text-5xl font-bold text-foreground mb-4 tracking-tight">
-              Powerful features
+          <div className="max-w-2xl mb-14">
+            <span className="text-[13px] font-mono uppercase tracking-widest text-blue-600 dark:text-blue-400">The method</span>
+            <h2 className="text-4xl sm:text-5xl font-bold text-foreground mt-3 mb-4 tracking-tight">
+              Five dimensions. No guessing.
             </h2>
-            <p className="text-lg text-muted-foreground dark:text-slate-400 max-w-xl mx-auto">
-              Everything you need to evaluate candidates with clinical precision and efficiency.
+            <p className="text-lg text-muted-foreground dark:text-slate-400 leading-relaxed">
+              Every statement is run against the same rubric a clinical shortlisting panel uses — so your score means something, and the gaps are specific enough to act on.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {features.map((feature, idx) => {
-              const Icon = feature.icon
-              return (
-                <div
-                  key={idx}
-                  className="rounded-xl border border-border bg-background p-7 hover:shadow-md hover:border-blue-200 dark:hover:border-blue-800 transition-all duration-200 group"
-                >
-                  <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-100 dark:border-blue-900 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
-                    <Icon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <h3 className="text-[16px] font-semibold text-foreground mb-2">
-                    {feature.title}
-                  </h3>
-                  <p className="text-[14px] text-muted-foreground dark:text-slate-400 leading-relaxed">
-                    {feature.description}
-                  </p>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* ── How It Works ── */}
-      <section className="py-20 sm:py-32">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-14">
-            <h2 className="text-4xl sm:text-5xl font-bold text-foreground mb-4 tracking-tight">
-              How it works
-            </h2>
-            <p className="text-lg text-muted-foreground dark:text-slate-400 max-w-xl mx-auto">
-              A simple five-step process to comprehensive candidate evaluation.
-            </p>
-          </div>
-
-          <div className="max-w-2xl mx-auto space-y-0">
-            {processSteps.map((step, idx) => (
-              <div key={idx} className="flex gap-6 items-start relative">
-                {/* Connector line */}
-                {idx < processSteps.length - 1 && (
-                  <div className="absolute left-5 top-12 w-px h-10 bg-border" />
-                )}
-                <div className="flex-shrink-0">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-white font-bold text-[13px] shadow shadow-blue-600/30">
-                    {step.number}
-                  </div>
-                </div>
-                <div className="flex-1 pb-10">
-                  <h3 className="text-[16px] font-semibold text-foreground mb-1">
-                    {step.title}
-                  </h3>
-                  <p className="text-[14px] text-muted-foreground dark:text-slate-400 leading-relaxed">
-                    {step.description}
-                  </p>
-                </div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-5">
+            {dimensions.map((d) => (
+              <div
+                key={d.n}
+                className="rounded-xl border border-border bg-background p-6 hover:shadow-md hover:border-blue-200 dark:hover:border-blue-800 transition-all duration-200"
+              >
+                <span className="text-[13px] font-mono font-semibold text-blue-600 dark:text-blue-400">{d.n}</span>
+                <h3 className="text-[16px] font-semibold text-foreground mt-3 mb-2 leading-snug">
+                  {d.name}
+                </h3>
+                <p className="text-[13.5px] text-muted-foreground dark:text-slate-400 leading-relaxed">
+                  {d.desc}
+                </p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── Security / Compliance ── */}
+      {/* ── Evidence-first philosophy ── */}
       <section className="py-20 sm:py-32 bg-slate-50 dark:bg-slate-900/50">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid md:grid-cols-2 gap-14 items-center">
             <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950 mb-6">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                <span className="text-[12px] font-semibold text-green-600 dark:text-green-400">
-                  Enterprise-grade security
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 mb-6">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                <span className="text-[12px] font-semibold text-amber-700 dark:text-amber-400">
+                  Evidence, not invention
                 </span>
               </div>
               <h2 className="text-4xl font-bold text-foreground mb-5 tracking-tight leading-tight">
-                Built for NHS compliance from day one
+                We will tell you when a claim has nothing behind it.
               </h2>
               <p className="text-[15px] text-muted-foreground dark:text-slate-400 mb-8 leading-relaxed">
-                Our platform meets the highest standards for data protection and
-                compliance — designed specifically for NHS and wider healthcare
-                organisations.
+                Most tools generate confident-sounding statements regardless of whether you actually have the evidence. We do the opposite: every claim is checked against your stored evidence, and unsupported claims are flagged, not hidden.
               </p>
 
               <ul className="space-y-3">
                 {[
-                  'GDPR compliant',
-                  'NHS IG Toolkit verified',
-                  'ISO 27001 certified',
-                  'End-to-end encryption',
-                  'Regular penetration testing',
-                  'Comprehensive audit trails',
+                  'Evidence stored once, reused across every application',
+                  'Unsupported claims flagged before you submit, not after rejection',
+                  'Real interview question practice, scored the same way',
+                  'A band-by-band map of what you are missing for promotion',
                 ].map((item, idx) => (
-                  <li key={idx} className="flex items-center gap-3">
-                    <div className="w-5 h-5 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center shrink-0">
-                      <Check className="h-3 w-3 text-green-600 dark:text-green-400" />
+                  <li key={idx} className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
                     </div>
                     <span className="text-[14px] text-foreground font-medium">{item}</span>
                   </li>
@@ -519,9 +397,33 @@ export default function HomePage() {
               </ul>
             </div>
 
-            <div className="rounded-2xl border border-border bg-background p-8">
-              <div className="aspect-square bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-950 dark:to-emerald-900 rounded-xl flex items-center justify-center">
-                <Lock className="h-16 w-16 text-green-500 dark:text-green-400 opacity-50" />
+            <div className="rounded-2xl border border-border bg-background p-7">
+              <div className="flex items-center justify-between mb-5 pb-5 border-b border-border">
+                <span className="text-[11px] font-mono uppercase tracking-wide text-muted-foreground">Evidence check</span>
+                <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+              </div>
+              <div className="space-y-5">
+                <div className="flex items-start gap-3">
+                  <span className="h-[7px] w-[7px] rounded-full bg-emerald-500 mt-[6px] shrink-0" />
+                  <div>
+                    <p className="text-[14px] text-foreground font-medium">"Led the MDT safeguarding response"</p>
+                    <p className="text-[12.5px] text-muted-foreground mt-0.5">Backed by 2 STAR examples in your vault</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <span className="h-[7px] w-[7px] rounded-full bg-red-500 mt-[6px] shrink-0" />
+                  <div>
+                    <p className="text-[14px] text-foreground font-medium">"Significantly improved patient outcomes"</p>
+                    <p className="text-[12.5px] text-muted-foreground mt-0.5">No supporting evidence found — name a specific result</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <span className="h-[7px] w-[7px] rounded-full bg-emerald-500 mt-[6px] shrink-0" />
+                  <div>
+                    <p className="text-[14px] text-foreground font-medium">"Mentored two newly qualified nurses"</p>
+                    <p className="text-[12.5px] text-muted-foreground mt-0.5">Matches reference vault entry, March 2025</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -532,16 +434,17 @@ export default function HomePage() {
       <section id="pricing" className="py-20 sm:py-32">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-14">
-            <h2 className="text-4xl sm:text-5xl font-bold text-foreground mb-4 tracking-tight">
-              Transparent pricing
+            <span className="text-[13px] font-mono uppercase tracking-widest text-blue-600 dark:text-blue-400">Pricing</span>
+            <h2 className="text-4xl sm:text-5xl font-bold text-foreground mt-3 mb-4 tracking-tight">
+              Start free. Upgrade when it counts.
             </h2>
             <p className="text-lg text-muted-foreground dark:text-slate-400 max-w-xl mx-auto">
-              Choose the plan that fits your organisation's needs. No hidden fees.
+              No hidden fees. Cancel any time.
             </p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-6">
-            {subscriptionPlans.map((tier, idx) => (
+            {pricingPlans.map((tier, idx) => (
               <div
                 key={idx}
                 className={`rounded-2xl border-2 p-8 transition-all ${
@@ -552,7 +455,7 @@ export default function HomePage() {
               >
                 {tier.featured && (
                   <div className="mb-4 inline-flex px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 text-[12px] font-semibold">
-                    Most popular
+                    Recommended
                   </div>
                 )}
 
@@ -578,8 +481,8 @@ export default function HomePage() {
                 <ul className="space-y-3">
                   {tier.features.map((feature, fidx) => (
                     <li key={fidx} className="flex items-start gap-3">
-                      <div className="w-4 h-4 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center shrink-0 mt-0.5">
-                        <Check className="h-2.5 w-2.5 text-green-600 dark:text-green-400" />
+                      <div className="w-4 h-4 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center shrink-0 mt-0.5">
+                        <Check className="h-2.5 w-2.5 text-emerald-600 dark:text-emerald-400" />
                       </div>
                       <span className="text-[13px] text-foreground">{feature}</span>
                     </li>
@@ -595,12 +498,10 @@ export default function HomePage() {
       <section className="py-20 sm:py-32 bg-slate-50 dark:bg-slate-900/50">
         <div className="mx-auto max-w-2xl px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-14">
-            <h2 className="text-4xl sm:text-5xl font-bold text-foreground mb-4 tracking-tight">
-              Common questions
+            <span className="text-[13px] font-mono uppercase tracking-widest text-blue-600 dark:text-blue-400">Questions</span>
+            <h2 className="text-4xl sm:text-5xl font-bold text-foreground mt-3 mb-4 tracking-tight">
+              Before you start
             </h2>
-            <p className="text-lg text-muted-foreground dark:text-slate-400">
-              Everything you need to know before getting started.
-            </p>
           </div>
 
           <div className="space-y-3">
@@ -639,23 +540,25 @@ export default function HomePage() {
             <div className="absolute bottom-0 left-0 w-64 h-64 bg-black/10 rounded-full blur-3xl pointer-events-none" />
             <div className="relative">
               <h2 className="text-4xl sm:text-5xl font-bold text-white mb-4 tracking-tight">
-                Ready to transform your hiring?
+                Your next statement deserves a real score.
               </h2>
               <p className="text-lg text-blue-100 mb-10 max-w-xl mx-auto leading-relaxed">
-                Join healthcare organisations using our evaluation engine to hire
-                better candidates, faster.
+                Free for your first analysis. No card. Five minutes to find out what the panel will see.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 <Link
                   href="/register"
                   className="px-8 py-3.5 rounded-xl bg-white text-blue-600 font-semibold text-[15px] hover:bg-blue-50 transition-colors flex items-center justify-center gap-2 shadow-lg"
                 >
-                  Start free trial
+                  Score your statement
                   <ArrowRight className="h-4 w-4" />
                 </Link>
-                <button className="px-8 py-3.5 rounded-xl border-2 border-white/40 text-white font-semibold text-[15px] hover:bg-white/10 transition-colors">
-                  Schedule a demo
-                </button>
+                <Link
+                  href="/jobs"
+                  className="px-8 py-3.5 rounded-xl border-2 border-white/40 text-white font-semibold text-[15px] hover:bg-white/10 transition-colors flex items-center justify-center gap-2"
+                >
+                  Browse NHS jobs
+                </Link>
               </div>
             </div>
           </div>
@@ -674,25 +577,25 @@ export default function HomePage() {
                 <span className="font-semibold text-[15px] text-foreground">JobReady AI</span>
               </div>
               <p className="text-[13px] text-muted-foreground dark:text-slate-400 leading-relaxed">
-                Clinical methodology for smarter NHS recruitment.
+                Know your score before the panel does.
               </p>
             </div>
 
             {[
               {
                 heading: 'Product',
-                links: ['Features', 'Pricing', 'Security', 'Browse jobs'],
-                hrefs: ['/#features', '/#pricing', '#', '/jobs'],
+                links: ['Method', 'Pricing', 'Browse jobs'],
+                hrefs: ['/#method', '/#pricing', '/jobs'],
               },
               {
                 heading: 'Company',
-                links: ['About', 'Blog', 'Contact'],
-                hrefs: ['#', '#', '#'],
+                links: ['About', 'Contact'],
+                hrefs: ['#', '#'],
               },
               {
                 heading: 'Legal',
-                links: ['Privacy', 'Terms', 'Cookies'],
-                hrefs: ['#', '#', '#'],
+                links: ['Privacy', 'Terms'],
+                hrefs: ['#', '#'],
               },
             ].map((col) => (
               <div key={col.heading}>
@@ -717,17 +620,6 @@ export default function HomePage() {
             <p className="text-[12px] text-muted-foreground dark:text-slate-400">
               © {new Date().getFullYear()} NHS JobReady AI. All rights reserved.
             </p>
-            <div className="flex gap-5">
-              {['Twitter', 'LinkedIn', 'GitHub'].map((s) => (
-                <a
-                  key={s}
-                  href="#"
-                  className="text-[12px] text-muted-foreground dark:text-slate-400 hover:text-foreground transition-colors"
-                >
-                  {s}
-                </a>
-              ))}
-            </div>
           </div>
         </div>
       </footer>

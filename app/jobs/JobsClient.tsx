@@ -11,73 +11,10 @@ import {
 } from 'lucide-react'
 import { ThemeSwitcher } from '@/components/theme-switcher'
 import { useSession } from 'next-auth/react'
+import { Navbar } from '@/components/navbar'
 
 
-function Navbar() {
-  const { data: session, status } = useSession()
-  const isLoading = status === 'loading'
 
-  const initials =
-    session?.user?.name
-      ?.split(' ')
-      .map((n: string) => n[0])
-      .slice(0, 2)
-      .join('')
-      .toUpperCase() ?? ''
-
-  return (
-    <nav className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-14 items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5 shrink-0">
-            <div className="h-8 w-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-semibold text-[11px] tracking-wide select-none">
-              NHS
-            </div>
-            <span className="font-semibold text-[15px] text-foreground leading-none">
-              JobReady
-              <span className="ml-1.5 text-[10px] font-normal text-muted-foreground bg-accent dark:bg-slate-800 px-1.5 py-0.5 rounded border border-border align-middle">
-                AI
-              </span>
-            </span>
-          </Link>
-          <div className="flex items-center gap-1">
-            <Link href="/jobs" className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-slate-800 transition-colors">
-              <Search className="h-3.5 w-3.5" /> Browse jobs
-            </Link>
-            {isLoading && (
-              <div className="flex items-center gap-2 ml-2">
-                <div className="h-7 w-14 rounded-md bg-accent dark:bg-slate-800 animate-pulse" />
-                <div className="h-7 w-28 rounded-lg bg-accent dark:bg-slate-800 animate-pulse" />
-              </div>
-            )}
-            {!isLoading && session && (
-              <>
-                <div className="hidden sm:block w-px h-5 bg-border mx-1.5" />
-                <ThemeSwitcher />
-                <div title={session.user?.name ?? ''} className="h-8 w-8 rounded-full bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 flex items-center justify-center ml-1 cursor-default select-none">
-                  <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">{initials || '?'}</span>
-                </div>
-                <Link href="/dashboard" className="hidden sm:flex items-center gap-1.5 ml-1.5 px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[13px] font-semibold transition-colors">
-                  Dashboard <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              </>
-            )}
-            {!isLoading && !session && (
-              <>
-                <div className="hidden sm:block w-px h-5 bg-border mx-1.5" />
-                <ThemeSwitcher />
-                <Link href="/login" className="px-3 py-1.5 rounded-lg text-[13px] font-medium text-foreground border border-border hover:bg-accent dark:hover:bg-slate-800 transition-colors">Sign in</Link>
-                <Link href="/register" className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[13px] font-semibold transition-colors">
-                  Get started free <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-    </nav>
-  )
-}
 
 interface Job {
   title: string; employer: string; location: string; salary: string
