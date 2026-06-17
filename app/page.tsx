@@ -7,19 +7,9 @@ import {
   ChevronDown,
   Search,
   Lock,
-  Sparkles,
-  Menu,
-  X,
 } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
-import { useSession } from 'next-auth/react'
-import { ThemeSwitcher } from '@/components/theme-switcher'
 import { Navbar } from '@/components/navbar'
-
-// ─────────────────────────────────────────────
-// Auth-aware Navbar — unchanged from your existing pattern
-// ─────────────────────────────────────────────
-
 
 // ─────────────────────────────────────────────
 // Hero signature — live scoring strip
@@ -157,6 +147,11 @@ export default function HomePage() {
         'Five dimensions, each weighted: essential criteria coverage, STAR completeness, NHS values alignment, language mirroring against the person specification, and specificity of evidence. No single AI guess — a deterministic breakdown you can audit line by line.',
     },
     {
+      question: 'Which NHS values does it check against?',
+      answer:
+        'It depends on your nation. England uses the six NHS Constitution values — Working Together for Patients, Respect and Dignity, Commitment to Quality of Care, Compassion, Improving Lives, and Everyone Counts. Scotland assesses against Care and Compassion, Dignity and Respect, Openness, Honesty and Responsibility, and Quality and Teamwork. We also check supporting themes recruiters commonly look for, including communication skills, person-centred care, equality and inclusion, and accountability.',
+    },
+    {
       question: 'Will this write my statement for me?',
       answer:
         'It drafts from your real evidence, stored in your EvidenceVault, but the final statement is yours to edit. We score honestly — including telling you when a claim has no evidence behind it.',
@@ -223,10 +218,10 @@ export default function HomePage() {
 
   const dimensions = [
     { n: '1', name: 'Essential criteria', desc: 'Every mandatory requirement checked against your statement, line by line.' },
-    { n: '2', name: 'STAR completeness', desc: 'Situation, Task, Action, Result — flagged when any element is missing or implied.' },
-    { n: '3', name: 'NHS values alignment', desc: 'Compassion, respect, teamwork — matched to specific, evidenced examples.' },
-    { n: '4', name: 'Language mirroring', desc: 'Terminology lifted directly from the person specification, not paraphrased.' },
-    { n: '5', name: 'Specificity', desc: 'Vague claims are surfaced and challenged — "improved patient care" is not evidence.' },
+    { n: '2', name: 'STAR completeness', desc: 'Checks that every example includes the Situation, Task, Action, and Result. Missing parts are highlighted.' },
+    { n: '3', name: 'NHS values alignment', desc: 'Matched to specific, evidenced examples — using the values framework for your nation, England or Scotland.' },
+    { n: '4', name: 'Language mirroring', desc: 'Uses the exact terminology from the person specification, not generic alternatives or paraphrased wording.' },
+    { n: '5', name: 'Specificity', desc: 'Vague claims are flagged and challenged. Statements like "I improved patient care" won\'t score highly unless backed by clear actions, evidence, and outcomes.' },
   ]
 
   return (
@@ -249,31 +244,44 @@ export default function HomePage() {
             </div>
 
             <h1 className="text-5xl sm:text-6xl font-bold text-foreground mb-6 leading-[1.06] tracking-tight">
-              Know your score{' '}
+              Know your NHS shortlisting score{' '}
               <span className="text-blue-600 dark:text-blue-400">before</span>{' '}
-              the panel does.
+              recruiters do.
             </h1>
 
             <p className="text-lg text-muted-foreground dark:text-slate-400 mb-9 max-w-xl leading-relaxed">
-              We score your NHS supporting statement the way a real shortlisting panel would — five dimensions, evidence-checked, with the exact gaps named.
+              An instant, recruiter-style assessment of your supporting statement — scored across five dimensions, evidence-checked, with every gap named, so you can fix them before they cost you an interview.
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
               <Link
                 href="/register"
-                className="px-8 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold text-[15px] transition-colors flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"
+                className="px-7 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold text-[15px] transition-colors flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"
               >
-                Score your first statement — free
+                Check My Score
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
-                href="#method"
-                className="px-8 py-3.5 rounded-xl border border-border text-foreground font-semibold text-[15px] hover:bg-accent dark:hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
+                href="/register"
+                className="px-7 py-3.5 rounded-xl border border-border text-foreground font-semibold text-[15px] hover:bg-accent dark:hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
               >
-                See the method
-                <ChevronDown className="h-4 w-4" />
+                Analyse My Application
+              </Link>
+              <Link
+                href="/register"
+                className="px-7 py-3.5 rounded-xl border border-border text-foreground font-semibold text-[15px] hover:bg-accent dark:hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
+              >
+                Predict My Interview Chances
               </Link>
             </div>
+
+            <Link
+              href="#method"
+              className="inline-flex items-center gap-1.5 mt-4 text-[13.5px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              See the method
+              <ChevronDown className="h-3.5 w-3.5" />
+            </Link>
           </div>
 
           {/* Scoring strip + stat rail */}
@@ -339,7 +347,7 @@ export default function HomePage() {
               Five dimensions. No guessing.
             </h2>
             <p className="text-lg text-muted-foreground dark:text-slate-400 leading-relaxed">
-              Every statement is run against the same rubric a clinical shortlisting panel uses — so your score means something, and the gaps are specific enough to act on.
+              Every statement is assessed against the same criteria used by NHS shortlisting panels — giving you a meaningful score and clear, actionable feedback on where to improve.
             </p>
           </div>
 
@@ -359,6 +367,23 @@ export default function HomePage() {
               </div>
             ))}
           </div>
+
+          {/* Shortlist Probability™ callout */}
+          <div className="mt-10 rounded-2xl border border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/30 p-7 sm:p-8 flex items-center justify-between gap-6 flex-wrap">
+            <div className="max-w-xl">
+              <span className="text-[12px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide">Shortlist Probability™</span>
+              <p className="text-[15px] text-foreground font-medium mt-1.5 leading-relaxed">
+                See your likely shortlisting outcome, broken down across 7 key scoring factors, with clear and practical actions to improve each one.
+              </p>
+            </div>
+            <Link
+              href="/register"
+              className="shrink-0 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-[14px] transition-colors flex items-center gap-2"
+            >
+              Predict My Interview Chances
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -370,14 +395,14 @@ export default function HomePage() {
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 mb-6">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                 <span className="text-[12px] font-semibold text-amber-700 dark:text-amber-400">
-                  Evidence, not invention
+                  Evidence, Not Assumptions
                 </span>
               </div>
               <h2 className="text-4xl font-bold text-foreground mb-5 tracking-tight leading-tight">
-                We will tell you when a claim has nothing behind it.
+                We highlight claims that aren't backed by evidence.
               </h2>
               <p className="text-[15px] text-muted-foreground dark:text-slate-400 mb-8 leading-relaxed">
-                Most tools generate confident-sounding statements regardless of whether you actually have the evidence. We do the opposite: every claim is checked against your stored evidence, and unsupported claims are flagged, not hidden.
+                Most tools generate confident-sounding statements regardless of whether you actually have the evidence. We do the opposite: every claim is checked against your stored evidence, examples, and results — and unsupported claims are flagged, not hidden.
               </p>
 
               <ul className="space-y-3">
