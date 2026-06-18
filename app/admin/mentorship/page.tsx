@@ -44,7 +44,7 @@ export default function AdminMentorshipInboxPage() {
   useEffect(() => { load() }, [filter, userFilter])
 
   return (
-    <div className="max-w-3xl mx-auto px-6 py-8 space-y-5">
+    <div className="max-w-5xl mx-auto px-6 py-8 space-y-5">
       <div>
         <h1 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
           <MessageCircle className="w-5 h-5 text-amber-600 dark:text-amber-500" /> Mentorship Inbox
