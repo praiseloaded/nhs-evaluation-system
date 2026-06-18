@@ -4,6 +4,7 @@ import Link from "next/link"
 import { LogOut, User, ChevronDown, Sparkles } from "lucide-react"
 import { useState, useRef, useEffect } from "react"
 import { useSession, signOut } from "next-auth/react"
+import { NotificationBell } from "./notification-bell"
 
 function TierBadge({ tier }: { tier: string }) {
   const isPro = tier === "pro" || tier === "premium"
@@ -59,6 +60,8 @@ export function TopNavbar() {
             </Link>
           </div>
         ) : (
+          <>
+          <NotificationBell />
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setIsOpen(!isOpen)}
@@ -78,6 +81,7 @@ export function TopNavbar() {
             {isOpen && (
               <div className="absolute right-0 mt-2 w-52 rounded-xl border border-border bg-background shadow-lg overflow-hidden">
                 <div className="p-3 border-b border-border bg-muted/30">
+                
                   <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-full bg-[#005EB8] flex items-center justify-center text-white font-semibold text-xs shrink-0">
                       {initials}
@@ -126,6 +130,7 @@ export function TopNavbar() {
               </div>
             )}
           </div>
+          </>
         )}
       </div>
     </nav>

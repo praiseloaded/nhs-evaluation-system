@@ -39,8 +39,34 @@ model User {
   stripeCustomerId     String?
   stripeSubscriptionId String?
 
+
+  role            String    @default("user")   // 'user' | 'admin'
+  suspended       Boolean   @default(false)
+  suspendedAt     DateTime?
+  suspendedReason String?
+
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+}
+
+
+model AdminAuditLog {
+  id          String   @id @default(cuid())
+  adminId     String
+  adminEmail  String                          // denormalised so log survives admin deletion
+  action      String                          // 'tier_change' | 'suspend' | 'unsuspend' | 'delete_user' | 'impersonate' | 'refund' | 'edit_record'
+  targetType  String                          // 'user' | 'analysis' | 'application' | 'cvProfile' | 'subscription'
+  targetId    String?
+  targetEmail String?
+  before      Json?                           // snapshot before change
+  after       Json?                           // snapshot after change
+  notes       String?  @db.Text
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  @@index([adminId])
+  @@index([targetId])
+  @@index([createdAt])
 }
 
 model Account {
@@ -61,6 +87,36 @@ model Account {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
+}
+
+
+model SystemEvent {
+  id         String   @id @default(cuid())
+  type       String                           // 'ai_call' | 'ai_error' | 'api_error' | 'scrape_failure' | 'payment_event'
+  provider   String?                          // 'gemini' | 'groq' | 'stripe' | 'nhs_jobs' | 'ukvi_register'
+  userId     String?
+  endpoint   String?                          // e.g. '/api/analysis', '/api/cv/[id]/export'
+  statusCode Int?
+  durationMs Int?
+  errorMessage String? @db.Text
+  metadata   Json?                            // free-form: tokens used, model name, etc.
+  createdAt  DateTime @default(now())
+
+  @@index([type])
+  @@index([createdAt])
+  @@index([userId])
+}
+
+model ImpersonationSession {
+  id         String    @id @default(cuid())
+  adminId    String
+  targetUserId String
+  startedAt  DateTime  @default(now())
+  endedAt    DateTime?
+  reason     String?
+
+  @@index([adminId])
+  @@index([targetUserId])
 }
 
 model Session {
@@ -405,4 +461,64 @@ model CvProfile {
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+
+model AdminNote {
+  id          String   @id @default(cuid())
+  userId      String                          // the user this note is about
+  adminId     String
+  adminEmail  String
+  body        String   @db.Text
+  pinned      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String                          // recipient
+  type        String                          // 'mentorship_reply' | 'mentorship_thread_closed' | 'account_tier_changed' | 'account_suspended' | 'account_unsuspended' | future types
+  title       String
+  body        String?
+  linkUrl     String?                         // where clicking the notification should go
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([userId, read])
+  @@index([createdAt])
+}
+
+model NotificationPreference {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String                            // matches Notification.type
+  muted     Boolean  @default(true)            // a row only exists when muted=true in practice
+
+  @@unique([userId, type])
+  @@index([userId])
+}
+
+
+model FeatureFlag {
+  id          String   @id @default(cuid())
+  key         String   @unique                // e.g. 'mentorship', 'interview_simulator', 'career_gps'
+  label       String                           // display name for the admin settings grid
+  description String?
+  minTier     String   @default("free")        // 'free' | 'pro' | 'elite'
+  enabled     Boolean  @default(true)          // global kill switch, independent of tier
+  updatedAt   DateTime @updatedAt
+}
+
+model TierLimit {
+  id        String   @id @default(cuid())
+  tier      String                             // 'free' | 'pro' | 'elite'
+  key       String                             // e.g. 'analysisLimit', 'cvProfileLimit', 'evidenceEntryLimit'
+  value     Int                                // -1 means unlimited
+  updatedAt DateTime @updatedAt
+
+  @@unique([tier, key])
 }

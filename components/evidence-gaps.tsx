@@ -117,7 +117,7 @@ function GapCard({ gap }: { gap: Gap }) {
           )}
           {gap.exampleLanguage && gap.severity !== 'none' && (
             <div className="rounded-lg bg-muted p-3">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Example language to add</p>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Example of sentence to Add</p>
               <p className="text-xs text-foreground italic">"{gap.exampleLanguage}"</p>
             </div>
           )}

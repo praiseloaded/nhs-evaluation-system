@@ -124,7 +124,7 @@ function ScoringHero() {
 
       {/* Score footer */}
       <div className={`flex items-center justify-between px-6 py-5 border-t border-border bg-muted/40 transition-opacity duration-700 ${activeLine >= SCORING_LINES.length - 1 ? 'opacity-100' : 'opacity-0'}`}>
-        <span className="text-[13.5px] text-muted-foreground">Shortlist probability</span>
+        <span className="text-[13.5px] text-muted-foreground">Shortlist probability Score</span>
         <span className="text-[24px] font-bold font-mono text-amber-600 dark:text-amber-400">62%</span>
       </div>
     </div>
@@ -244,7 +244,7 @@ export default function HomePage() {
             </div>
 
             <h1 className="text-5xl sm:text-6xl font-bold text-foreground mb-6 leading-[1.06] tracking-tight">
-              Know your NHS shortlisting score{' '}
+              Know your NHS Shortlisting Score{' '}
               <span className="text-blue-600 dark:text-blue-400">before</span>{' '}
               recruiters do.
             </h1>

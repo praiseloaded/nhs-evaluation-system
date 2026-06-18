@@ -6,6 +6,7 @@ import { signOut, useSession } from "next-auth/react"
 import { ArrowRight, Search, Menu, X } from "lucide-react"
 import { useState } from "react"
 import { Button } from "./ui/button"
+import { NotificationBell } from "./notification-bell"
 
 export function Navbar() {
   const { data: session, status } = useSession()
@@ -124,6 +125,8 @@ export function Navbar() {
               {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </Button>
           </div>
+
+          
         </div>
       </div>
 

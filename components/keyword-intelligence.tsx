@@ -214,7 +214,7 @@ export function KeywordIntelligence({ analysisId }: { analysisId: string }) {
       {result.criticalMissing.length > 0 && (
         <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 p-4 space-y-2">
           <p className="text-sm font-semibold text-red-700 dark:text-red-300 flex items-center gap-2">
-            <XCircle className="w-4 h-4" /> Critical Missing Keywords — likely to hurt shortlisting
+            <XCircle className="w-4 h-4" /> Missing Keywords — likely to hurt shortlisting
           </p>
           <div className="flex flex-wrap gap-2">
             {result.criticalMissing.map(k => (
