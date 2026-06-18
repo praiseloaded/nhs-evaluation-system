@@ -1,5 +1,4 @@
 // app/admin/mentorship/page.tsx
-// Dedicated admin inbox — every mentorship thread across every user.
 'use client'
 
 import { useState, useEffect } from 'react'
