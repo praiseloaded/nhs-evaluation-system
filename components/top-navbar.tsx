@@ -7,16 +7,17 @@ import { useSession, signOut } from "next-auth/react"
 import { NotificationBell } from "./notification-bell"
 
 function TierBadge({ tier }: { tier: string }) {
-  const isPro = tier === "pro" || tier === "premium"
+  const isElite = tier === "elite"
+  const isPro   = tier === "pro" || tier === "premium"
+  const label   = isElite ? "Elite" : isPro ? "Pro" : "Free"
+  const cls     = isElite
+    ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+    : isPro
+      ? "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"
+      : "bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
   return (
-    <span
-      className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
-        isPro
-          ? "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"
-          : "bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
-      }`}
-    >
-      {isPro ? "Pro" : "Free"}
+    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${cls}`}>
+      {label}
     </span>
   )
 }
@@ -42,9 +43,9 @@ export function TopNavbar() {
     return <nav className="fixed top-0 right-0 left-0 md:left-64 h-16 border-b border-border bg-background z-30" />
   }
 
-  const userName = session?.user?.name || "User"
+  const userName  = session?.user?.name  || "User"
   const userEmail = session?.user?.email || ""
-  const initials = userName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
+  const initials  = userName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
 
   return (
     <nav className="fixed top-0 right-0 left-0 md:left-64 h-16 border-b border-border bg-background/95 backdrop-blur z-30">
@@ -62,7 +63,7 @@ export function TopNavbar() {
         ) : (
           <>
           <NotificationBell />
-          <div className="relative" ref={dropdownRef}>
+          <div className="relative ml-2" ref={dropdownRef}>
             <button
               onClick={() => setIsOpen(!isOpen)}
               className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg border border-border hover:bg-accent transition-colors"
@@ -81,7 +82,6 @@ export function TopNavbar() {
             {isOpen && (
               <div className="absolute right-0 mt-2 w-52 rounded-xl border border-border bg-background shadow-lg overflow-hidden">
                 <div className="p-3 border-b border-border bg-muted/30">
-                
                   <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-full bg-[#005EB8] flex items-center justify-center text-white font-semibold text-xs shrink-0">
                       {initials}
@@ -106,14 +106,25 @@ export function TopNavbar() {
                     Account settings
                   </Link>
 
+                  {/* Upgrade prompts — contextual per tier */}
                   {userTier === "free" && (
                     <Link
-                      href="/dashboard/upgrade"
+                      href="/upgrade"
                       className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm hover:bg-violet-50 dark:hover:bg-violet-900/20 text-violet-700 dark:text-violet-300 transition-colors"
                       onClick={() => setIsOpen(false)}
                     >
                       <Sparkles className="h-4 w-4" />
                       Upgrade to Pro
+                    </Link>
+                  )}
+                  {userTier === "pro" && (
+                    <Link
+                      href="/upgrade"
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 text-amber-700 dark:text-amber-300 transition-colors"
+                      onClick={() => setIsOpen(false)}
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      Upgrade to Elite
                     </Link>
                   )}
 

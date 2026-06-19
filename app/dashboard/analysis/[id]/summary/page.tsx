@@ -1,3 +1,4 @@
+// app/dashboard/analysis/[id]/summary/page.tsx
 import { auth }       from '@/auth'
 import { prisma }     from '@/lib/prisma'
 import { notFound }   from 'next/navigation'
@@ -15,10 +16,11 @@ export default async function SummaryPage({ params }: Params) {
   const record = await prisma.analysis.findUnique({ where: { id } })
   if (!record || record.userId !== session.user.id) notFound()
 
-  const userTier     = await getUserTier(session.user.id as string)
-  const isPro        = userTier === 'pro'
-  const raw          = (record.result as any) ?? {}
-  const result       = sanitizeAnalysisForTier(raw, isPro ? 'pro' : 'free')
+  const userTier = await getUserTier(session.user.id as string)
+  // Fixed: include 'elite' — previously only 'pro' was treated as paid
+  const isPro    = ['pro', 'elite'].includes(userTier)
+  const raw      = (record.result as any) ?? {}
+  const result   = sanitizeAnalysisForTier(raw, isPro ? 'pro' : 'free')
 
   return (
     <SummaryClient

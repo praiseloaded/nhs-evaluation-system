@@ -1,12 +1,12 @@
 'use client'
 
+import { useFeatureAccess } from '@/components/providers/feature-access-provider'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter }                   from 'next/navigation'
 import type { ShortlistProbabilityBreakdown } from '@/lib/billing/evidence-vault'
 
 interface Props {
   data:    ShortlistProbabilityBreakdown
-  isPro:   boolean
   onClose: () => void
 }
 
@@ -41,7 +41,8 @@ function bandColors(band: string): [string, string] {
   return map[band] ?? ['#f3f4f6', '#374151']
 }
 
-export function ShortlistScorePopup({ data, isPro, onClose }: Props) {
+export function ShortlistScorePopup({ data, onClose }: Props) {
+  const isPro = useFeatureAccess('shortlist_factors_pro')
   const router     = useRouter()
   const overlayRef = useRef<HTMLDivElement>(null)
   const [animScore, setAnimScore] = useState(0)

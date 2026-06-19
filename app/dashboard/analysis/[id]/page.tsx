@@ -57,7 +57,7 @@ async function getAnalysis(id: string, userId: string) {
     }
 
     const userTier = await getUserTier(userId)
-    const tier     = userTier === 'pro' ? 'pro' : 'free'
+    const tier     = ['pro','elite'].includes(userTier) ? 'pro' : 'free'
     const filtered = sanitizeAnalysisForTier(raw, tier)
 
     return {
@@ -70,7 +70,6 @@ async function getAnalysis(id: string, userId: string) {
         createdAt:      record.createdAt,
         result:         filtered,
       },
-      // Raw record fields needed by BandMatchTab
       record: {
         essentialCriteria: record.essentialCriteria ?? '',
         desirableCriteria: record.desirableCriteria ?? '',
@@ -78,7 +77,8 @@ async function getAnalysis(id: string, userId: string) {
         jobDescription:    record.jobDescription    ?? '',
         band:              (record as any).band     ?? null,
       },
-      isPro: tier === 'pro',
+      // isPro still needed for server-side button logic (Generate Full Report)
+      isPro: ['pro','elite'].includes(userTier),
     }
   } catch (err) {
     console.error('[getAnalysis]', err)
@@ -150,16 +150,16 @@ export default async function AnalysisPage({ params }: Params) {
     <div className="min-h-screen bg-background">
       <Navbar />
 
+      {/* isPro removed — ShortlistPopupTrigger's child (ShortlistScorePopup)
+          reads its own access via useFeatureAccess('shortlist_factors_pro') */}
       <ShortlistPopupTrigger
         analysisId={analysis.id}
         result={result}
-        isPro={isPro}
         showOnMount={true}
       />
 
       <main className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-10 space-y-8">
 
-        {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Link href="/dashboard/saved-analyses" className="hover:text-foreground transition-colors">
             Analyses
@@ -168,13 +168,11 @@ export default async function AnalysisPage({ params }: Params) {
           <span className="text-foreground font-medium truncate max-w-xs">{analysis.jobTitle || 'Untitled'}</span>
         </div>
 
-        {/* Re-analyse error banner */}
         <ReanalyseButton analysisId={analysis.id} />
 
-        {/* Score header */}
-        <ScoreHeader analysis={analysis} isPro={isPro} />
+        {/* ScoreHeader reads its own feature access via hooks internally */}
+        <ScoreHeader analysis={analysis} />
 
-        {/* Action buttons */}
         <div className="flex flex-wrap gap-3">
           <Link
             href={`/dashboard/analysis/${analysis.id}/recruiter-sim`}
@@ -190,6 +188,8 @@ export default async function AnalysisPage({ params }: Params) {
             <BookOpen className="w-4 h-4" />
             Generate Summary
           </Link>
+          {/* isPro still used here — purely server-side button rendering,
+              no hook needed for this static conditional */}
           {isPro ? (
             <Link
               href={`/dashboard/analysis/${analysis.id}/report`}
@@ -210,7 +210,6 @@ export default async function AnalysisPage({ params }: Params) {
           )}
         </div>
 
-        {/* Meta strip */}
         <div className="flex flex-wrap gap-3">
           {analysis.band && (
             <div className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground/70 bg-muted border border-border rounded-full px-3 py-1.5">
@@ -232,15 +231,13 @@ export default async function AnalysisPage({ params }: Params) {
           )}
         </div>
 
-        {/* ── Tabbed content ── */}
+        {/* AnalysisTabs and InsightsPanel read their own access via hooks */}
         <AnalysisTabs
           analysisId={analysis.id}
-          isPro={isPro}
           jobTitle={analysis.jobTitle}
           result={result}
           record={record}
         >
-          {/* ── Tab 1 content: existing analysis sections ── */}
 
           <Section label="Criteria Breakdown" badge="Essential & Desirable" badgeColor="blue">
             <div className="grid md:grid-cols-2 gap-6">
@@ -320,21 +317,23 @@ export default async function AnalysisPage({ params }: Params) {
             </div>
           </Section>
 
+          {/* Advanced Dimensions — featureKey drives each gate via admin Settings */}
           <Section label="Advanced Dimensions" badge="Pro" badgeColor="purple">
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <PremiumGate label="STAR structure analysis" reason="star" isPro={isPro}>
+              <PremiumGate label="STAR structure analysis" reason="star" featureKey="score_star">
                 {dimStar     && <DimensionPanel dimension={dimStar}     icon={<Zap      className="w-4 h-4" />} />}
               </PremiumGate>
-              <PremiumGate label="Language mirroring" reason="language" isPro={isPro}>
+              <PremiumGate label="Language mirroring" reason="language" featureKey="score_language">
                 {dimLanguage && <DimensionPanel dimension={dimLanguage} icon={<Pen      className="w-4 h-4" />} />}
               </PremiumGate>
-              <PremiumGate label="Specificity analysis" reason="specificity" isPro={isPro}>
+              <PremiumGate label="Specificity analysis" reason="specificity" featureKey="score_specificity">
                 {dimDetail   && <DimensionPanel dimension={dimDetail}   icon={<BookOpen className="w-4 h-4" />} />}
               </PremiumGate>
             </div>
           </Section>
 
-          <InsightsPanel analysis={analysis} isPro={isPro} />
+          {/* InsightsPanel reads each section's own feature access via hooks */}
+          <InsightsPanel analysis={analysis} />
 
         </AnalysisTabs>
 

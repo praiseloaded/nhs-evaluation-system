@@ -51,7 +51,7 @@ export function NotificationBell() {
 
   useEffect(() => {
     load()
-    const interval = setInterval(load, 20000)
+    const interval = setInterval(load, 60000) // poll every 60s — notifications aren't time-critical
     return () => clearInterval(interval)
   }, [])
 

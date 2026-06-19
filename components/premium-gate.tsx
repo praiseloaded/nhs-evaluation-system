@@ -1,24 +1,37 @@
 'use client'
-
+import { useFeatureAccess } from '@/components/providers/feature-access-provider'
 import Link from 'next/link'
 import { Lock } from 'lucide-react'
 
+// Sentinel key — not in the feature catalog, so hasAccess() returns true (no block).
+// Used when featureKey is not supplied so we can call the hook unconditionally
+// (React rules forbid conditional hook calls).
+const NO_GATE_KEY = '__no_gate__'
+
 interface PremiumGateProps {
-  label:    string
-  children: React.ReactNode
-  isPro:    boolean
-  reason?:  string
-  preview?: React.ReactNode
+  label:       string
+  children:    React.ReactNode
+  isPro?:      boolean      // legacy — still works; featureKey takes priority
+  featureKey?: string       // preferred — reads from FeatureFlag table via admin Settings
+  reason?:     string
+  preview?:    React.ReactNode
 }
 
 export function PremiumGate({
   label,
   children,
   isPro,
+  featureKey,
   reason = 'limit_reached',
   preview,
 }: PremiumGateProps) {
-  if (isPro) return <>{children}</>
+  // Always call the hook unconditionally (React rules).
+  // When featureKey is supplied → use the admin-configurable FeatureFlag table.
+  // When only isPro is supplied → fall back to that boolean.
+  const featureAccessResult = useFeatureAccess(featureKey ?? NO_GATE_KEY)
+  const hasAccess = featureKey !== undefined ? featureAccessResult : (isPro ?? false)
+
+  if (hasAccess) return <>{children}</>
 
   return (
     <div className="relative rounded-lg overflow-hidden">

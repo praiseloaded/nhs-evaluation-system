@@ -16,7 +16,7 @@ interface AnalysisSummary {
   createdAt: string
 }
 
-export default function InterviewProbabilityPage() {
+export function InterviewProbabilityClient() {
   const [analyses, setAnalyses] = useState<AnalysisSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)

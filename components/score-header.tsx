@@ -1,5 +1,5 @@
 'use client'
-
+import { useFeatureAccess } from '@/components/providers/feature-access-provider'
 import { Analysis } from '@/lib/types'
 import {
   Award, Lock, MapPin, Layers, Calendar,
@@ -10,7 +10,6 @@ import { cn } from '@/lib/utils'
 
 interface ScoreHeaderProps {
   analysis: Analysis
-  isPro:    boolean
 }
 
 // ─── Pure helpers — defined before use ───────────────────────────────────────
@@ -98,7 +97,11 @@ function LockedBar({ label }: { label: string }) {
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
-export function ScoreHeader({ analysis, isPro }: ScoreHeaderProps) {
+export function ScoreHeader({ analysis }: ScoreHeaderProps) {
+  const showRejectionRisk = useFeatureAccess('rejection_risk')
+  const showStar = useFeatureAccess('score_star')
+  const showLanguage = useFeatureAccess('score_language')
+  const showSpecificity = useFeatureAccess('score_specificity')
   const result = analysis.result
   const sb     = result?.scoredBreakdown
   const scan   = result?.statementScan
@@ -174,7 +177,7 @@ export function ScoreHeader({ analysis, isPro }: ScoreHeaderProps) {
           )}
 
           {/* Rejection risk badge — pro only */}
-          {isPro && risk && (() => {
+          {showRejectionRisk && risk && (() => {
             const rc = RISK_CONFIG[risk.overall]
             return (
               <div className={cn('inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium mb-4', rc.bg)}>
@@ -188,7 +191,7 @@ export function ScoreHeader({ analysis, isPro }: ScoreHeaderProps) {
           <div className="grid sm:grid-cols-2 gap-3 max-w-md">
             <ScoreBar label="Criteria coverage"  value={sb?.criteriaCoverage  ?? 0} barColor="bg-blue-500"   />
             <ScoreBar label="NHS values"          value={sb?.valuesAlignment   ?? 0} barColor="bg-green-500" />
-            {isPro ? (
+            {(showStar && showLanguage && showSpecificity) ? (
               <>
                 <ScoreBar label="STAR completeness"  value={sb?.starCompleteness  ?? 0} barColor="bg-purple-500" />
                 <ScoreBar label="Language mirroring" value={sb?.languageMirroring ?? 0} barColor="bg-pink-500"   />
@@ -196,9 +199,9 @@ export function ScoreHeader({ analysis, isPro }: ScoreHeaderProps) {
               </>
             ) : (
               <>
-                <LockedBar label="STAR completeness"  />
-                <LockedBar label="Language mirroring" />
-                <LockedBar label="Specificity"        />
+                {!showStar && <LockedBar label="STAR completeness" />}
+                {!showLanguage && <LockedBar label="Language mirroring" />}
+                {!showSpecificity && <LockedBar label="Specificity" />}
               </>
             )}
           </div>

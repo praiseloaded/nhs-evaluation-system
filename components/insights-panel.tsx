@@ -1,5 +1,5 @@
 'use client'
-
+import { useFeatureAccess } from '@/components/providers/feature-access-provider'
 import { useState } from 'react'
 import { Analysis } from '@/lib/types'
 import {
@@ -10,9 +10,10 @@ import Link from 'next/link'
 import { PremiumGate } from '@/components/premium-gate'
 import { cn } from '@/lib/utils'
 
+
+
 interface InsightsPanelProps {
   analysis: Analysis
-  isPro:    boolean
 }
 
 const RISK_CONFIG = {
@@ -27,7 +28,7 @@ const OP_CLS: Record<string, string> = {
   absent:       'bg-red-100   text-red-700   dark:bg-red-950   dark:text-red-300',
 }
 
-export function InsightsPanel({ analysis, isPro }: InsightsPanelProps) {
+export function InsightsPanel({ analysis }: InsightsPanelProps) {
   const [strengthsExpanded, setStrengthsExpanded] = useState(false)
   const [weaknessesExpanded, setWeaknessesExpanded] = useState(false)
 
@@ -46,10 +47,10 @@ export function InsightsPanel({ analysis, isPro }: InsightsPanelProps) {
     <div className="space-y-6">
       <h2 className="text-xl font-bold text-foreground">Insights</h2>
 
-      {/* ── Row 1: Strengths + Recommendations ─────────────────────────────── */}
+      {/* ── Row 1: Strengths (free) + Recommendations (admin-configurable) ── */}
       <div className="grid md:grid-cols-2 gap-4">
 
-        {/* Strengths — FREE */}
+        {/* Strengths — FREE (no gate) */}
         <div className="rounded-xl border border-border bg-card overflow-hidden">
           <div className="flex items-center gap-2.5 p-5 border-b border-border">
             <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950 flex items-center justify-center">
@@ -100,11 +101,11 @@ export function InsightsPanel({ analysis, isPro }: InsightsPanelProps) {
           </div>
         </div>
 
-        {/* Recommendations — PRO */}
+        {/* Recommendations — featureKey: insights_recommendations */}
         <PremiumGate
           label="Personalised improvement directives"
           reason="recommendations"
-          isPro={isPro}
+          featureKey="insights_recommendations"
           preview={[
             'Strengthen your safeguarding evidence with a specific patient example.',
             'Mirror the phrase "holistic assessment" from the person spec.',
@@ -146,14 +147,14 @@ export function InsightsPanel({ analysis, isPro }: InsightsPanelProps) {
         </PremiumGate>
       </div>
 
-      {/* ── Row 2: Weaknesses + Missing criteria ────────────────────────────── */}
+      {/* ── Row 2: Weaknesses + Missing criteria ── */}
       <div className="grid md:grid-cols-2 gap-4">
 
-        {/* Weaknesses — PRO */}
+        {/* Weaknesses — featureKey: insights_weaknesses */}
         <PremiumGate
           label="Full gap analysis — every unmet criterion"
           reason="weaknesses"
-          isPro={isPro}
+          featureKey="insights_weaknesses"
           preview={['Lack of evidence for district nursing caseload management.', 'No explicit SPQ qualification stated.'].map((w, i) => (
             <li key={i} className="flex gap-3 text-sm">
               <XCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
@@ -203,11 +204,11 @@ export function InsightsPanel({ analysis, isPro }: InsightsPanelProps) {
           </div>
         </PremiumGate>
 
-        {/* Missing criteria — PRO */}
+        {/* Missing criteria — featureKey: insights_missing_criteria */}
         <PremiumGate
           label="Missing criteria list"
           reason="missing_criteria"
-          isPro={isPro}
+          featureKey="insights_missing_criteria"
         >
           <div className="rounded-xl border border-border bg-card overflow-hidden">
             <div className="flex items-center gap-2.5 p-5 border-b border-border">
@@ -238,14 +239,14 @@ export function InsightsPanel({ analysis, isPro }: InsightsPanelProps) {
         </PremiumGate>
       </div>
 
-      {/* ── Row 3: Rejection risk + Operational realism ─────────────────────── */}
+      {/* ── Row 3: Rejection risk + Operational realism ── */}
       <div className="grid md:grid-cols-2 gap-4">
 
-        {/* Rejection risk — PRO */}
+        {/* Rejection risk — featureKey: insights_rejection_risk */}
         <PremiumGate
           label="Rejection risk analysis across all four sift gates"
           reason="rejection_risk"
-          isPro={isPro}
+          featureKey="insights_rejection_risk"
         >
           <div className="rounded-xl border border-border bg-card overflow-hidden">
             <div className="flex items-center gap-2.5 p-5 border-b border-border">
@@ -284,11 +285,11 @@ export function InsightsPanel({ analysis, isPro }: InsightsPanelProps) {
           </div>
         </PremiumGate>
 
-        {/* Operational realism — PRO */}
+        {/* Operational realism — featureKey: insights_operational_realism */}
         <PremiumGate
           label="Operational realism — NHS environment awareness"
           reason="operational_realism"
-          isPro={isPro}
+          featureKey="insights_operational_realism"
         >
           <div className="rounded-xl border border-border bg-card overflow-hidden">
             <div className="flex items-center gap-2.5 p-5 border-b border-border">
@@ -337,11 +338,11 @@ export function InsightsPanel({ analysis, isPro }: InsightsPanelProps) {
         </PremiumGate>
       </div>
 
-      {/* ── Row 4: Band coaching ─────────────────────────────────────────────── */}
+      {/* ── Row 4: Band coaching — featureKey: insights_band_coaching ── */}
       <PremiumGate
         label="Band-specific coaching tailored to your target role"
         reason="band_coaching"
-        isPro={isPro}
+        featureKey="insights_band_coaching"
       >
         <div className="rounded-xl border border-border bg-card overflow-hidden">
           <div className="flex items-center gap-2.5 p-5 border-b border-border">
@@ -360,8 +361,6 @@ export function InsightsPanel({ analysis, isPro }: InsightsPanelProps) {
 
           {bandCoaching ? (
             <div className="p-5 grid md:grid-cols-3 gap-5">
-
-              {/* What panels look for */}
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">What panels look for</p>
                 <ul className="space-y-1.5">
@@ -373,8 +372,6 @@ export function InsightsPanel({ analysis, isPro }: InsightsPanelProps) {
                   ))}
                 </ul>
               </div>
-
-              {/* Candidate gaps */}
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Your gaps</p>
                 <ul className="space-y-1.5">
@@ -386,8 +383,6 @@ export function InsightsPanel({ analysis, isPro }: InsightsPanelProps) {
                   ))}
                 </ul>
               </div>
-
-              {/* Tips + critical gap */}
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Band tips</p>
                 <ul className="space-y-1.5 mb-3">
@@ -403,7 +398,6 @@ export function InsightsPanel({ analysis, isPro }: InsightsPanelProps) {
                   <p className="text-xs text-red-600 dark:text-red-400">{bandCoaching.mostCriticalBandGap}</p>
                 </div>
               </div>
-
             </div>
           ) : (
             <div className="p-5">

@@ -3,6 +3,7 @@ import { auth }     from '@/auth'
 import { prisma }   from '@/lib/prisma'
 import { Navbar }   from '@/components/navbar'
 import Link         from 'next/link'
+import { FeatureGate } from '@/components/feature-gate'
 import {
   ChevronLeft, Monitor, User, Briefcase,
   CheckCircle2, XCircle, AlertTriangle,
@@ -651,6 +652,7 @@ export default async function RecruiterSimPage({ params }: Params) {
   const managerPanel   = computeHiringManager(result)
 
   return (
+    <FeatureGate featureKey="recruiter_simulator">
     <div className="min-h-screen bg-background">
       <Navbar />
 
@@ -758,5 +760,6 @@ export default async function RecruiterSimPage({ params }: Params) {
 
       </main>
     </div>
+    </FeatureGate>
   )
 }

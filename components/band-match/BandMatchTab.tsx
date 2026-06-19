@@ -1,5 +1,5 @@
 'use client'
-
+import { useFeatureAccess } from '@/components/providers/feature-access-provider'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
@@ -21,7 +21,6 @@ interface BandResult {
 
 interface Props {
   analysisId: string
-  isPro:      boolean
   jobTitle:   string
   result:     any
   record: {
@@ -219,7 +218,8 @@ function BandCard({ band, isTarget, isPro, expanded, onToggle }: {
   )
 }
 
-export function BandMatchTab({ analysisId, isPro, jobTitle, result, record }: Props) {
+export function BandMatchTab({ analysisId, jobTitle, result, record }: Props) {
+  const isPro = useFeatureAccess('band_match_advanced')
   const router = useRouter()
 
   const [loading,  setLoading]  = useState(false)

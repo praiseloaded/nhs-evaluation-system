@@ -1,14 +1,7 @@
-// app/admin/settings/page.tsx
-//
-// Two sections: a feature × tier access grid (click a tier pill to set
-// the minimum tier required for that feature, toggle the global enabled
-// switch), and a per-tier numeric limits editor (analyses/month, CV
-// profiles, evidence entries — extend LIMIT_CATALOG in lib/feature-access.ts
-// to add more).
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Loader2, Settings as SettingsIcon, Power, Save, Check } from 'lucide-react'
+import { Loader2, Settings as SettingsIcon, Power, Check } from 'lucide-react'
 
 interface FlagRow { id: string; key: string; label: string; description: string | null; minTier: string; enabled: boolean }
 interface LimitRow { id: string; tier: string; key: string; value: number }
@@ -16,14 +9,21 @@ interface LimitRow { id: string; tier: string; key: string; value: number }
 const TIERS = ['free', 'pro', 'elite'] as const
 const TIER_LABEL: Record<string, string> = { free: 'Free', pro: 'Pro', elite: 'Elite' }
 const TIER_COLOR: Record<string, string> = {
-  free: 'bg-muted text-muted-foreground',
-  pro: 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300',
+  free:  'bg-muted text-muted-foreground',
+  pro:   'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300',
   elite: 'bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300',
 }
 
+const GROUP_LABELS: Record<string, string> = {
+  page:      'Page-level gates',
+  score:     'Score sub-dimensions',
+  analysis:  'Analysis report elements',
+  dashboard: 'Dashboard elements',
+}
+
 const LIMIT_LABELS: Record<string, string> = {
-  analysisLimit: 'Analyses per month',
-  cvProfileLimit: 'CV profiles',
+  analysisLimit:      'Analyses per month',
+  cvProfileLimit:     'CV profiles',
   evidenceEntryLimit: 'EvidenceVault entries',
 }
 
@@ -71,6 +71,24 @@ export default function AdminSettingsPage() {
 
   if (loading) return <div className="flex justify-center py-24"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
 
+  // Group flags by their 'group' field (we store group in description prefix workaround)
+  // Actually flags from DB don't store group — group comes from FEATURE_CATALOG
+  // We derive it from the key pattern:
+  const getGroup = (key: string): string => {
+    if (['mentorship','interview_simulator','career_gps','recruiter_simulator',
+         'interview_probability','evidence_vault','cv_builder','shortlist_probability','momentum_score'].includes(key)) return 'page'
+    if (key.startsWith('score_')) return 'score'
+    if (key.startsWith('dashboard_')) return 'dashboard'
+    return 'analysis'
+  }
+
+  const grouped: Record<string, FlagRow[]> = {}
+  for (const f of flags) {
+    const g = getGroup(f.key)
+    if (!grouped[g]) grouped[g] = []
+    grouped[g].push(f)
+  }
+
   const limitKeys = [...new Set(limits.map(l => l.key))]
 
   return (
@@ -79,55 +97,65 @@ export default function AdminSettingsPage() {
         <h1 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
           <SettingsIcon className="w-5 h-5 text-amber-600 dark:text-amber-500" /> Platform Settings
         </h1>
-        <p className="text-[12.5px] mt-1 text-muted-foreground">Control which tier unlocks each feature, and the numeric limits per tier. Changes apply immediately, platform-wide.</p>
+        <p className="text-[12.5px] mt-1 text-muted-foreground">
+          Control which tier unlocks each feature and UI element. Changes apply immediately — no redeploy needed.
+        </p>
       </div>
 
-      {/* Feature access grid */}
-      <div className="rounded-2xl bg-card border border-border overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-border">
-          <p className="text-[13px] font-semibold text-foreground">Feature Access</p>
-        </div>
-        <div className="divide-y divide-border">
-          {flags.map(f => (
-            <div key={f.key} className="px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="text-[13.5px] font-medium text-foreground">{f.label}</p>
-                  {savedKey === f.key && <Check className="w-3.5 h-3.5 text-emerald-500" />}
-                  {savingKey === f.key && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
-                </div>
-                {f.description && <p className="text-[11.5px] text-muted-foreground mt-0.5">{f.description}</p>}
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <div className="flex rounded-full border border-border overflow-hidden">
-                  {TIERS.map(t => (
-                    <button
-                      key={t}
-                      onClick={() => setFlagTier(f.key, t)}
-                      className={`px-3 py-1.5 text-[11.5px] font-semibold transition-colors ${f.minTier === t ? TIER_COLOR[t] : 'text-muted-foreground hover:bg-accent'}`}
-                    >
-                      {TIER_LABEL[t]}+
-                    </button>
-                  ))}
-                </div>
-                <button
-                  onClick={() => toggleEnabled(f.key, !f.enabled)}
-                  title={f.enabled ? 'Disable globally' : 'Enable globally'}
-                  className={`p-1.5 rounded-lg transition-colors ${f.enabled ? 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40' : 'text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40'}`}
-                >
-                  <Power className="w-4 h-4" />
-                </button>
-              </div>
+      {/* Feature groups */}
+      {(['page','score','analysis','dashboard'] as const).map(group => {
+        const groupFlags = grouped[group] ?? []
+        if (groupFlags.length === 0) return null
+        return (
+          <div key={group} className="rounded-2xl bg-card border border-border overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-border bg-muted/30">
+              <p className="text-[13px] font-bold text-foreground">{GROUP_LABELS[group]}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                {group === 'page' && 'Gate entire dashboard pages — locks users out completely'}
+                {group === 'score' && 'Individual sub-score pills shown on analysis rows and reports'}
+                {group === 'analysis' && 'Elements within the analysis report and detail views'}
+                {group === 'dashboard' && 'KPI cards and charts on the main dashboard page'}
+              </p>
             </div>
-          ))}
-        </div>
-      </div>
+            <div className="divide-y divide-border">
+              {groupFlags.map(f => (
+                <div key={f.key} className={`px-5 py-4 flex items-center justify-between gap-4 flex-wrap ${!f.enabled ? 'opacity-50' : ''}`}>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-[13.5px] font-medium text-foreground">{f.label}</p>
+                      {savedKey === f.key && <Check className="w-3.5 h-3.5 text-emerald-500" />}
+                      {savingKey === f.key && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
+                      {!f.enabled && <span className="text-[10px] font-bold uppercase text-red-500 bg-red-50 dark:bg-red-950/40 px-1.5 py-0.5 rounded">Disabled</span>}
+                    </div>
+                    {f.description && <p className="text-[11.5px] text-muted-foreground mt-0.5">{f.description}</p>}
+                    <p className="text-[10.5px] font-mono text-muted-foreground/60 mt-0.5">{f.key}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex rounded-full border border-border overflow-hidden">
+                      {TIERS.map(t => (
+                        <button key={t} onClick={() => setFlagTier(f.key, t)}
+                          className={`px-3 py-1.5 text-[11.5px] font-semibold transition-colors ${f.minTier === t ? TIER_COLOR[t] : 'text-muted-foreground hover:bg-accent'}`}>
+                          {TIER_LABEL[t]}+
+                        </button>
+                      ))}
+                    </div>
+                    <button onClick={() => toggleEnabled(f.key, !f.enabled)} title={f.enabled ? 'Disable globally' : 'Enable globally'}
+                      className={`p-1.5 rounded-lg transition-colors ${f.enabled ? 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40' : 'text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40'}`}>
+                      <Power className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })}
 
       {/* Tier limits */}
       <div className="rounded-2xl bg-card border border-border overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-border">
-          <p className="text-[13px] font-semibold text-foreground">Tier Limits</p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Enter -1 for unlimited.</p>
+        <div className="px-5 py-3.5 border-b border-border bg-muted/30">
+          <p className="text-[13px] font-bold text-foreground">Tier Limits</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Numeric caps per tier. Enter -1 for unlimited.</p>
         </div>
         <div className="divide-y divide-border">
           {limitKeys.map(key => (
@@ -141,12 +169,9 @@ export default function AdminSettingsPage() {
                     <div key={tier}>
                       <label className="block text-[10.5px] font-semibold uppercase text-muted-foreground mb-1">{TIER_LABEL[tier]}</label>
                       <div className="relative">
-                        <input
-                          type="number"
-                          defaultValue={row?.value ?? 0}
+                        <input type="number" defaultValue={row?.value ?? 0}
                           onBlur={e => setLimit(tier, key, Number(e.target.value))}
-                          className="w-full rounded-lg px-3 py-1.5 text-[13px] font-mono bg-background border border-border text-foreground"
-                        />
+                          className="w-full rounded-lg px-3 py-1.5 text-[13px] font-mono bg-background border border-border text-foreground" />
                         {savedKey === compositeId && <Check className="w-3.5 h-3.5 text-emerald-500 absolute right-2 top-1/2 -translate-y-1/2" />}
                       </div>
                     </div>

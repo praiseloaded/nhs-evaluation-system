@@ -1,6 +1,7 @@
+'use client'
+import { useFeatureAccess } from '@/components/providers/feature-access-provider'
 // components/AnalysisTabs.tsx
 // Updated to include MOAT 7 (Keyword Intelligence™) and MOAT 4 (Evidence Gaps™) tabs
-'use client'
 
 import { useState } from 'react'
 import { BandMatchTab }  from '@/components/band-match/BandMatchTab'
@@ -13,7 +14,6 @@ import {
 
 interface Props {
   analysisId: string
-  isPro: boolean
   jobTitle: string
   result: any
   record: {
@@ -35,7 +35,8 @@ const TABS: { key: TabKey; label: string; icon: any; proOnly?: boolean }[] = [
   { key: 'gaps',      label: 'Evidence Gaps™',        icon: Search      },
 ]
 
-export function AnalysisTabs({ analysisId, isPro, jobTitle, result, record, children }: Props) {
+export function AnalysisTabs({ analysisId, jobTitle, result, record, children }: Props) {
+  const isPro = useFeatureAccess('insights_advanced')
   const [activeTab, setActiveTab] = useState<TabKey>('analysis')
 
   return (
@@ -77,7 +78,6 @@ export function AnalysisTabs({ analysisId, isPro, jobTitle, result, record, chil
      {activeTab === 'band' && (
   <BandMatchTab
     analysisId={analysisId}
-    isPro={isPro}
     jobTitle={jobTitle}
     result={result}
     record={record}
