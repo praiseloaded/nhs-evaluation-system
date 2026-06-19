@@ -72,7 +72,7 @@ function FactorBar({ factor }: { factor: Factor }) {
   )
 }
 
-export function InterviewProbability({ analysisId }: { analysisId: string }) {
+export default function InterviewProbability({ analysisId }: { analysisId: string }) {
   const [result, setResult] = useState<ProbabilityResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [loadingSaved, setLoadingSaved] = useState(true)
