@@ -1,13 +1,9 @@
-// app/dashboard/interview-probability/page.tsx
-// MOAT 9 — Interview Probability Engine™ standalone page
-// Lets the user pick a saved analysis, then shows the probability breakdown for it.
-
 'use client'
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Loader2, Target, ChevronDown, FileText, Calendar } from 'lucide-react'
-import { InterviewProbability } from '@/components/interview-probability'
+import InterviewProbability from '@/components/interview-probability'
 
 interface AnalysisSummary {
   id: string
