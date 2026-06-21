@@ -329,6 +329,8 @@ function StatementBuilderWizardInner() {
   const [savedEvidence, setSavedEvidence]       = useState<Record<string, boolean>>({})
   const [savingEvidence, setSavingEvidence]     = useState(false)
 
+  const [vaultSuggestions, setVaultSuggestions]     = useState<any[]>([])
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false)
   // ── Step 5–7: Statements ────────────────────────────────────────────────────
   const [statementQ1, setStatementQ1] = useState('')
   const [statementQ2, setStatementQ2] = useState('')
