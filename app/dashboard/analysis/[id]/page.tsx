@@ -18,6 +18,7 @@ import { buildDimensionScores } from '@/lib/types'
 import { auth }         from '@/auth'
 import { prisma }       from '@/lib/prisma'
 import { getUserTier }             from '@/lib/billing/tier'
+import { hasFeatureAccess }         from '@/lib/feature-access'
 import { sanitizeAnalysisForTier } from '@/lib/billing/sanitize-analysis'
 import { calculateNhsBandScore }   from '@/lib/scoring/calculate-overall-score'
 
@@ -77,8 +78,7 @@ async function getAnalysis(id: string, userId: string) {
         jobDescription:    record.jobDescription    ?? '',
         band:              (record as any).band     ?? null,
       },
-      // isPro still needed for server-side button logic (Generate Full Report)
-      isPro: ['pro','elite'].includes(userTier),
+      userTier,
     }
   } catch (err) {
     console.error('[getAnalysis]', err)
@@ -125,7 +125,7 @@ export default async function AnalysisPage({ params }: Params) {
   const data   = await getAnalysis(id, userId)
   if (!data) notFound()
 
-  const { analysis, record, isPro } = data
+  const { analysis, record, userTier } = data
   const result = analysis.result ?? {}
 
   const scored     = result.scoredBreakdown ?? null
@@ -188,9 +188,9 @@ export default async function AnalysisPage({ params }: Params) {
             <BookOpen className="w-4 h-4" />
             Generate Summary
           </Link>
-          {/* isPro still used here — purely server-side button rendering,
-              no hook needed for this static conditional */}
-          {isPro ? (
+          {/* Report button — reads from FeatureFlag table via hasFeatureAccess.
+              Admin can change the required tier from /admin/settings without redeploy. */}
+          {await hasFeatureAccess(userTier, 'full_report') ? (
             <Link
               href={`/dashboard/analysis/${analysis.id}/report`}
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
@@ -205,7 +205,7 @@ export default async function AnalysisPage({ params }: Params) {
             >
               <FileText className="w-4 h-4" />
               Generate Full Report
-              <span className="text-xs bg-blue-600 text-white px-1.5 py-0.5 rounded-full">Pro</span>
+              <span className="text-xs bg-blue-600 text-white px-1.5 py-0.5 rounded-full">Upgrade</span>
             </Link>
           )}
         </div>

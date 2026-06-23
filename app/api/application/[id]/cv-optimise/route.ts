@@ -6,11 +6,33 @@ import { NextRequest } from "next/server"
 
 type Params = { params: Promise<{ id: string }> }
 
+const TONE_INSTRUCTIONS: Record<string, string> = {
+  professional: `REWRITE TONE: Professional NHS clinical.
+- Precise, formal, third-person where appropriate
+- Lead with competencies and qualifications
+- Use NHS/clinical terminology accurately
+- Avoid personal anecdotes — focus on roles and responsibilities`,
+  warm: `REWRITE TONE: Warm and human — still professional but reads like a real person.
+- First person throughout ("I developed...", "I led...", "I worked with...")
+- Include one brief specific example per section where possible
+- Avoid bullet-point lists of duties — write short flowing sentences
+- Sound enthusiastic about the work without being over the top
+- NHS terminology used naturally, not forced`,
+  personal: `REWRITE TONE: Personal and authentic — the candidate's own voice.
+- Strong first-person narrative ("When I joined...", "One of the moments I'm most proud of...")
+- Lead each section with a brief real example or moment, then explain the skill
+- Show the person behind the role — why they care about nursing/healthcare
+- Keep it professional but let personality come through
+- Avoid corporate/generic phrases like "results-driven" or "team player"
+- Specific is always better than general — name procedures, departments, patient groups`,
+}
+
 function buildCvOptimiserPrompt(
   jobTitle: string,
   jobDescription: string,
   parsedSpec: any,
-  cvText: string
+  cvText: string,
+  tone: string = 'warm'
 ): string {
   const essentialKeywords = (parsedSpec?.essentialCriteria ?? [])
     .flatMap((c: any) => c.keywords ?? [])
@@ -30,6 +52,8 @@ KEYWORDS FROM PERSON SPEC: ${allKeywords.join(', ')}
 
 CANDIDATE CV:
 ${cvText.slice(0, 6000)}
+
+${TONE_INSTRUCTIONS[tone] ?? TONE_INSTRUCTIONS.warm}
 
 ANALYSE AND SCORE:
 
@@ -85,7 +109,8 @@ Return ONLY valid JSON:
       "issue": "What's wrong",
       "severity": "high|medium|low",
       "currentText": "Brief quote of the weak text",
-      "suggestedRewrite": "NHS-optimised rewrite of that section"
+      "suggestedRewrite": "NHS-optimised rewrite of that section in the requested tone",
+      "whyItMatters": "one sentence — why recruiters will respond better to this"
     }
   ],
   "topPriorities": [
@@ -106,9 +131,10 @@ export async function POST(req: NextRequest, { params }: Params) {
       return Response.json({ error: "Not found" }, { status: 404 })
     }
 
-    // Accept CV from body or use stored CV
+    // Accept CV and tone from body or use stored CV
     const body = await req.json().catch(() => ({}))
     const cvText = body.cvText ?? application.cvText
+    const tone = body.tone ?? 'warm'
 
     if (!cvText || cvText.trim().length < 50) {
       return Response.json({ error: "No CV text available. Upload or paste your CV first." }, { status: 400 })
@@ -124,7 +150,8 @@ export async function POST(req: NextRequest, { params }: Params) {
       application.jobTitle,
       application.jobDescription,
       parsedSpec,
-      cvText
+      cvText,
+      tone
     )
 
     const response = await fetch(

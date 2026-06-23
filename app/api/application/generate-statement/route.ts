@@ -2,18 +2,19 @@
 //
 // Generates Q1 — "Why are you suitable for this role?"
 //
-// Scotland / unknown: hard 500w, target 480w
-// England/Wales/NI:   proportional (~50% of total limit)
-//
-// KEY FIX: When there are many criteria (>6), we select the most important ones
-// to fit within the word limit. Each criterion gets ~50-60 words. 
-// Server-side trim enforces the hard limit if AI overshoots.
+// LAYER 4 UPDATE:
+//   Checks parsedSpec.competencyEvidence first.
+//   If present → writes around competencies (produces more human output).
+//   If absent  → falls back to the original criterion paragraph path.
 
-import { prisma } from "@/lib/prisma"
-import { auth } from "@/auth"
-import { callGeminiJSON } from "@/lib/application/ai"
-import { scoreApplication } from "@/lib/application/scoring"
-import { NATION_CONFIGS } from "@/lib/nhs-nations"
+import { prisma }                   from "@/lib/prisma"
+import { auth }                     from "@/auth"
+import { callGeminiJSON }           from "@/lib/application/ai"
+import { scoreApplication }         from "@/lib/application/scoring"
+import { NATION_CONFIGS }           from "@/lib/nhs-nations"
+import { validateEvidence }         from "@/lib/application/anti-hallucination-guard"
+import { sendEmail }                from "@/lib/email"
+import { statementGeneratedEmail }  from "@/lib/email-templates"
 
 // ─── Word limit helpers ────────────────────────────────────────────────────────
 
@@ -23,31 +24,20 @@ function getQ1WordLimit(nation: string, totalLimit: number): { hard: number; tar
   return { hard, target: Math.round(hard * 0.96) }
 }
 
-// ─── Trim to word limit at sentence boundary ──────────────────────────────────
-
 function trimToWordLimit(text: string, limit: number): string {
   const words = text.trim().split(/\s+/)
   if (words.length <= limit) return text
-
-  // Trim to limit then find the last sentence boundary
   const trimmed = words.slice(0, limit).join(" ")
-  // Find last sentence-ending punctuation
   const lastStop = Math.max(
     trimmed.lastIndexOf(". "),
     trimmed.lastIndexOf("! "),
     trimmed.lastIndexOf("? "),
   )
-  if (lastStop > trimmed.length * 0.7) {
-    return trimmed.slice(0, lastStop + 1).trim()
-  }
-  // No clean sentence boundary found — trim at word boundary
+  if (lastStop > trimmed.length * 0.7) return trimmed.slice(0, lastStop + 1).trim()
   return trimmed.trim()
 }
 
-// ─── Select criteria to include ────────────────────────────────────────────────
-// With 11 criteria × ~75 words each = 825 words — way over 480.
-// We select the most important criteria that fit the word budget.
-// Priority: clinical skills > communication > teamwork > other
+// ─── Criterion selection (legacy path) ────────────────────────────────────────
 
 const PRIORITY_CATEGORIES = ["clinical", "communication", "teamwork", "technical", "knowledge", "other"]
 
@@ -57,21 +47,90 @@ function selectCriteria(
   wordsPerCriterion: number,
 ): typeof criteria {
   const maxCriteria = Math.floor(wordsAvailable / wordsPerCriterion)
-
   if (criteria.length <= maxCriteria) return criteria
-
-  // Sort by priority category then order
   const sorted = [...criteria].sort((a, b) => {
     const aPriority = PRIORITY_CATEGORIES.indexOf(a.category ?? "other")
     const bPriority = PRIORITY_CATEGORIES.indexOf(b.category ?? "other")
     if (aPriority !== bPriority) return aPriority - bPriority
     return a.order - b.order
   })
-
   return sorted.slice(0, maxCriteria)
 }
 
-// ─── Prompt builder ────────────────────────────────────────────────────────────
+// ─── LAYER 4: Competency-based prompt ─────────────────────────────────────────
+
+function buildCompetencyPrompt(input: {
+  jobTitle: string
+  band: string | null
+  employer: string | null
+  nation: string
+  hardLimit: number
+  targetLimit: number
+  currentRole: string | null
+  yearsExperience: number | null
+  qualifications: string | null
+  systemsKnowledge: string | null
+  careerMotivation: string | null
+  nhsValuesText: string | null
+  competencies: Array<{ label: string; description: string; evidence: string | null; noExperience: boolean }>
+}): string {
+  const nationLabel = NATION_CONFIGS[input.nation as keyof typeof NATION_CONFIGS]?.label ?? "NHS Scotland"
+  const isScotland  = input.nation === "scotland" || input.nation === "unknown"
+
+  const evidenceBlock = input.competencies
+    .filter(c => !c.noExperience && c.evidence?.trim())
+    .map(c => `COMPETENCY: ${c.label}\nEVIDENCE: ${c.evidence!.trim()}`)
+    .join("\n\n")
+
+  const developingBlock = input.competencies
+    .filter(c => c.noExperience)
+    .map(c => `DEVELOPING: ${c.label} — ${c.description}`)
+    .join("\n")
+
+  return `
+You are an expert ${nationLabel} recruitment writer generating Q1 of a supporting statement.
+
+QUESTION: "Why are you suitable for this role?"
+JOB: ${input.jobTitle}${input.band ? `, ${input.band}` : ""}
+EMPLOYER: ${input.employer ?? nationLabel}
+APPLICANT CURRENT ROLE: ${input.currentRole ?? "not specified"}
+
+══════════════════════════════════════════════
+WORD COUNT: MINIMUM ${input.targetLimit - 30} · TARGET ${input.targetLimit} · MAXIMUM ${input.hardLimit}
+Count your words before responding. Aim for exactly ${input.targetLimit} words.
+══════════════════════════════════════════════
+
+COMPETENCY EVIDENCE (write one cohesive paragraph per competency area — not per criterion):
+${evidenceBlock}
+${developingBlock ? `\nDEVELOPING AREAS (write one forward-looking sentence each — commitment to build):\n${developingBlock}` : ""}
+
+ADDITIONAL CONTEXT:
+- Qualifications: ${input.qualifications ?? "not specified"}
+- Systems/clinical skills: ${input.systemsKnowledge ?? "not specified"}
+- Why this role: ${input.careerMotivation ?? "not specified"}
+${input.nhsValuesText ? `\nVALUES DOC (for tone only — do NOT reproduce):\n${input.nhsValuesText.slice(0, 500)}` : ""}
+
+WRITING RULES:
+1. Write ONE flowing paragraph per competency — not per criterion. This produces a human statement.
+2. Open with the applicant's strongest clinical or professional skill. NOT "I am applying for..."
+3. Each competency paragraph: specific example + outcome. Compress evidence into tight prose.
+4. Do NOT copy evidence verbatim — rewrite in first person, professional NHS tone.
+5. Developing areas: one sentence showing commitment, placed naturally at the end.
+6. Qualifications and motivation: 1–2 sentences each, woven in where natural.
+7. Closing: one forward-looking sentence.
+8. NO bullet points, NO headers — pure flowing prose throughout.
+9. NHS values motivation belongs in Q2 NOT here.
+10. Active voice. Every sentence earns its place.
+11. STOP at ${input.hardLimit} words.
+
+${isScotland ? "Jobtrain NHS Scotland — Q1 of 3 questions. NHS values (Q2) and personal circumstances (Q3) go in their own boxes, not here." : "Suitability only. Values motivation goes in Q2, other info in Q3."}
+
+Respond ONLY with JSON (no markdown):
+{"q1":"complete Q1 text","wordCount":<integer>}
+`.trim()
+}
+
+// ─── LEGACY: Criterion paragraph prompt ──────────────────────────────────────
 
 function buildQ1Prompt(input: {
   jobTitle: string
@@ -93,7 +152,6 @@ function buildQ1Prompt(input: {
   const isScotland  = input.nation === "scotland" || input.nation === "unknown"
   const criteriaCount = input.criterionParagraphs.length
 
-  // Calculate exact word budget per section
   const openingBudget    = 40
   const closingBudget    = 30
   const knowledgeBudget  = Math.round(input.targetLimit * 0.17)
@@ -114,50 +172,37 @@ EMPLOYER: ${input.employer ?? nationLabel}
 APPLICANT CURRENT ROLE: ${input.currentRole ?? "not specified"}
 
 ══════════════════════════════════════════════
-WORD COUNT: MINIMUM ${input.targetLimit - 30} WORDS · TARGET ${input.targetLimit} WORDS · MAXIMUM ${input.hardLimit} WORDS
-Your output MUST be between ${input.targetLimit - 30} and ${input.hardLimit} words.
-Too short is as bad as too long. Aim for ${input.targetLimit} words.
-Count your words before responding. If under ${input.targetLimit - 30}, expand. If over ${input.hardLimit}, trim.
+WORD COUNT: MINIMUM ${input.targetLimit - 30} · TARGET ${input.targetLimit} · MAXIMUM ${input.hardLimit}
 ══════════════════════════════════════════════
 
-SECTION BUDGETS (must stay within these):
+SECTION BUDGETS:
 - Opening hook: ${openingBudget} words MAX
-- Criteria evidence (${criteriaCount} criteria × ~${wordsPerCriterion} words each): ${criteriaBudget} words MAX
-- Knowledge/qualifications: ${knowledgeBudget} words MAX  
+- Criteria evidence (${criteriaCount} × ~${wordsPerCriterion} words): ${criteriaBudget} words MAX
+- Knowledge/qualifications: ${knowledgeBudget} words MAX
 - Motivation/career goals: ${motivationBudget} words MAX
 - Closing sentence: ${closingBudget} words MAX
-- TOTAL: ${input.targetLimit} words TARGET, ${input.hardLimit} words ABSOLUTE MAX
 
-EVIDENCE TO WEAVE IN (${criteriaCount} criteria):
+EVIDENCE (${criteriaCount} criteria):
 ${criteriaBlock}
-${input.omittedCount > 0 ? `\nNOTE: ${input.omittedCount} lower-priority criteria were omitted to stay within the word limit.` : ""}
+${input.omittedCount > 0 ? `\nNOTE: ${input.omittedCount} lower-priority criteria omitted to stay within word limit.` : ""}
 
 ADDITIONAL CONTEXT:
 - Qualifications: ${input.qualifications ?? "not specified"}
 - Systems/clinical skills: ${input.systemsKnowledge ?? "not specified"}
 - Why this role: ${input.careerMotivation ?? "not specified"}
-${input.nhsValuesText ? `\nVALUES DOC CONTEXT (do NOT reproduce — use for tone only):\n${input.nhsValuesText.slice(0, 500)}` : ""}
+${input.nhsValuesText ? `\nVALUES DOC (tone only):\n${input.nhsValuesText.slice(0, 500)}` : ""}
 
 WRITING RULES:
-1. Opening: Start with the applicant's strongest clinical or professional skill directly. NOT "I am applying for..." or "I am a motivated..."
-2. Evidence: Each criterion gets ~${wordsPerCriterion} words. Be concise. One STAR sentence per criterion, not a full paragraph.
-3. Do NOT copy the evidence paragraphs verbatim — compress them into tight, flowing prose
-4. Knowledge: 1–2 sentences only on qualifications/systems
-5. Motivation: 1–2 sentences on why this specific role/band
-6. Closing: One forward-looking sentence
-7. NHS values motivation belongs in Q2, NOT here
-8. NO bullet points, NO headers — pure prose
-9. Active voice throughout
-10. Write fully — aim for ${input.targetLimit} words. Every section must be properly developed, not truncated.
-11. STOP at ${input.hardLimit} words maximum.
+1. Open with the applicant's strongest clinical skill. NOT "I am applying for..."
+2. Each criterion: ~${wordsPerCriterion} words. One STAR sentence. Compress — do NOT copy verbatim.
+3. Knowledge: 1–2 sentences. Motivation: 1–2 sentences. Closing: 1 sentence.
+4. NHS values motivation belongs in Q2.
+5. NO bullet points, NO headers — pure prose.
+6. Active voice. Aim for ${input.targetLimit} words. STOP at ${input.hardLimit}.
+${isScotland ? "\nJobtrain NHS Scotland Q1 — values (Q2) and personal circumstances (Q3) go in their own boxes." : ""}
 
-${isScotland ? "This is a Jobtrain NHS Scotland application — Q1 of 3 separate questions. Do not address NHS values (Q2) or personal circumstances (Q3) here." : "This is the suitability section — NHS values motivation goes in Q2, other info in Q3."}
-
-Respond ONLY with this JSON (no markdown):
-{
-  "q1": "complete Q1 text",
-  "wordCount": <integer — count carefully>
-}
+Respond ONLY with JSON (no markdown):
+{"q1":"complete Q1 text","wordCount":<integer>}
 `.trim()
 }
 
@@ -169,84 +214,155 @@ export async function POST(req: Request) {
     if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
 
     const body = await req.json()
-    const { applicationId, qualifications, systemsKnowledge, careerMotivation, nation: bodyNation, wordLimit: bodyWordLimit } = body
+    const {
+      applicationId,
+      qualifications,
+      systemsKnowledge,
+      careerMotivation,
+      nation: bodyNation,
+      wordLimit: bodyWordLimit,
+    } = body
 
     if (!applicationId) return Response.json({ error: "applicationId required" }, { status: 400 })
 
     const application = await prisma.application.findUnique({
-      where: { id: applicationId },
+      where:   { id: applicationId },
       include: { criteria: { orderBy: { order: "asc" } } },
     })
     if (!application || application.userId !== session.user.id) {
       return Response.json({ error: "Not found" }, { status: 404 })
     }
 
-    const parsed       = application.parsedSpec as any
-    const nation       = bodyNation ?? parsed?.detectedNation ?? "unknown"
-    const totalLimit   = bodyWordLimit ?? parsed?.statementWordLimit ?? (nation === "scotland" || nation === "unknown" ? 500 : 1500)
+    const parsed     = application.parsedSpec as any
+    const nation     = bodyNation ?? parsed?.detectedNation ?? "unknown"
+    const totalLimit = bodyWordLimit ?? parsed?.statementWordLimit ?? (nation === "scotland" || nation === "unknown" ? 500 : 1500)
     const { hard, target } = getQ1WordLimit(nation, totalLimit)
 
-    // Get all essential criteria with generated paragraphs
-    const allCriterionParagraphs = application.criteria
-      .filter(c => c.type === "essential" && c.generatedParagraph)
-      .map(c => ({
-        criterionText: c.criterionText,
-        type: c.type as string,
-        paragraph: c.generatedParagraph!,
-        order: c.order,
-        category: (parsed?.essentialCriteria ?? []).find((p: any) => p.text === c.criterionText)?.category ?? "other",
+    // ── Decide which path to use ──────────────────────────────────────────────
+    const competencyEvidence = parsed?.competencyEvidence as Record<string, any> | undefined
+    const useLayer4 = competencyEvidence && Object.keys(competencyEvidence).length > 0
+
+    let prompt: string
+    let omittedCount = 0
+
+    if (useLayer4) {
+      // ── Layer 4 path: competency-based generation ─────────────────────────
+      console.log(`[Q1] Layer 4 path — ${Object.keys(competencyEvidence!).length} competencies`)
+
+      // ── Anti-hallucination guard ──────────────────────────────────────────
+      const essentialCriterionIds = new Set(
+        application.criteria.filter(c => c.type === "essential").map(c => c.id)
+      )
+      const essentialCompetencyIds = new Set(
+        Object.entries(competencyEvidence!).filter(([, ce]: [string, any]) =>
+          (ce.criteriaIds as string[])?.some((id: string) => essentialCriterionIds.has(id))
+          || (ce.criteriaTexts as string[] | undefined)?.some((t: string) =>
+            application.criteria.some(c => c.type === "essential" && c.criterionText.trim().toLowerCase() === t.trim().toLowerCase())
+          )
+        ).map(([id]) => id)
+      )
+
+      const guard = validateEvidence(
+        competencyEvidence as Record<string, any>,
+        essentialCompetencyIds
+      )
+
+      if (!guard.canGenerate) {
+        return Response.json({
+          error:         guard.blockedReason,
+          canGenerate:   false,
+          essentialGaps: guard.essentialGaps,
+          checks:        guard.checks,
+        }, { status: 422 })
+      }
+
+      if (guard.warnings.length > 0) {
+        console.log(`[Q1] Evidence warnings: ${guard.warnings.join(" | ")}`)
+      }
+
+      const competencies = Object.values(competencyEvidence!).map((ce: any) => ({
+        label:        ce.label        as string,
+        description:  (ce.description as string) ?? "",
+        evidence:     ce.evidence     as string | null,
+        noExperience: (ce.noExperience as boolean) ?? false,
       }))
 
-    if (allCriterionParagraphs.length === 0) {
-      return Response.json({ error: "No essential criteria paragraphs generated yet." }, { status: 400 })
+      prompt = buildCompetencyPrompt({
+        jobTitle:         application.jobTitle,
+        band:             application.band,
+        employer:         application.employer,
+        nation,
+        hardLimit:        hard,
+        targetLimit:      target,
+        currentRole:      application.currentRole,
+        yearsExperience:  application.yearsExperience,
+        qualifications:   qualifications   ?? null,
+        systemsKnowledge: systemsKnowledge ?? null,
+        careerMotivation: careerMotivation ?? null,
+        nhsValuesText:    (application as any).nhsValuesText ?? null,
+        competencies,
+      })
+    } else {
+      // ── Legacy path: criterion paragraph generation ───────────────────────
+      console.log("[Q1] Legacy path — criterion paragraphs")
+
+      const allCriterionParagraphs = application.criteria
+        .filter(c => c.type === "essential" && c.generatedParagraph)
+        .map(c => ({
+          criterionText: c.criterionText,
+          type:          c.type as string,
+          paragraph:     c.generatedParagraph!,
+          order:         c.order,
+          category:      (parsed?.essentialCriteria ?? []).find((p: any) => p.text === c.criterionText)?.category ?? "other",
+        }))
+
+      if (allCriterionParagraphs.length === 0) {
+        return Response.json({ error: "No essential criteria paragraphs generated yet." }, { status: 400 })
+      }
+
+      const fixedOverhead      = 40 + 30 + Math.round(target * 0.17) + Math.round(target * 0.17)
+      const criteriaWordBudget = target - fixedOverhead
+      const wordsPerCriterion  = 55
+      const selectedCriteria   = selectCriteria(allCriterionParagraphs, criteriaWordBudget, wordsPerCriterion)
+      omittedCount = allCriterionParagraphs.length - selectedCriteria.length
+
+      prompt = buildQ1Prompt({
+        jobTitle:         application.jobTitle,
+        band:             application.band,
+        employer:         application.employer,
+        nation,
+        hardLimit:        hard,
+        targetLimit:      target,
+        currentRole:      application.currentRole,
+        yearsExperience:  application.yearsExperience,
+        criterionParagraphs: selectedCriteria,
+        qualifications:   qualifications   ?? null,
+        systemsKnowledge: systemsKnowledge ?? null,
+        careerMotivation: careerMotivation ?? null,
+        nhsValuesText:    (application as any).nhsValuesText ?? null,
+        omittedCount,
+      })
     }
 
-    // Select criteria that fit the word budget
-    // Opening (40) + Knowledge (85) + Motivation (85) + Closing (30) = 240 words used
-    // Remaining for criteria: target - 240 = ~240 words at 480 target
-    const fixedOverhead = 40 + 30 + Math.round(target * 0.17) + Math.round(target * 0.17)
-    const criteriaWordBudget = target - fixedOverhead
-    const wordsPerCriterion = 55  // concise STAR sentence per criterion
+    // ── Generate ──────────────────────────────────────────────────────────────
+    const result = await callGeminiJSON(prompt, 3000)
+    let q1Text   = result.q1 ?? ""
 
-    const selectedCriteria = selectCriteria(allCriterionParagraphs, criteriaWordBudget, wordsPerCriterion)
-    const omittedCount = allCriterionParagraphs.length - selectedCriteria.length
-
-    const result = await callGeminiJSON(buildQ1Prompt({
-      jobTitle: application.jobTitle,
-      band: application.band,
-      employer: application.employer,
-      nation,
-      hardLimit: hard,
-      targetLimit: target,
-      currentRole: application.currentRole,
-      yearsExperience: application.yearsExperience,
-      criterionParagraphs: selectedCriteria,
-      qualifications: qualifications ?? null,
-      systemsKnowledge: systemsKnowledge ?? null,
-      careerMotivation: careerMotivation ?? null,
-      nhsValuesText: (application as any).nhsValuesText ?? null,
-      omittedCount,
-    }), 3000)  // 3000 tokens ≈ ~2000 words — enough room to write 480 words properly
-
-    let q1Text = result.q1 ?? ""
-
-    // ── Server-side enforcement ───────────────────────────────────────────────
+    // ── Retry if too short ────────────────────────────────────────────────────
     const rawCount = q1Text.split(/\s+/).filter(Boolean).length
-
-    // If too short (under 80% of target) — retry once with explicit expansion prompt
     if (rawCount < target * 0.80) {
-      console.log(`[Q1] Too short (${rawCount} words, target ${target}) — retrying with expansion prompt`)
+      console.log(`[Q1] Too short (${rawCount} words, target ${target}) — retrying`)
       const expansionPrompt = `
-The following NHS supporting statement Q1 is only ${rawCount} words — too short. 
-It must be ${target}–${hard} words (NHS Scotland Jobtrain Q1 limit).
+The following NHS supporting statement Q1 is only ${rawCount} words — too short.
+It must be ${target}–${hard} words.
 
-EXPAND IT to reach ${target} words by:
-- Adding more specific clinical detail to each STAR example
-- Expanding the knowledge/qualifications section
-- Strengthening the motivation/career goals paragraph
-- Do NOT add a new section — develop what is already there
-- Keep the same structure and voice
-- STOP at ${hard} words maximum
+EXPAND to reach ${target} words by:
+- Adding more specific clinical detail to each example
+- Expanding the qualifications/systems section
+- Strengthening the motivation paragraph
+- Do NOT add new sections — develop what is already there
+- Keep same structure and voice
+- STOP at ${hard} words
 
 CURRENT TEXT:
 ${q1Text}
@@ -260,7 +376,7 @@ Respond ONLY with JSON: {"q1":"expanded text","wordCount":0}
       }
     }
 
-    // If too long — trim at sentence boundary
+    // ── Trim if over hard limit ───────────────────────────────────────────────
     const afterRetryCount = q1Text.split(/\s+/).filter(Boolean).length
     if (afterRetryCount > hard) {
       q1Text = trimToWordLimit(q1Text, hard)
@@ -270,25 +386,32 @@ Respond ONLY with JSON: {"q1":"expanded text","wordCount":0}
     const wordCount = q1Text.split(/\s+/).filter(Boolean).length
     const overLimit = wordCount > hard
 
+    // ── Score + persist ───────────────────────────────────────────────────────
     const criteriaInputs = application.criteria.map(c => ({
-      type: c.type as "essential" | "desirable",
-      situation: c.situation, task: c.task, action: c.action, result: c.result,
-      metrics: c.metrics, reflection: c.reflection, generatedParagraph: c.generatedParagraph,
-      keywords: (parsed?.essentialCriteria ?? []).concat(parsed?.desirableCriteria ?? []).find((p: any) => p.text === c.criterionText)?.keywords ?? [],
-      criterionText: c.criterionText,
+      type:               c.type as "essential" | "desirable",
+      situation:          c.situation,
+      task:               c.task,
+      action:             c.action,
+      result:             c.result,
+      metrics:            c.metrics,
+      reflection:         c.reflection,
+      generatedParagraph: c.generatedParagraph,
+      keywords:           (parsed?.essentialCriteria ?? []).concat(parsed?.desirableCriteria ?? [])
+                            .find((p: any) => p.text === c.criterionText)?.keywords ?? [],
+      criterionText:      c.criterionText,
     }))
+
     const liveScore = scoreApplication(criteriaInputs, q1Text, "", q1Text, parsed?.nhsValues ?? [])
 
     await prisma.application.update({
       where: { id: applicationId },
       data: {
-        // @ts-expect-error — new fields
-        statementQ1: q1Text,
-        wordCountQ1: wordCount,
+        statementQ1:   q1Text,
+        wordCountQ1:   wordCount,
         fullStatement: q1Text,
         wordCount,
         liveScore,
-        status: "in_progress",
+        status:        "in_progress",
       },
     })
 
@@ -296,17 +419,53 @@ Respond ONLY with JSON: {"q1":"expanded text","wordCount":0}
       data: { applicationId, content: q1Text, wordCount, score: liveScore },
     })
 
+    // ── Email — only when all three questions are complete ────────────────────
+    // Q1 just saved above. Check if Q2 and Q3 already exist from a previous session.
+    const freshApp = await prisma.application.findUnique({
+      where:  { id: applicationId },
+      select: {
+        statementQ1: true, wordCountQ1: true,
+        statementQ2: true, wordCountQ2: true,
+        statementQ3: true, wordCountQ3: true,
+        jobTitle: true, employer: true,
+      },
+    })
+
+    if (freshApp?.statementQ1 && freshApp?.statementQ2 && freshApp?.statementQ3) {
+      const userRow = await prisma.user.findUnique({
+        where:  { id: session.user.id },
+        select: { email: true, name: true },
+      })
+      if (userRow?.email) {
+        sendEmail({
+          to:      userRow.email,
+          subject: `Your statement for ${freshApp.jobTitle} is ready — OmniJobReady AI™`,
+          html:    statementGeneratedEmail({
+            name:         userRow.name ?? "",
+            jobTitle:     freshApp.jobTitle,
+            employer:     freshApp.employer,
+            nation,
+            wordCountQ1:  freshApp.wordCountQ1 ?? 0,
+            wordCountQ2:  freshApp.wordCountQ2 ?? 0,
+            wordCountQ3:  freshApp.wordCountQ3 ?? 0,
+            statementUrl: `${process.env.NEXTAUTH_URL}/dashboard/application/${applicationId}`,
+          }),
+        }).catch(err => console.error("[generate-q1] email failed:", err))
+      }
+    }
+
     return Response.json({
-      success: true,
-      question: "q1",
-      statement: q1Text,
+      success:         true,
+      question:        "q1",
+      statement:       q1Text,
       wordCount,
       overLimit,
-      hardLimit: hard,
-      targetLimit: target,
+      hardLimit:       hard,
+      targetLimit:     target,
       nation,
       omittedCriteria: omittedCount,
-      score: liveScore,
+      generationPath:  useLayer4 ? "layer4_competency" : "legacy_criterion",
+      score:           liveScore,
       warning: overLimit
         ? `Q1 is ${wordCount} words — slightly over the ${hard}-word limit. Edit to trim.`
         : null,

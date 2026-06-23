@@ -59,7 +59,7 @@ export function AnalysisTabs({ analysisId, jobTitle, result, record, children }:
               {tab.label}
               {tab.proOnly && !isPro && (
                 <span className="text-[9px] font-bold bg-violet-600 text-white px-1.5 py-0.5 rounded-full ml-0.5">
-                  PRO
+                  PRO or ELITE
                 </span>
               )}
             </button>

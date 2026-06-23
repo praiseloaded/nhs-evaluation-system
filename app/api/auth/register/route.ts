@@ -1,12 +1,14 @@
-import { prisma } from "@/lib/prisma"
-import bcrypt from "bcryptjs"
+import { prisma }       from "@/lib/prisma"
+import bcrypt           from "bcryptjs"
+import { sendEmail }    from "@/lib/email"
+import { welcomeEmail } from "@/lib/email-templates"
 
 export async function POST(req: Request) {
   try {
     const body = await req.json()
 
-    const name = body.name?.trim()
-    const email = body.email?.trim().toLowerCase()
+    const name     = body.name?.trim()
+    const email    = body.email?.trim().toLowerCase()
     const password = body.password
 
     if (!name || !email || !password) {
@@ -37,9 +39,20 @@ export async function POST(req: Request) {
       },
     })
 
+    // ── Welcome email ──────────────────────────────────────────────────────
+    // Fire-and-forget — never let email failure block the registration response
+    sendEmail({
+      to:      user.email!,
+      subject: 'Welcome to OmniJobReady AI™',
+      html:    welcomeEmail(
+        user.name ?? '',
+        `${process.env.NEXTAUTH_URL}/dashboard`,
+      ),
+    }).catch(err => console.error('[register] welcome email failed:', err))
+
     return Response.json({
       success: true,
-      userId: user.id,
+      userId:  user.id,
     })
   } catch (error) {
     console.error(error)
@@ -50,3 +63,5 @@ export async function POST(req: Request) {
     )
   }
 }
+
+

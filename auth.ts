@@ -4,6 +4,8 @@ import Credentials from "next-auth/providers/credentials"
 import { PrismaAdapter } from "@auth/prisma-adapter"
 import { prisma } from "@/lib/prisma"
 import bcrypt from "bcryptjs"
+import { sendEmail } from '@/lib/email'
+import { welcomeEmail } from '@/lib/email-templates'
 
 declare module "next-auth" {
   interface Session {

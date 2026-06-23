@@ -79,6 +79,7 @@ export const FEATURE_CATALOG: {
   { key: 'insights_rejection_risk',     label: 'Rejection Risk analysis',      description: 'Risk level across ATS, shortlisting, values, interview gates',   defaultMinTier: 'pro',  group: 'analysis' },
   { key: 'insights_operational_realism',label: 'Operational Realism',          description: 'Whether the statement reflects NHS environment awareness',        defaultMinTier: 'pro',  group: 'analysis' },
   { key: 'insights_band_coaching',      label: 'Band Coaching',                description: 'Band-specific coaching tailored to the target role',             defaultMinTier: 'pro',  group: 'analysis' },
+  { key: 'full_report',                 label: 'Generate Full Report',         description: 'Full PDF report with all dimensions, criteria and coaching',    defaultMinTier: 'pro',  group: 'analysis' },
 
   // ── Dashboard elements ─────────────────────────────────────────────────────
   { key: 'dashboard_distribution',label: 'Score Distribution chart', description: 'Verdict distribution bar on main dashboard',           defaultMinTier: 'pro',  group: 'dashboard' },

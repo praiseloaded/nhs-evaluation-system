@@ -8,10 +8,12 @@
 //
 // Also accepts pre-detected nation + word limit from the launcher UI.
 
-import { prisma } from "@/lib/prisma"
-import { auth } from "@/auth"
-import { callGeminiJSON } from "@/lib/application/ai"
+import { prisma }                  from "@/lib/prisma"
+import { auth }                    from "@/auth"
+import { callGeminiJSON }          from "@/lib/application/ai"
 import { buildParserPrompt, postProcessParsedSpec } from "@/lib/application/parser"
+import { sendEmail }               from "@/lib/email"
+import { analysisCompleteEmail }   from "@/lib/email-templates"
 
 export async function POST(req: Request) {
   try {
@@ -23,30 +25,28 @@ export async function POST(req: Request) {
     const {
       jobTitle,
       jobDescription,
-      personSpec,          // now separate from jobDescription
+      personSpec,
       cvText,
-      nhsValuesText,       // NEW — Trust/Board values document
+      nhsValuesText,
       employer,
       band,
       sourceUrl,
-      detectedNation,      // NEW — from launcher auto-detection
-      statementWordLimit,  // NEW — for England/Wales/NI dynamic limit
+      detectedNation,
+      statementWordLimit,
     } = body
 
     if (!jobTitle || !jobDescription) {
       return Response.json({ error: "jobTitle and jobDescription required" }, { status: 400 })
     }
 
-    // Combine JD + person spec for criteria extraction
     const combined = [jobDescription, personSpec].filter(Boolean).join("\n\n")
 
-    // Attempt to extract employer from JD if not supplied
     const parserInput = employer
       ? combined
       : `[NOTE: Extract the NHS employer / Health Board name from this job description if present]\n\n${combined}`
 
     const prompt = buildParserPrompt(jobTitle, parserInput)
-    const raw = await callGeminiJSON(prompt, 6000)
+    const raw    = await callGeminiJSON(prompt, 6000)
     const parsed = postProcessParsedSpec(raw)
 
     const resolvedEmployer = employer ?? parsed.employer ?? raw.employer ?? null
@@ -65,19 +65,19 @@ export async function POST(req: Request) {
       data: {
         userId,
         jobTitle,
-        band: band ?? null,
-        employer: resolvedEmployer,
-        sourceUrl: sourceUrl ?? null,
+        band:         band         ?? null,
+        employer:     resolvedEmployer,
+        sourceUrl:    sourceUrl    ?? null,
         jobDescription,
-        personSpec: personSpec ?? null,
-        cvText: cvText ?? null,
+        personSpec:   personSpec   ?? null,
+        cvText:       cvText       ?? null,
         // @ts-expect-error — new fields
         nhsValuesText: nhsValuesText ?? null,
         parsedSpec: {
           ...parsed,
           q3Triggers,
-          resolvedBoard: resolvedEmployer,
-          detectedNation: resolvedNation,
+          resolvedBoard:      resolvedEmployer,
+          detectedNation:     resolvedNation,
           statementWordLimit: statementWordLimit ?? null,
         },
         status: "draft",
@@ -94,15 +94,45 @@ export async function POST(req: Request) {
         data: {
           applicationId: application.id,
           criterionText: c.text,
-          type: c.type,
-          category: c.category,
-          order: c.order,
+          type:          c.type,
+          category:      c.category,
+          order:         c.order,
         },
       })
     }
 
+    // ── Analysis complete email ────────────────────────────────────────────────
+    // Sends as soon as the job spec is parsed and criteria are extracted.
+    // The score at this point reflects criteria coverage only (no statement yet)
+    // — we show it as an "analysis ready" notification so the user comes back.
+    const userRow = await prisma.user.findUnique({
+      where:  { id: userId },
+      select: { email: true, name: true },
+    })
+
+    if (userRow?.email) {
+      const essentialCount = parsed.essentialCriteria?.length ?? 0
+      const totalCount     = allCriteria.length
+      // Simple coverage score: how many criteria were extracted vs expected
+      const coverageScore  = Math.min(100, Math.round((essentialCount / Math.max(totalCount, 1)) * 100 + 40))
+
+      sendEmail({
+        to:      userRow.email,
+        subject: `Analysis ready: ${jobTitle} — OmniJobReady AI™`,
+        html:    analysisCompleteEmail({
+          name:              userRow.name ?? "",
+          jobTitle,
+          employer:          resolvedEmployer,
+          overallScore:      coverageScore,
+          grade:             coverageScore >= 80 ? "strong" : coverageScore >= 60 ? "developing" : "needs_work",
+          essentialCoverage: Math.min(100, Math.round((essentialCount / Math.max(1, essentialCount)) * 100)),
+          shortlistUrl:      `${process.env.NEXTAUTH_URL}/dashboard/application/${application.id}`,
+        }),
+      }).catch(err => console.error("[parse-spec] analysis email failed:", err))
+    }
+
     return Response.json({
-      success: true,
+      success:       true,
       applicationId: application.id,
       parsed,
       criteriaCount: allCriteria.length,

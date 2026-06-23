@@ -1,4 +1,5 @@
 import { AppLayout } from '@/components/app-layout'
+import { FeatureAccessProvider } from '@/components/providers/feature-access-provider'
 import { ReactNode } from 'react'
 
 interface DashboardLayoutProps {
@@ -6,5 +7,11 @@ interface DashboardLayoutProps {
 }
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
-  return <AppLayout>{children}</AppLayout>
+  return (
+    <AppLayout>
+      <FeatureAccessProvider>
+        {children}
+      </FeatureAccessProvider>
+    </AppLayout>
+  )
 }
