@@ -1,5 +1,6 @@
 import { auth }                 from '@/auth'
 import { prisma }               from '@/lib/prisma'
+import { getDb }                from '@/lib/db-router'
 import { notFound, redirect }   from 'next/navigation'
 import { getUserTier }          from '@/lib/billing/tier'
 import { ReportDownloadClient } from './ReportClient'
@@ -12,9 +13,11 @@ export default async function ReportPage({ params }: Params) {
   if (!session?.user?.id) notFound()
 
   const userTier = await getUserTier(session.user.id as string)
-  if (userTier !== 'pro') redirect('/upgrade')
+  // Elite also gets full report access
+  if (!['pro', 'elite'].includes(userTier)) redirect('/upgrade')
 
-  const record = await prisma.analysis.findUnique({ where: { id } })
+  const db     = await getDb(session.user.id as string)
+  const record = await db.analysis.findUnique({ where: { id } })
   if (!record || record.userId !== session.user.id) notFound()
 
   const result = (record.result as any) ?? {}

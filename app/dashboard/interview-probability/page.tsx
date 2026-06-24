@@ -38,7 +38,7 @@ export default function InterviewProbabilityClient() {
   const selected = analyses.find(a => a.id === selectedId)
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-10 space-y-6">
+    <div className="max-w-4xl mx-auto px-4 py-10 space-y-6">
       <div>
         <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground mb-4 transition-colors">
           <ArrowLeft className="w-3.5 h-3.5" /> Dashboard

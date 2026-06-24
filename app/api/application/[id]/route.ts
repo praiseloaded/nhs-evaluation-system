@@ -1,8 +1,11 @@
 // app/api/application/[id]/route.ts
 
 import { prisma } from "@/lib/prisma"
+import { getDb }  from "@/lib/db-router"
 import { auth } from "@/auth"
 import { NextRequest } from "next/server"
+
+export const runtime = 'nodejs'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -11,8 +14,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
     const { id } = await params
     const session = await auth()
     if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
+    const db      = await getDb(session.user.id)
 
-    const application = await prisma.application.findUnique({
+    const application = await db.application.findUnique({
       where: { id },
       include: {
         criteria: { orderBy: { order: "asc" } },

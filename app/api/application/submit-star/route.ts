@@ -1,21 +1,25 @@
 // app/api/application/submit-star/route.ts
 
 import { prisma } from "@/lib/prisma"
+import { getDb }  from "@/lib/db-router"
 import { auth } from "@/auth"
 import { callGeminiJSON } from "@/lib/application/ai"
 import { buildStarPrompt } from "@/lib/application/star-engine"
+
+export const runtime = 'nodejs'
 
 export async function POST(req: Request) {
   try {
     const session = await auth()
     if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
+    const db      = await getDb(session.user.id)
 
     const body = await req.json()
     const { criterionId, situation, task, action, result, metrics, mdtContext, reflection, nhsValues } = body
 
     if (!criterionId) return Response.json({ error: "criterionId required" }, { status: 400 })
 
-    const criterion = await prisma.applicationCriterion.findUnique({
+    const criterion = await db.applicationCriterion.findUnique({
       where: { id: criterionId },
       include: { application: true },
     })
@@ -25,7 +29,7 @@ export async function POST(req: Request) {
     }
 
     // Save STAR evidence
-    await prisma.applicationCriterion.update({
+    await db.applicationCriterion.update({
       where: { id: criterionId },
       data: { situation, task, action, result, metrics, mdtContext, reflection, nhsValues, status: "drafted" },
     })
@@ -52,7 +56,7 @@ export async function POST(req: Request) {
       generated = await callGeminiJSON(prompt, 3000)
 
       // Save generated paragraph
-      await prisma.applicationCriterion.update({
+      await db.applicationCriterion.update({
         where: { id: criterionId },
         data: {
           generatedParagraph: generated.paragraph,
@@ -69,14 +73,14 @@ export async function POST(req: Request) {
     }
 
     // Update application completeness
-    const allCriteria = await prisma.applicationCriterion.findMany({
+    const allCriteria = await db.applicationCriterion.findMany({
       where: { applicationId: criterion.applicationId },
     })
     const total = allCriteria.length
     const done = allCriteria.filter(c => c.situation && c.task && c.action && c.result).length
     const completeness = total > 0 ? Math.round((done / total) * 100) : 0
 
-    await prisma.application.update({
+    await db.application.update({
       where: { id: criterion.applicationId },
       data: { completeness, status: completeness > 0 ? "in_progress" : "draft" },
     })

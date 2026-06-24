@@ -7,6 +7,9 @@ import { sanitizeAnalysisForTier } from "@/lib/billing/sanitize-analysis"
 import { auth }                  from "@/auth"
 import { calculateNhsBandScore } from "@/lib/scoring/calculate-overall-score"
 import { detectEvidenceVault } from "@/lib/billing/detect-evidence-vault"
+import { getDb }  from '@/lib/db-router'
+
+export const runtime = 'nodejs'
 
 function normalize(value?: string) {
   return value?.trim() || ""
@@ -47,6 +50,7 @@ export async function POST(req: Request) {
     }
 
     const userId = session.user.id as string
+    const db      = await getDb(userId)
     const body   = await req.json()
 
     // ───────────────────────────────
@@ -57,7 +61,7 @@ export async function POST(req: Request) {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
-    const usageToday = await prisma.analysis.count({
+    const usageToday = await db.analysis.count({
       where: {
         userId,
         createdAt: { gte: today },
@@ -128,7 +132,7 @@ export async function POST(req: Request) {
     // ───────────────────────────────
     // 5. SAVE
     // ───────────────────────────────
-    const saved = await prisma.analysis.create({
+    const saved = await db.analysis.create({
       data: {
         userId,
         jobTitle,

@@ -3,6 +3,9 @@
 import { auth }        from '@/auth'
 import { prisma }      from '@/lib/prisma'
 import { NextRequest } from 'next/server'
+import { getDb }  from '@/lib/db-router'
+
+export const runtime = 'nodejs'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -203,8 +206,9 @@ export async function POST(_req: NextRequest, { params }: Params) {
     const { id }  = await params
     const session = await auth()
     if (!session?.user?.id) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    const db      = await getDb(session.user.id)
 
-    const record = await prisma.analysis.findUnique({ where: { id } })
+    const record = await db.analysis.findUnique({ where: { id } })
     if (!record || record.userId !== session.user.id) return Response.json({ error: 'Not found' }, { status: 404 })
 
     const result = (record.result as any) ?? {}
@@ -241,7 +245,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
     console.log('[band-match] First normalised band:', JSON.stringify(resultBands[0]).slice(0, 200))
 
     // Save
-    await prisma.analysis.update({
+    await db.analysis.update({
       where: { id },
       data:  { result: { ...result, bandMatch: resultBands } },
     })

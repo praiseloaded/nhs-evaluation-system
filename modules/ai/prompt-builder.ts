@@ -5,7 +5,7 @@
 //   2. buildChunk1Prompt()    — criteria, STAR, specificity, seniority, ATS, scan
 //   3. buildChunk2Prompt()    — values, language, risk, coaching, strengths/weaknesses
 //
-// With Gemini's 1M context window, most inputs fit in a single call.
+// With Gemini 2.5 Flash 1M context, most inputs fit in a single call.
 // Chunking is kept as a safety net for extreme edge cases or Groq fallback.
 
 export interface PromptInput {
@@ -59,15 +59,14 @@ ${truncate(statement, limits.statement)}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SINGLE-CALL FULL PROMPT
-// Gemini handles this easily. Limits are generous — full content preserved.
+// Gemini 2.5 Flash: 1M context — limits are generous safety caps only.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export function buildAnalysisPrompt(input: PromptInput): string {
-  // Gemini: 1M context — no need to truncate aggressively
-  // These limits are safety caps, not normal constraints
-  const jobSpec   = truncate(input.jobSpec,       20000)
-  const cv        = truncate(input.cv ?? "",      20000)
-  const statement = truncate(input.statement,     15000)
+  // Generous limits — Gemini handles large inputs easily
+  const jobSpec   = truncate(input.jobSpec,       40000)
+  const cv        = truncate(input.cv ?? "",      30000)
+  const statement = truncate(input.statement,     20000)
 
   return `
 You are a STRICT NHS RECRUITMENT PANEL ASSESSOR. ZERO TOLERANCE for score inflation.
@@ -92,11 +91,11 @@ STEPS:
 4. Find all STAR examples. Classify each element: "present"/"weak"/"absent".
 5. Classify specificity: tier1 (measurable+named), tier2 (named only), tier3 (generic).
 6. Assess 5 NHS values: "behavioural_with_outcome"/"behavioural"/"referenced"/"keyword"/"absent".
-7. Assess language mirroring against THIS job spec's distinctive phrases.
+7. Assess language mirroring against THIS job spec distinctive phrases.
 8. ATS keyword scan (up to 20 keywords).
 9. Statement surface scan (wordCount, hasExamples, usesWeLanguage, etc.).
 10. Seniority: demonstratedBand, targetBand, bandGap.
-11. Rejection risk across 4 gates (ATS sift, Human shortlisting, Values-based, Interview).
+11. Rejection risk across 4 gates.
 12. Operational realism across 5 dimensions.
 13. Band-specific coaching for target band.
 14. Strengths (with quoted evidence), weaknesses, missingCriteria, recommendations.
@@ -142,7 +141,7 @@ ${statement}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CHUNK 1 — Criteria, STAR, Specificity, Seniority, ATS, StatementScan
-// Used only when falling back to Groq with long inputs.
+// Limits raised so criteria are NOT cut off when chunking is triggered.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export function buildChunk1Prompt(input: PromptInput): string {
@@ -151,7 +150,8 @@ export function buildChunk1Prompt(input: PromptInput): string {
     input.jobSpec,
     input.cv ?? "",
     input.statement,
-    { jobSpec: 3500, cv: 3500, statement: 2000 }
+    // Raised from 3500/3500/2000 — low limits caused criteriaAnalysis to be empty
+    { jobSpec: 20000, cv: 10000, statement: 10000 }
   )
 
   return `
@@ -166,6 +166,7 @@ RULES:
 - Vague results ("improved outcomes") do NOT count as Result.
 - Specificity: tier1=measurable+named, tier2=named only, tier3=generic/vague.
 - Each band gap = -10 points on criteria and STAR.
+- YOU MUST list EVERY criterion from the job spec in criteriaAnalysis — do not skip any.
 
 REQUIRED OUTPUT (JSON only):
 {
@@ -206,7 +207,8 @@ export function buildChunk2Prompt(
     input.jobSpec,
     input.cv ?? "",
     input.statement,
-    { jobSpec: 3000, cv: 1500, statement: 3000 }
+    // Raised from 3000/1500/3000
+    { jobSpec: 15000, cv: 10000, statement: 10000 }
   )
 
   const summary = JSON.stringify(chunk1Summary)

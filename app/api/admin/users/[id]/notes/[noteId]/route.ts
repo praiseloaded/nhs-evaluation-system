@@ -3,6 +3,8 @@
 import { prisma } from "@/lib/prisma"
 import { withAdminAuth } from "@/lib/admin-auth"
 
+export const runtime = 'nodejs'
+
 export const DELETE = withAdminAuth(async (req: Request, admin, ctx: any) => {
   const { noteId } = await ctx.params
   await prisma.adminNote.delete({ where: { id: noteId } }).catch(() => {})

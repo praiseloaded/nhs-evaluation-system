@@ -7,8 +7,11 @@
 // what you said about teamwork..."
 
 import { prisma } from "@/lib/prisma"
+import { getDb }  from "@/lib/db-router"
 import { auth } from "@/auth"
 import { NHS_PANEL } from "@/lib/interview/panellists"
+
+export const runtime = 'nodejs'
 
 function buildFollowUpPrompt(
   panellists: any[],
@@ -73,6 +76,7 @@ export async function POST(req: Request) {
     }
 
     const userId = session.user.id as string
+    const db      = await getDb(userId)
 
     const { getUserTier } = await import("@/lib/billing/tier")
     const tier = await getUserTier(userId)
@@ -87,7 +91,7 @@ export async function POST(req: Request) {
       return Response.json({ success: false, error: "Missing required fields" }, { status: 400 })
     }
 
-    const interview = await prisma.interview.findUnique({ where: { id: interviewId } })
+    const interview = await db.interview.findUnique({ where: { id: interviewId } })
     if (!interview || interview.userId !== userId) {
       return Response.json({ success: false, error: "Interview not found" }, { status: 404 })
     }

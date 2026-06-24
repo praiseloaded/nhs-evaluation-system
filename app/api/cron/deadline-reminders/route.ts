@@ -1,38 +1,52 @@
 // app/api/cron/deadline-reminders/route.ts
-
+// Queries BOTH databases for deadline reminders.
+// Vercel Cron — runs daily at 08:00 UTC (vercel.json)
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma }                    from '@/lib/prisma'
+import { prisma2 }                   from '@/lib/db-router'
 import { sendEmail }                 from '@/lib/email'
 import { deadlineReminderEmail }     from '@/lib/email-templates'
 
+export const runtime = 'nodejs'
+
 export async function GET(req: NextRequest) {
-  // Verify this is a legitimate Vercel cron call (not someone hitting the URL manually)
   const auth = req.headers.get('authorization')
   if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const now       = new Date()
-  const in48h     = new Date(now.getTime() + 48 * 60 * 60 * 1000)
+  const now   = new Date()
+  const in48h = new Date(now.getTime() + 48 * 60 * 60 * 1000)
 
-  // Find all applications with a deadline in the next 48 hours
-  // that we haven't already reminded about
-  const applications = await prisma.application.findMany({
-    where: {
-      deadlineDate:          { gte: now, lte: in48h },
-      deadlineReminderSent:  false,
-      status:                { notIn: ['submitted', 'shortlisted', 'interview', 'offer', 'rejected'] },
-    },
-    include: {
-      user: { select: { email: true, name: true } }
-    },
-  })
+  const where = {
+    deadlineDate:         { gte: now, lte: in48h },
+    deadlineReminderSent: false,
+    status:               { notIn: ['submitted', 'shortlisted', 'interview', 'offer', 'rejected'] },
+  }
 
-  let sent   = 0
-  let failed = 0
+  // Query both databases simultaneously
+  const [apps1, apps2] = await Promise.all([
+    prisma.application.findMany({
+      where,
+      include: { user: { select: { email: true, name: true } } },
+    }).catch(() => []),
+    process.env.DATABASE_URL_2
+      ? prisma2.application.findMany({
+          where,
+          include: { user: { select: { email: true, name: true } } },
+        }).catch(() => [])
+      : Promise.resolve([]),
+  ])
 
-  for (const app of applications) {
+  const allApps = [
+    ...apps1.map((a: any) => ({ ...a, _db: prisma })),
+    ...apps2.map((a: any) => ({ ...a, _db: prisma2 })),
+  ]
+
+  let sent = 0, failed = 0
+
+  for (const app of allApps) {
     if (!app.user?.email) continue
 
     const hoursLeft = Math.round(
@@ -56,8 +70,7 @@ export async function GET(req: NextRequest) {
     })
 
     if (ok) {
-      // Mark as reminded so we don't send again tomorrow
-      await prisma.application.update({
+      await app._db.application.update({
         where: { id: app.id },
         data:  { deadlineReminderSent: true },
       })
@@ -67,6 +80,6 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  console.log(`[cron] Deadline reminders: ${sent} sent, ${failed} failed, ${applications.length} checked`)
-  return NextResponse.json({ sent, failed, checked: applications.length })
+  console.log(`[cron] Deadline reminders: ${sent} sent, ${failed} failed, ${allApps.length} checked`)
+  return NextResponse.json({ sent, failed, checked: allApps.length })
 }

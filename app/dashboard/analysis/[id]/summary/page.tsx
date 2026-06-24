@@ -1,6 +1,7 @@
 // app/dashboard/analysis/[id]/summary/page.tsx
 import { auth }       from '@/auth'
 import { prisma }     from '@/lib/prisma'
+import { getDb }      from '@/lib/db-router'
 import { notFound }   from 'next/navigation'
 import { getUserTier } from '@/lib/billing/tier'
 import { sanitizeAnalysisForTier } from '@/lib/billing/sanitize-analysis'
@@ -13,11 +14,11 @@ export default async function SummaryPage({ params }: Params) {
   const session = await auth()
   if (!session?.user?.id) notFound()
 
-  const record = await prisma.analysis.findUnique({ where: { id } })
+  const db     = await getDb(session.user.id as string)
+  const record = await db.analysis.findUnique({ where: { id } })
   if (!record || record.userId !== session.user.id) notFound()
 
   const userTier = await getUserTier(session.user.id as string)
-  // Fixed: include 'elite' — previously only 'pro' was treated as paid
   const isPro    = ['pro', 'elite'].includes(userTier)
   const raw      = (record.result as any) ?? {}
   const result   = sanitizeAnalysisForTier(raw, isPro ? 'pro' : 'free')

@@ -1,21 +1,25 @@
 // app/api/application/generate-questions/route.ts
 
 import { prisma } from "@/lib/prisma"
+import { getDb }  from "@/lib/db-router"
 import { auth } from "@/auth"
 import { callGeminiJSON } from "@/lib/application/ai"
 import { buildQuestionPrompt } from "@/lib/application/star-engine"
+
+export const runtime = 'nodejs'
 
 export async function POST(req: Request) {
   try {
     const session = await auth()
     if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
+    const db      = await getDb(session.user.id)
 
     const body = await req.json()
     const { criterionId } = body
 
     if (!criterionId) return Response.json({ error: "criterionId required" }, { status: 400 })
 
-    const criterion = await prisma.applicationCriterion.findUnique({
+    const criterion = await db.applicationCriterion.findUnique({
       where: { id: criterionId },
       include: { application: true },
     })

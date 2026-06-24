@@ -7,6 +7,8 @@ import { prisma } from "@/lib/prisma"
 import { withAdminAuth, logAdminAction } from "@/lib/admin-auth"
 import { createNotification } from "@/lib/notifications"
 
+export const runtime = 'nodejs'
+
 export const GET = withAdminAuth(async (req: Request, admin, ctx: any) => {
   const { id } = await ctx.params
 

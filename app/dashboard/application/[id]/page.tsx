@@ -886,7 +886,7 @@ export default function StatementBuilderPage() {
 
         {/* CV Optimiser */}
         {view === 'cv' && (
-          <div className="mt-2 max-w-3xl">
+          <div className="mt-2 max-w-4xl">
             <CvOptimiser applicationId={app.id} existingCvText={app.cvText} existingCvScore={app.cvScore} onScoreUpdate={() => load()} />
           </div>
         )}

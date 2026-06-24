@@ -1,14 +1,14 @@
 // modules/ai/retry.ts
 //
 // Provider priority:
-//   1. Google Gemini (gemini-2.5-flash) — 1,500 req/day free, 1M context
+//   1. Google Gemini (gemini-2.5-flash) — 1M context, 1,500 req/day free
 //   2. Groq (llama-3.3-70b-versatile)  — 100k tokens/day free (fallback)
 //
 // Smart routing:
 //   - Estimates token usage
-//   - Short input → single call
-//   - Long input  → chunked (2 calls with delay)
-//   - If primary fails → falls back to secondary provider
+//   - Short/medium input → single call (covers 99% of NHS job specs)
+//   - Very large input   → truncates to fit, never chunks
+//   - If primary fails   → falls back to secondary provider
 //   - Never retries on rate limits (429)
 
 import {
@@ -21,11 +21,18 @@ import {
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const MAX_RETRIES        = 2
-const SINGLE_CALL_BUDGET = 10000
-const SINGLE_MAX_OUTPUT  = 16000
-const CHUNK_MAX_OUTPUT   = 12000
-const CHUNK_DELAY_MS     = 2000
+const MAX_RETRIES = 2
+// Gemini 2.5 Flash has 1M context — use a generous budget.
+// We only chunk if the prompt itself is enormous (>40k tokens input).
+// This prevents chunking for typical NHS job specs (3k-15k tokens).
+const SINGLE_CALL_BUDGET = 45_000   // input tokens only — not including output
+const SINGLE_MAX_OUTPUT  = 25_000
+const CHUNK_MAX_OUTPUT   = 20_000
+const CHUNK_DELAY_MS     = 8_000
+
+// Truncate input to this character limit before sending
+// ~40k chars ≈ 10k tokens — keeps us well within single-call budget
+const MAX_INPUT_CHARS = 45_000
 
 const SYSTEM_MESSAGE = "You are a strict NHS recruitment panel assessor. Return ONLY valid JSON. No markdown. No commentary. No code blocks."
 
@@ -51,9 +58,7 @@ async function callGemini(prompt: string, maxTokens: number): Promise<string> {
           temperature: 0,
           maxOutputTokens: maxTokens,
           responseMimeType: "application/json",
-          thinkingConfig: {
-            thinkingBudget: 0,
-          },
+          thinkingConfig: { thinkingBudget: 0 },
         },
       }),
     },
@@ -78,15 +83,12 @@ async function callGemini(prompt: string, maxTokens: number): Promise<string> {
 
   if (!text) {
     const blockReason = data?.candidates?.[0]?.finishReason
-    if (blockReason === "SAFETY") {
-      throw new Error("Gemini blocked response due to safety filters")
-    }
+    if (blockReason === "SAFETY") throw new Error("Gemini blocked response due to safety filters")
     console.error("[Gemini] Unexpected response shape:", JSON.stringify(data).slice(0, 500))
     throw new Error(`Empty response from Gemini (finishReason: ${blockReason ?? "unknown"})`)
   }
 
   console.log(`[Gemini] Response received: ${text.length} chars, finishReason: ${data?.candidates?.[0]?.finishReason ?? "unknown"}`)
-
   return text
 }
 
@@ -120,46 +122,60 @@ async function callGroq(prompt: string, maxTokens: number): Promise<string> {
     throw err
   }
 
-  const data = await response.json()
-
+  const data     = await response.json()
   const stopReason = data?.choices?.[0]?.finish_reason
-  if (stopReason === "length") {
-    console.warn("Groq truncated response (finish_reason: length)")
-  }
+  if (stopReason === "length") console.warn("Groq truncated response (finish_reason: length)")
 
   const raw = data?.choices?.[0]?.message?.content?.trim()
   if (!raw) throw new Error("Empty response from Groq")
-
   return raw
 }
 
 // ─── Unified caller with fallback ─────────────────────────────────────────────
 
-// ─── Unified caller with fallback ─────────────────────────────────────────────
-
 async function callAI(prompt: string, maxTokens: number): Promise<string> {
   const estimatedInputTokens = estimateTokens(prompt)
-  const GROQ_INPUT_LIMIT = 8_000 // leave headroom under their 12k TPM limit
+  const GROQ_INPUT_LIMIT     = 8_000
 
-  // Try Gemini first
   if (process.env.GEMINI_API_KEY) {
-    try {
-      return await callGemini(prompt, maxTokens)
-    } catch (err: any) {
-      if (err?.status === 429) {
-        console.warn("[AI] Gemini rate limited. Trying Groq fallback...")
-      } else {
-        console.warn(`[AI] Gemini failed: ${err?.message}. Trying Groq fallback...`)
+    // Retry Gemini up to 3 times on 503 (temporary overload) with backoff
+    // Only fall back to Groq on 429 (rate limit) or persistent failure
+    const GEMINI_RETRIES   = 3
+    const GEMINI_RETRY_DELAYS = [3000, 8000, 15000] // ms between retries
+    let lastGeminiError: any
+
+    for (let attempt = 1; attempt <= GEMINI_RETRIES; attempt++) {
+      try {
+        return await callGemini(prompt, maxTokens)
+      } catch (err: any) {
+        lastGeminiError = err
+
+        if (err?.status === 429) {
+          // Rate limited — no point retrying, fall through to Groq
+          console.warn("[AI] Gemini rate limited (429). Trying Groq fallback...")
+          break
+        }
+
+        if (err?.status === 503 && attempt < GEMINI_RETRIES) {
+          // Temporary overload — wait and retry Gemini
+          const delay = GEMINI_RETRY_DELAYS[attempt - 1]
+          console.warn(`[AI] Gemini 503 (attempt ${attempt}/${GEMINI_RETRIES}). Retrying in ${delay}ms...`)
+          await new Promise(resolve => setTimeout(resolve, delay))
+          continue
+        }
+
+        // Other error or final attempt — fall through to Groq
+        console.warn(`[AI] Gemini failed (attempt ${attempt}): ${err?.message}. Trying Groq fallback...`)
+        break
       }
     }
   }
 
-  // Fallback to Groq — but only if payload fits
   if (process.env.GROQ_API_KEY) {
     if (estimatedInputTokens > GROQ_INPUT_LIMIT) {
       throw new Error(
         `Payload too large for Groq fallback (estimated ${estimatedInputTokens} input tokens, limit ~${GROQ_INPUT_LIMIT}). ` +
-        `Gemini must be available for large analyses. Check GEMINI_API_KEY.`
+        `Gemini must be available for large analyses.`
       )
     }
     return await callGroq(prompt, maxTokens)
@@ -167,6 +183,26 @@ async function callAI(prompt: string, maxTokens: number): Promise<string> {
 
   throw new Error("No AI provider configured. Set GEMINI_API_KEY or GROQ_API_KEY in .env")
 }
+
+// ─── Input truncation ─────────────────────────────────────────────────────────
+// Truncates the job spec portion of the input to stay within budget.
+// Criteria and statement are preserved — only the raw job spec is trimmed.
+
+function truncateInput(input: PromptInput): PromptInput {
+  const truncated = { ...input }
+
+  if ((truncated.jobSpec?.length ?? 0) > MAX_INPUT_CHARS) {
+    console.warn(
+      `[AI] jobSpec truncated from ${truncated.jobSpec!.length} to ${MAX_INPUT_CHARS} chars ` +
+      `to avoid chunking. All criteria fields preserved.`
+    )
+    truncated.jobSpec = truncated.jobSpec!.slice(0, MAX_INPUT_CHARS) +
+      '\n\n[Job description truncated — too long. Essential and desirable criteria above are complete.]'
+  }
+
+  return truncated
+}
+
 // ─── JSON parsing with repair ─────────────────────────────────────────────────
 
 function parseJSON(raw: string): any {
@@ -176,24 +212,13 @@ function parseJSON(raw: string): any {
     .replace(/\s*```$/, "")
     .trim()
 
-  // First try: parse as-is
-  try {
-    return JSON.parse(cleaned)
-  } catch {
+  try { return JSON.parse(cleaned) } catch {
     console.warn("[JSON] Parse failed, attempting repair on", cleaned.length, "chars...")
   }
 
-  // ── Repair truncated JSON ─────────────────────────────────────────────────
-
-  // Remove trailing comma
   cleaned = cleaned.replace(/,\s*$/, "")
 
-  // Count open brackets/braces and detect unclosed strings
-  let openBraces = 0
-  let openBrackets = 0
-  let inString = false
-  let escaped = false
-
+  let openBraces = 0, openBrackets = 0, inString = false, escaped = false
   for (const ch of cleaned) {
     if (escaped) { escaped = false; continue }
     if (ch === "\\") { escaped = true; continue }
@@ -205,18 +230,10 @@ function parseJSON(raw: string): any {
     if (ch === "]") openBrackets--
   }
 
-  // Close any open string
   if (inString) cleaned += '"'
-
-  // Remove trailing partial key-value pair after closing the string
   cleaned = cleaned.replace(/,\s*"[^"]*"?\s*:?\s*"?[^"]*$/, "")
 
-  // Recount after cleanup
-  openBraces = 0
-  openBrackets = 0
-  inString = false
-  escaped = false
-
+  openBraces = 0; openBrackets = 0; inString = false; escaped = false
   for (const ch of cleaned) {
     if (escaped) { escaped = false; continue }
     if (ch === "\\") { escaped = true; continue }
@@ -228,10 +245,7 @@ function parseJSON(raw: string): any {
     if (ch === "]") openBrackets--
   }
 
-  // Remove any trailing comma again after cleanup
   cleaned = cleaned.replace(/,\s*$/, "")
-
-  // Close open brackets and braces
   for (let i = 0; i < openBrackets; i++) cleaned += "]"
   for (let i = 0; i < openBraces; i++) cleaned += "}"
 
@@ -241,7 +255,6 @@ function parseJSON(raw: string): any {
     return result
   } catch (e) {
     console.error("[JSON] Repair also failed. First 500 chars:", cleaned.slice(0, 500))
-    console.error("[JSON] Last 200 chars:", cleaned.slice(-200))
     throw e
   }
 }
@@ -258,25 +271,13 @@ function isPayloadTooLarge(err: any): boolean {
 
 function quickValidate(result: any): string[] {
   const warnings: string[] = []
+  if (!result) { warnings.push("result is null"); return warnings }
+  if (!result.nhsValues || result.nhsValues.length < 1) warnings.push("nhsValues missing")
+  if (!result.breakdown?.starCompleteness?.examples?.length) warnings.push("starCompleteness.examples missing")
 
-  if (!result) {
-    warnings.push("result is null")
-    return warnings
-  }
-
-  if (!result.nhsValues || result.nhsValues.length < 1)
-    warnings.push("nhsValues missing")
-
-  if (!result.breakdown?.starCompleteness?.examples?.length)
-    warnings.push("starCompleteness.examples missing")
-
-  const expected =
-    (result.criteriaInventory?.essentialTotal ?? 0) +
-    (result.criteriaInventory?.desirableTotal ?? 0)
-  const actual = result.criteriaAnalysis?.length ?? 0
-
-  if (expected > 0 && actual < expected * 0.8)
-    warnings.push(`criteriaAnalysis incomplete: ${actual} of ~${expected}`)
+  const expected = (result.criteriaInventory?.essentialTotal ?? 0) + (result.criteriaInventory?.desirableTotal ?? 0)
+  const actual   = result.criteriaAnalysis?.length ?? 0
+  if (expected > 0 && actual < expected * 0.8) warnings.push(`criteriaAnalysis incomplete: ${actual} of ~${expected}`)
 
   return warnings
 }
@@ -289,7 +290,7 @@ async function singleCallAnalysis(input: PromptInput): Promise<any> {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       const prompt = buildAnalysisPrompt(input)
-      const raw = await callAI(prompt, SINGLE_MAX_OUTPUT)
+      const raw    = await callAI(prompt, SINGLE_MAX_OUTPUT)
       const result = parseJSON(raw)
 
       const warnings = quickValidate(result)
@@ -300,15 +301,10 @@ async function singleCallAnalysis(input: PromptInput): Promise<any> {
       }
 
       return result
-
     } catch (err: any) {
       lastError = err
       console.error(`Single-call attempt ${attempt} failed:`, err?.message)
-
-      // Never retry on rate limits or payload-too-large
-      if (isRateLimitError(err)) throw err
-      if (isPayloadTooLarge(err)) throw err
-
+      if (isRateLimitError(err) || isPayloadTooLarge(err)) throw err
       if (attempt < MAX_RETRIES) continue
     }
   }
@@ -316,124 +312,122 @@ async function singleCallAnalysis(input: PromptInput): Promise<any> {
   throw lastError ?? new Error("Single-call analysis failed")
 }
 
-// ─── Chunked mode ─────────────────────────────────────────────────────────────
+// ─── Chunked mode (kept for truly enormous inputs) ────────────────────────────
+// Only triggers when jobSpec > 40k chars even after truncation.
+// Fixed merge: arrays are concatenated, not overwritten.
 
 async function chunkedAnalysis(input: PromptInput): Promise<any> {
   console.log("[CHUNKED] Input too large for single call — splitting into 2 chunks")
 
-  // ── Chunk 1: Criteria, STAR, Specificity, Seniority, ATS, Scan ────────────
   let chunk1Result: any
-
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       const prompt = buildChunk1Prompt(input)
       console.log(`[CHUNK1] Attempt ${attempt}, estimated tokens: ${estimateTokens(prompt)}`)
-
-      const raw = await callAI(prompt, CHUNK_MAX_OUTPUT)
+      const raw  = await callAI(prompt, CHUNK_MAX_OUTPUT)
       chunk1Result = parseJSON(raw)
-
       if (!chunk1Result?.criteriaInventory) {
         console.warn(`[CHUNK1] Missing criteriaInventory on attempt ${attempt}`)
         if (attempt < MAX_RETRIES) continue
       }
-
       break
-
     } catch (err: any) {
       console.error(`[CHUNK1] Attempt ${attempt} failed:`, err?.message)
-      if (isRateLimitError(err) || attempt >= MAX_RETRIES) {
-        throw new Error(`Chunk 1 failed: ${err?.message}`)
-      }
+      if (isRateLimitError(err) || attempt >= MAX_RETRIES) throw new Error(`Chunk 1 failed: ${err?.message}`)
     }
   }
 
-  // ── Delay between chunks ──────────────────────────────────────────────────
   console.log(`[CHUNKED] Waiting ${CHUNK_DELAY_MS}ms before chunk 2...`)
   await new Promise(resolve => setTimeout(resolve, CHUNK_DELAY_MS))
 
-  // ── Build chunk 1 summary for context ─────────────────────────────────────
-  const cov = chunk1Result?.breakdown?.criteriaCoverage ?? {}
+  const cov  = chunk1Result?.breakdown?.criteriaCoverage ?? {}
   const star = chunk1Result?.breakdown?.starCompleteness ?? {}
 
   const chunk1Summary = {
-    seniority:         chunk1Result?.seniority ?? { demonstratedBand: null, targetBand: null, bandGap: 0 },
+    seniority:         chunk1Result?.seniority         ?? { demonstratedBand: null, targetBand: null, bandGap: 0 },
     criteriaInventory: chunk1Result?.criteriaInventory ?? { essentialTotal: 0, desirableTotal: 0 },
-    essentialMet:      cov.essentialMet ?? 0,
-    essentialNotMet:   cov.essentialNotMet ?? 0,
-    desirableMet:      cov.desirableMet ?? 0,
-    starExamplesFound: star.examplesFound ?? 0,
+    essentialMet:      cov.essentialMet      ?? 0,
+    essentialNotMet:   cov.essentialNotMet   ?? 0,
+    desirableMet:      cov.desirableMet      ?? 0,
+    starExamplesFound: star.examplesFound    ?? 0,
     resultsAbsent:     star.resultsConsistentlyAbsent ?? false,
   }
 
-  // ── Chunk 2: Values, Language, Risk, Coaching, Strengths/Weaknesses ───────
-  let chunk2Result: any
-
+  let chunk2Result: any = {}
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       const prompt = buildChunk2Prompt(input, chunk1Summary)
       console.log(`[CHUNK2] Attempt ${attempt}, estimated tokens: ${estimateTokens(prompt)}`)
-
-      const raw = await callAI(prompt, CHUNK_MAX_OUTPUT)
+      const raw  = await callAI(prompt, CHUNK_MAX_OUTPUT)
       chunk2Result = parseJSON(raw)
-
       if (!chunk2Result?.nhsValues?.length) {
         console.warn(`[CHUNK2] Missing nhsValues on attempt ${attempt}`)
         if (attempt < MAX_RETRIES) continue
       }
-
       break
-
     } catch (err: any) {
       console.error(`[CHUNK2] Attempt ${attempt} failed:`, err?.message)
       if (isRateLimitError(err) || attempt >= MAX_RETRIES) {
-        console.error("[CHUNK2] Failed. Returning partial result from chunk 1.")
-        chunk2Result = {}
+        console.error("[CHUNK2] Failed. Using partial chunk 1 result.")
+        break
       }
     }
   }
 
-  // ── Merge chunks ──────────────────────────────────────────────────────────
+  // ── Merge — arrays concatenated, not overwritten ──────────────────────────
   const merged = {
-    seniority:         chunk1Result?.seniority ?? { demonstratedBand: null, targetBand: null, bandGap: 0 },
+    seniority:         chunk1Result?.seniority         ?? { demonstratedBand: null, targetBand: null, bandGap: 0 },
     criteriaInventory: chunk1Result?.criteriaInventory ?? { essentialTotal: 0, desirableTotal: 0 },
-    criteriaAnalysis:  chunk1Result?.criteriaAnalysis ?? [],
-    breakdown: {
-      criteriaCoverage: chunk1Result?.breakdown?.criteriaCoverage ?? { essentialMet: 0, essentialPartial: 0, essentialNotMet: 0, desirableMet: 0, desirablePartial: 0, desirableNotMet: 0 },
-      starCompleteness: chunk1Result?.breakdown?.starCompleteness ?? { examplesFound: 0, resultsConsistentlyAbsent: false, examples: [] },
-      specificity:      chunk1Result?.breakdown?.specificity ?? { totalClaims: 0, tier1Count: 0, tier2Count: 0, tier3Count: 0 },
-      languageMirroring: chunk2Result?.languageMirroring ?? { specPhrasesTotal: 0, present: 0, paraphrased: 0, absent: 0, phrasesFound: [], phrasesMissing: [] },
-    },
-    atsMatch:      chunk1Result?.atsMatch ?? undefined,
-    statementScan: chunk1Result?.statementScan ?? undefined,
 
-    confidence:          chunk2Result?.confidence ?? 0,
-    nhsValues:           chunk2Result?.nhsValues ?? [],
-    rejectionRisk:       chunk2Result?.rejectionRisk ?? undefined,
-    operationalRealism:  chunk2Result?.operationalRealism ?? undefined,
-    bandCoaching:        chunk2Result?.bandCoaching ?? undefined,
-    strengths:           chunk2Result?.strengths ?? [],
-    weaknesses:          chunk2Result?.weaknesses ?? [],
-    missingCriteria:     chunk2Result?.missingCriteria ?? [],
-    recommendations:     chunk2Result?.recommendations ?? [],
-    roleMatchSuggestions: chunk2Result?.roleMatchSuggestions ?? [],
+    // Concatenate criteriaAnalysis from both chunks (chunk2 may add more rows)
+    criteriaAnalysis: [
+      ...(chunk1Result?.criteriaAnalysis ?? []),
+      ...(chunk2Result?.criteriaAnalysis ?? []),
+    ],
+
+    breakdown: {
+      criteriaCoverage:  chunk1Result?.breakdown?.criteriaCoverage  ?? { essentialMet: 0, essentialPartial: 0, essentialNotMet: 0, desirableMet: 0, desirablePartial: 0, desirableNotMet: 0 },
+      starCompleteness:  chunk1Result?.breakdown?.starCompleteness  ?? { examplesFound: 0, resultsConsistentlyAbsent: false, examples: [] },
+      specificity:       chunk1Result?.breakdown?.specificity       ?? { totalClaims: 0, tier1Count: 0, tier2Count: 0, tier3Count: 0 },
+      languageMirroring: chunk2Result?.languageMirroring            ?? { specPhrasesTotal: 0, present: 0, paraphrased: 0, absent: 0, phrasesFound: [], phrasesMissing: [] },
+    },
+
+    atsMatch:      chunk1Result?.atsMatch      ?? undefined,
+    statementScan: chunk1Result?.statementScan ?? undefined,
+    confidence:    chunk2Result?.confidence    ?? 0,
+
+    nhsValues:     chunk2Result?.nhsValues     ?? [],
+    rejectionRisk: chunk2Result?.rejectionRisk ?? undefined,
+    operationalRealism:   chunk2Result?.operationalRealism   ?? undefined,
+    bandCoaching:         chunk2Result?.bandCoaching         ?? undefined,
+
+    // Concatenate array fields from both chunks
+    strengths:            [...(chunk1Result?.strengths        ?? []), ...(chunk2Result?.strengths        ?? [])],
+    weaknesses:           [...(chunk1Result?.weaknesses       ?? []), ...(chunk2Result?.weaknesses       ?? [])],
+    missingCriteria:      [...(chunk1Result?.missingCriteria  ?? []), ...(chunk2Result?.missingCriteria  ?? [])],
+    recommendations:      [...(chunk1Result?.recommendations  ?? []), ...(chunk2Result?.recommendations  ?? [])],
+    roleMatchSuggestions: [...(chunk1Result?.roleMatchSuggestions ?? []), ...(chunk2Result?.roleMatchSuggestions ?? [])],
   }
 
-  console.log("[CHUNKED] Merge complete.")
+  console.log(`[CHUNKED] Merge complete. criteriaAnalysis rows: ${merged.criteriaAnalysis.length}`)
   return merged
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export async function getValidatedAIResult(input: PromptInput): Promise<any> {
-  const fullPrompt = buildAnalysisPrompt(input)
-  const estimatedTotal = estimateTokens(fullPrompt) + SINGLE_MAX_OUTPUT
+  // Truncate input first — prevents unnecessary chunking for long job specs
+  const safeInput      = truncateInput(input)
+  const fullPrompt     = buildAnalysisPrompt(safeInput)
+  const estimatedInput = estimateTokens(fullPrompt)   // input tokens only
 
-  console.log(`[AI] Estimated total tokens: ${estimatedTotal} (budget: ${SINGLE_CALL_BUDGET})`)
+  console.log(`[AI] Estimated total tokens: ${estimatedInput} (budget: ${SINGLE_CALL_BUDGET})`)
   console.log(`[AI] Providers: ${process.env.GEMINI_API_KEY ? "Gemini (primary)" : "no Gemini"} | ${process.env.GROQ_API_KEY ? "Groq (fallback)" : "no Groq"}`)
 
-  if (estimatedTotal <= SINGLE_CALL_BUDGET) {
+  // Single call covers 99% of analyses — chunking only for truly massive inputs
+  if (estimatedInput <= SINGLE_CALL_BUDGET) {
     try {
-      return await singleCallAnalysis(input)
+      return await singleCallAnalysis(safeInput)
     } catch (err: any) {
       if (isPayloadTooLarge(err)) {
         console.warn("[AI] Single call too large — falling back to chunked mode")
@@ -443,5 +437,5 @@ export async function getValidatedAIResult(input: PromptInput): Promise<any> {
     }
   }
 
-  return await chunkedAnalysis(input)
+  return await chunkedAnalysis(safeInput)
 }

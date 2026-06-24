@@ -2,13 +2,17 @@
 // Gated to Pro/Elite (configurable via FeatureFlag 'mentorship', default minTier 'pro').
 
 import { prisma } from "@/lib/prisma"
+import { getDb }  from "@/lib/db-router"
 import { auth } from "@/auth"
 import { getUserTier } from "@/lib/billing/tier"
 import { hasFeatureAccess, getRequiredTier } from "@/lib/feature-access"
 
+export const runtime = 'nodejs'
+
 export async function GET() {
   const session = await auth()
   if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
+  const db      = await getDb(session.user.id)
 
   const tier = await getUserTier(session.user.id)
   const allowed = await hasFeatureAccess(tier, 'mentorship')
@@ -17,7 +21,7 @@ export async function GET() {
     return Response.json({ error: "Upgrade required", requiredTier: requiredTier ?? 'pro', locked: true }, { status: 403 })
   }
 
-  const threads = await prisma.mentorshipThread.findMany({
+  const threads = await db.mentorshipThread.findMany({
     where: { userId: session.user.id },
     orderBy: { lastMessageAt: 'desc' },
     select: {
@@ -32,6 +36,7 @@ export async function GET() {
 export async function POST(req: Request) {
   const session = await auth()
   if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
+  const db      = await getDb(session.user.id)
 
   const tier = await getUserTier(session.user.id)
   const allowed = await hasFeatureAccess(tier, 'mentorship')
@@ -45,7 +50,7 @@ export async function POST(req: Request) {
     return Response.json({ error: "Subject and message required" }, { status: 400 })
   }
 
-  const thread = await prisma.mentorshipThread.create({
+  const thread = await db.mentorshipThread.create({
     data: {
       userId: session.user.id,
       subject: subject.trim(),

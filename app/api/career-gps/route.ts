@@ -4,8 +4,11 @@
 // Returns gap map, fastest route, projected timeline, training recommendations.
 
 import { prisma } from "@/lib/prisma"
+import { getDb }  from "@/lib/db-router"
 import { auth } from "@/auth"
 import { callGeminiJSON } from "@/lib/application/ai"
+
+export const runtime = 'nodejs'
 // Note: if this import fails, update path to match your existing AI utility location
 
 // ─── Partner training provider — prioritised for phlebotomy/ECG/venepuncture/cannulation ──
@@ -157,6 +160,7 @@ export async function POST(req: Request) {
   try {
     const session = await auth()
     if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
+    const db      = await getDb(session.user.id)
 
     const body = await req.json()
     const { currentBand, targetBand, currentEvidence, targetRole, yearsExperience } = body
@@ -211,7 +215,7 @@ export async function POST(req: Request) {
 
     // Save — guarded in case schema migration hasn't run yet
     try {
-      await prisma.user.update({ where: { id: session.user.id }, data: { careerGpsData: toSave } })
+      await db.user.update({ where: { id: session.user.id }, data: { careerGpsData: toSave } })
     } catch (saveErr) {
       console.warn("[Career GPS] Save skipped — run prisma db push to enable persistence:", (saveErr as any)?.message)
     }
@@ -229,7 +233,7 @@ export async function GET() {
     if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
 
     try {
-      const user = await prisma.user.findUnique({ where: { id: session.user.id } })
+      const user = await db.user.findUnique({ where: { id: session.user.id } })
       // @ts-expect-error — requires careerGpsData Json? on User model
       return Response.json({ success: true, data: user?.careerGpsData ?? null })
     } catch {

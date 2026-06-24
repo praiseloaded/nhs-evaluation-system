@@ -4,8 +4,11 @@
 // 1-2 pages, Arial/Calibri body font.
 
 import { prisma } from "@/lib/prisma"
+import { getDb }  from "@/lib/db-router"
 import { auth } from "@/auth"
 import {
+
+export const runtime = 'nodejs'
   Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType,
   LevelFormat, BorderStyle, TabStopType, TabStopPosition,
 } from "docx"
@@ -53,8 +56,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const { id } = await params
     const session = await auth()
     if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
+    const db      = await getDb(session.user.id)
 
-    const profile = await prisma.cvProfile.findUnique({ where: { id } })
+    const profile = await db.cvProfile.findUnique({ where: { id } })
     if (!profile || profile.userId !== session.user.id) {
       return Response.json({ error: "Not found" }, { status: 404 })
     }

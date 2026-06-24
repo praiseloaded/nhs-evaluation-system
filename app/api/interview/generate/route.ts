@@ -1,6 +1,7 @@
 // app/api/interview/generate/route.ts
 
 import { prisma } from "@/lib/prisma"
+import { getDb }  from "@/lib/db-router"
 import { auth } from "@/auth"
 import { NHS_PANEL } from "@/lib/interview/panellists"
 
@@ -99,12 +100,12 @@ export async function POST(req: Request) {
     }
 
     const userId = session.user.id as string
-
+    const db      = await getDb(userId)
 
     // Pro-only feature
     const { getUserTier } = await import('@/lib/billing/tier')
     const tier = await getUserTier(userId)
-    if (tier !== 'pro') {
+    if (!['pro', 'elite'].includes(tier)) {
       return Response.json(
         { success: false, error: 'Interview simulator requires Pro plan', blocked: true },
         { status: 402 },
@@ -120,7 +121,7 @@ export async function POST(req: Request) {
     }
 
     // Fetch the analysis
-    const analysis = await prisma.analysis.findUnique({ where: { id: analysisId } })
+    const analysis = await db.analysis.findUnique({ where: { id: analysisId } })
 
     if (!analysis || analysis.userId !== userId) {
       return Response.json({ success: false, error: "Analysis not found" }, { status: 404 })
@@ -134,7 +135,7 @@ export async function POST(req: Request) {
     )
 
     // Create interview session
-    const interview = await prisma.interview.create({
+    const interview = await db.interview.create({
       data: {
         userId,
         analysisId,

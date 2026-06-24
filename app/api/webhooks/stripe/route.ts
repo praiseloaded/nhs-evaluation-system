@@ -2,6 +2,8 @@ import { stripe } from "@/lib/stripe"
 import { prisma } from "@/lib/prisma"
 import { NextRequest } from "next/server"
 
+export const runtime = 'nodejs'
+
 export async function POST(req: NextRequest) {
   const body = await req.text()
   const sig = req.headers.get("stripe-signature")!

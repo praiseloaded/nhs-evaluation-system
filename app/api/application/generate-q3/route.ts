@@ -6,8 +6,11 @@
 // Retry if too short. Trim if too long. Fallback if AI fails.
 
 import { prisma } from "@/lib/prisma"
+import { getDb }  from "@/lib/db-router"
 import { auth } from "@/auth"
 import { callGeminiJSON } from "@/lib/application/ai"
+
+export const runtime = 'nodejs'
 
 interface Q3Context {
   hasCareerGap: boolean
@@ -136,6 +139,7 @@ export async function POST(req: Request) {
   try {
     const session = await auth()
     if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
+    const db      = await getDb(session.user.id)
 
     const body = await req.json()
     const { applicationId, context, nation: bodyNation, wordLimit: bodyWordLimit } = body as {
@@ -145,7 +149,7 @@ export async function POST(req: Request) {
     if (!applicationId) return Response.json({ error: "applicationId required" }, { status: 400 })
     if (!context)        return Response.json({ error: "context required" }, { status: 400 })
 
-    const application = await prisma.application.findUnique({ where: { id: applicationId } })
+    const application = await db.application.findUnique({ where: { id: applicationId } })
     if (!application || application.userId !== session.user.id) {
       return Response.json({ error: "Not found" }, { status: 404 })
     }
@@ -157,7 +161,7 @@ export async function POST(req: Request) {
 
     // Nothing to declare — return "None." without calling AI
     if (!hasAnyContent(context)) {
-      await prisma.application.update({
+      await db.application.update({
         where: { id: applicationId },
         data: {
           // @ts-expect-error
@@ -216,7 +220,7 @@ Respond ONLY with JSON: {"q3":"expanded text","wordCount":0}
 
     const wordCount = q3Text.split(/\s+/).filter(Boolean).length
 
-    await prisma.application.update({
+    await db.application.update({
       where: { id: applicationId },
       data: {
         // @ts-expect-error

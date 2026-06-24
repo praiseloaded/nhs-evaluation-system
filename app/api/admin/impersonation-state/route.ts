@@ -7,6 +7,8 @@ import { prisma } from "@/lib/prisma"
 import { auth } from "@/auth"
 import { cookies } from "next/headers"
 
+export const runtime = 'nodejs'
+
 export async function GET() {
   const session = await auth()
   if (!session?.user?.id) return Response.json({ isImpersonating: false })

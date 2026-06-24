@@ -6,6 +6,8 @@
 import { prisma } from "@/lib/prisma"
 import { withAdminAuth } from "@/lib/admin-auth"
 
+export const runtime = 'nodejs'
+
 function daysAgo(n: number): Date {
   const d = new Date()
   d.setDate(d.getDate() - n)

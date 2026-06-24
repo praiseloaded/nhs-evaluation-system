@@ -4,6 +4,8 @@
 import { prisma } from "@/lib/prisma"
 import { withAdminAuth } from "@/lib/admin-auth"
 
+export const runtime = 'nodejs'
+
 export const GET = withAdminAuth(async (req: Request, admin, ctx: any) => {
   const { id } = await ctx.params
   const notes = await prisma.adminNote.findMany({

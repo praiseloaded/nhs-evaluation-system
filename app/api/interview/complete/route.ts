@@ -1,7 +1,10 @@
 // app/api/interview/complete/route.ts
 
 import { prisma } from "@/lib/prisma"
+import { getDb }  from "@/lib/db-router"
 import { auth } from "@/auth"
+
+export const runtime = 'nodejs'
 
 export async function POST(req: Request) {
   try {
@@ -11,6 +14,7 @@ export async function POST(req: Request) {
     }
 
     const userId = session.user.id as string
+    const db      = await getDb(userId)
     const body = await req.json()
     const { interviewId } = body
 
@@ -18,7 +22,7 @@ export async function POST(req: Request) {
       return Response.json({ success: false, error: "interviewId required" }, { status: 400 })
     }
 
-    const interview = await prisma.interview.findUnique({
+    const interview = await db.interview.findUnique({
       where: { id: interviewId },
       include: { answers: true },
     })
@@ -75,7 +79,7 @@ export async function POST(req: Request) {
     }
 
     // Update interview
-    await prisma.interview.update({
+    await db.interview.update({
       where: { id: interviewId },
       data: {
         status: "completed",

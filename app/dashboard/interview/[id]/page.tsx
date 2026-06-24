@@ -304,7 +304,7 @@ const [interviewStarted, setInterviewStarted] = useState(false)
 
   // ═══ LOBBY ═══
   if (phase === 'lobby') return (
-    <div className="min-h-screen bg-background"><div className="max-w-3xl mx-auto px-6 py-12">
+    <div className="min-h-screen bg-background"><div className="max-w-4xl mx-auto px-6 py-12">
       <div className="flex items-center justify-between mb-8"><Link href="/dashboard/interview" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="w-4 h-4" /> Back</Link><ThemeToggle /></div>
       <div className="text-center mb-10"><div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4"><Users className="w-7 h-7 text-primary" /></div><h1 className="text-3xl font-bold text-foreground mb-2">Mock Interview</h1><p className="text-lg text-muted-foreground">{jobTitle}</p><p className="text-sm text-muted-foreground mt-1 flex items-center justify-center gap-1.5"><Clock className="w-4 h-4" /> 15 minute time limit</p></div>
       <div className="mb-10"><h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">Your interview panel</h2>

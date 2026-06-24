@@ -1,7 +1,10 @@
 // app/api/application/dashboard/route.ts
 
 import { prisma } from "@/lib/prisma"
+import { getDb }  from "@/lib/db-router"
 import { auth } from "@/auth"
+
+export const runtime = 'nodejs'
 
 export async function GET() {
   try {
@@ -9,8 +12,9 @@ export async function GET() {
     if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
 
     const userId = session.user.id as string
+    const db      = await getDb(userId)
 
-    const applications = await prisma.application.findMany({
+    const applications = await db.application.findMany({
       where: { userId },
       orderBy: { updatedAt: "desc" },
       select: {

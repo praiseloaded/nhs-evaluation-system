@@ -5,6 +5,8 @@
 import { prisma } from "@/lib/prisma"
 import { withAdminAuth } from "@/lib/admin-auth"
 
+export const runtime = 'nodejs'
+
 export const GET = withAdminAuth(async (req: Request) => {
   const { searchParams } = new URL(req.url)
   const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10))

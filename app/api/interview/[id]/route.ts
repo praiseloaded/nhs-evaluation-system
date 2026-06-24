@@ -1,8 +1,11 @@
 // app/api/interview/[id]/route.ts
 
 import { prisma } from "@/lib/prisma"
+import { getDb }  from "@/lib/db-router"
 import { auth } from "@/auth"
 import { NextRequest } from "next/server"
+
+export const runtime = 'nodejs'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -16,8 +19,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
     }
 
     const userId = session.user.id as string
+    const db      = await getDb(userId)
 
-    const interview = await prisma.interview.findUnique({
+    const interview = await db.interview.findUnique({
       where: { id },
       include: { answers: { orderBy: { answeredAt: "asc" } } },
     })

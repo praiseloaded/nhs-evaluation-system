@@ -2,7 +2,10 @@
 // Competency Tracker
 
 import { prisma } from "@/lib/prisma"
+import { getDb }  from "@/lib/db-router"
 import { auth } from "@/auth"
+
+export const runtime = 'nodejs'
 
 // Standard NHS clinical skills shown by default
 export const DEFAULT_SKILLS = [
@@ -15,8 +18,9 @@ export const DEFAULT_SKILLS = [
 export async function GET() {
   const session = await auth()
   if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
+  const db      = await getDb(session.user.id)
 
-  const competencies = await prisma.competency.findMany({
+  const competencies = await db.competency.findMany({
     where: { userId: session.user.id },
     orderBy: { skillName: "asc" },
   })
@@ -34,12 +38,13 @@ export async function GET() {
 export async function POST(req: Request) {
   const session = await auth()
   if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
+  const db      = await getDb(session.user.id)
 
   const body = await req.json()
   const { skillName, status, evidenceId, notes, signedOffBy, signedOffDate } = body
   if (!skillName) return Response.json({ error: "skillName required" }, { status: 400 })
 
-  const competency = await prisma.competency.upsert({
+  const competency = await db.competency.upsert({
     where: { userId_skillName: { userId: session.user.id, skillName } },
     update: {
       status: status ?? "training",
@@ -63,11 +68,12 @@ export async function POST(req: Request) {
 export async function DELETE(req: Request) {
   const session = await auth()
   if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
+  const db      = await getDb(session.user.id)
 
   const { id } = await req.json()
-  const existing = await prisma.competency.findUnique({ where: { id } })
+  const existing = await db.competency.findUnique({ where: { id } })
   if (!existing || existing.userId !== session.user.id) return Response.json({ error: "Not found" }, { status: 404 })
 
-  await prisma.competency.delete({ where: { id } })
+  await db.competency.delete({ where: { id } })
   return Response.json({ success: true })
 }

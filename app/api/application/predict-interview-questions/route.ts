@@ -4,15 +4,19 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth }             from '@/auth'
 import { prisma }           from '@/lib/prisma'
 import { callGeminiJSON }   from '@/lib/application/ai'
+import { getDb }  from '@/lib/db-router'
+
+export const runtime = 'nodejs'
 
 export async function POST(req: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+    const db      = await getDb(session.user.id)
 
     const { applicationId } = await req.json()
 
-    const app = await prisma.application.findUnique({
+    const app = await db.application.findUnique({
       where:   { id: applicationId },
       include: { criteria: true },
     })
@@ -76,7 +80,7 @@ Rules:
     }
 
     // Cache on the application so repeat fetches are instant
-    await prisma.application.update({
+    await db.application.update({
       where: { id: applicationId },
       data:  { parsedSpec: { ...parsedSpec, predictedQuestions: questions, questionsGeneratedAt: new Date().toISOString() } },
     })

@@ -9,6 +9,8 @@ import { prisma } from "@/lib/prisma"
 import { withAdminAuth, logAdminAction } from "@/lib/admin-auth"
 import { FEATURE_CATALOG } from "@/lib/feature-access"
 
+export const runtime = 'nodejs'
+
 export const GET = withAdminAuth(async () => {
   const existing = await prisma.featureFlag.findMany()
   const existingKeys = new Set(existing.map(f => f.key))

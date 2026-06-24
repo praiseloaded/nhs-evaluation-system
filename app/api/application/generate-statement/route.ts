@@ -8,6 +8,7 @@
 //   If absent  → falls back to the original criterion paragraph path.
 
 import { prisma }                   from "@/lib/prisma"
+import { getDb }                    from "@/lib/db-router"
 import { auth }                     from "@/auth"
 import { callGeminiJSON }           from "@/lib/application/ai"
 import { scoreApplication }         from "@/lib/application/scoring"
@@ -225,7 +226,8 @@ export async function POST(req: Request) {
 
     if (!applicationId) return Response.json({ error: "applicationId required" }, { status: 400 })
 
-    const application = await prisma.application.findUnique({
+    const db          = await getDb(session.user.id)
+    const application = await db.application.findUnique({
       where:   { id: applicationId },
       include: { criteria: { orderBy: { order: "asc" } } },
     })
@@ -403,7 +405,7 @@ Respond ONLY with JSON: {"q1":"expanded text","wordCount":0}
 
     const liveScore = scoreApplication(criteriaInputs, q1Text, "", q1Text, parsed?.nhsValues ?? [])
 
-    await prisma.application.update({
+    await db.application.update({
       where: { id: applicationId },
       data: {
         statementQ1:   q1Text,
@@ -415,13 +417,13 @@ Respond ONLY with JSON: {"q1":"expanded text","wordCount":0}
       },
     })
 
-    await prisma.applicationDraft.create({
+    await db.applicationDraft.create({
       data: { applicationId, content: q1Text, wordCount, score: liveScore },
     })
 
     // ── Email — only when all three questions are complete ────────────────────
     // Q1 just saved above. Check if Q2 and Q3 already exist from a previous session.
-    const freshApp = await prisma.application.findUnique({
+    const freshApp = await db.application.findUnique({
       where:  { id: applicationId },
       select: {
         statementQ1: true, wordCountQ1: true,
@@ -432,7 +434,7 @@ Respond ONLY with JSON: {"q1":"expanded text","wordCount":0}
     })
 
     if (freshApp?.statementQ1 && freshApp?.statementQ2 && freshApp?.statementQ3) {
-      const userRow = await prisma.user.findUnique({
+      const userRow = await db.user.findUnique({
         where:  { id: session.user.id },
         select: { email: true, name: true },
       })

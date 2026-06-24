@@ -10,11 +10,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth }   from '@/auth'
 import { prisma } from '@/lib/prisma'
+import { getDb }  from '@/lib/db-router'
+
+export const runtime = 'nodejs'
 
 export async function POST(req: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+    const db      = await getDb(session.user.id)
 
     const {
       applicationId,
@@ -31,7 +35,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Verify ownership
-    const app = await prisma.application.findUnique({ where: { id: applicationId } })
+    const app = await db.application.findUnique({ where: { id: applicationId } })
     if (!app || app.userId !== session.user.id) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
@@ -50,7 +54,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Persist back to parsedSpec
-    await prisma.application.update({
+    await db.application.update({
       where: { id: applicationId },
       data:  {
         parsedSpec: { ...parsedSpec, competencyEvidence },
@@ -68,7 +72,7 @@ export async function POST(req: NextRequest) {
     // Also write evidence text against each Criterion in the cluster
     // so the existing scoring pipeline still has data to work with
     if (criteriaIds?.length && evidence) {
-      await prisma.criterion.updateMany({
+      await db.criterion.updateMany({
         where: {
           applicationId,
           id: { in: criteriaIds },

@@ -2,7 +2,10 @@
 // Interview Answer Vault
 
 import { prisma } from "@/lib/prisma"
+import { getDb }  from "@/lib/db-router"
 import { auth } from "@/auth"
+
+export const runtime = 'nodejs'
 
 export const COMMON_QUESTIONS = [
   { question: "Tell us about yourself and why you want this role", category: "general" },
@@ -17,8 +20,9 @@ export const COMMON_QUESTIONS = [
 export async function GET() {
   const session = await auth()
   if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
+  const db      = await getDb(session.user.id)
 
-  const entries = await prisma.interviewVaultEntry.findMany({
+  const entries = await db.interviewVaultEntry.findMany({
     where: { userId: session.user.id },
     orderBy: { updatedAt: "desc" },
   })
@@ -28,12 +32,13 @@ export async function GET() {
 export async function POST(req: Request) {
   const session = await auth()
   if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
+  const db      = await getDb(session.user.id)
 
   const body = await req.json()
   const { question, category, answer, linkedEvidenceId } = body
   if (!question || !answer) return Response.json({ error: "question and answer required" }, { status: 400 })
 
-  const entry = await prisma.interviewVaultEntry.create({
+  const entry = await db.interviewVaultEntry.create({
     data: {
       userId: session.user.id, question, category: category ?? "general", answer,
       linkedEvidenceId: linkedEvidenceId ?? null,
@@ -45,26 +50,28 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   const session = await auth()
   if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
+  const db      = await getDb(session.user.id)
 
   const body = await req.json()
   const { id, ...data } = body
   if (!id) return Response.json({ error: "id required" }, { status: 400 })
 
-  const existing = await prisma.interviewVaultEntry.findUnique({ where: { id } })
+  const existing = await db.interviewVaultEntry.findUnique({ where: { id } })
   if (!existing || existing.userId !== session.user.id) return Response.json({ error: "Not found" }, { status: 404 })
 
-  const entry = await prisma.interviewVaultEntry.update({ where: { id }, data })
+  const entry = await db.interviewVaultEntry.update({ where: { id }, data })
   return Response.json({ entry })
 }
 
 export async function DELETE(req: Request) {
   const session = await auth()
   if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
+  const db      = await getDb(session.user.id)
 
   const { id } = await req.json()
-  const existing = await prisma.interviewVaultEntry.findUnique({ where: { id } })
+  const existing = await db.interviewVaultEntry.findUnique({ where: { id } })
   if (!existing || existing.userId !== session.user.id) return Response.json({ error: "Not found" }, { status: 404 })
 
-  await prisma.interviewVaultEntry.delete({ where: { id } })
+  await db.interviewVaultEntry.delete({ where: { id } })
   return Response.json({ success: true })
 }

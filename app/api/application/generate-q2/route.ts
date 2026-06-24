@@ -6,9 +6,12 @@
 // Server-side trim enforces the hard limit if AI overshoots.
 
 import { prisma } from "@/lib/prisma"
+import { getDb }  from "@/lib/db-router"
 import { auth } from "@/auth"
 import { callGeminiJSON } from "@/lib/application/ai"
 import { resolveEmployer, NATION_CONFIGS } from "@/lib/nhs-nations"
+
+export const runtime = 'nodejs'
 
 function getQ2WordLimit(nation: string, totalLimit: number): { hard: number; target: number } {
   if (nation === "scotland" || nation === "unknown") return { hard: 500, target: 450 }
@@ -89,13 +92,14 @@ export async function POST(req: Request) {
   try {
     const session = await auth()
     if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
+    const db      = await getDb(session.user.id)
 
     const body = await req.json()
     const { applicationId, personalMotivation, valuesExample, careerGoals, nation: bodyNation, wordLimit: bodyWordLimit } = body
 
     if (!applicationId) return Response.json({ error: "applicationId required" }, { status: 400 })
 
-    const application = await prisma.application.findUnique({ where: { id: applicationId } })
+    const application = await db.application.findUnique({ where: { id: applicationId } })
     if (!application || application.userId !== session.user.id) {
       return Response.json({ error: "Not found" }, { status: 404 })
     }
@@ -160,7 +164,7 @@ Respond ONLY with JSON: {"q2":"expanded text","wordCount":0}
     const wordCount = q2Text.split(/\s+/).filter(Boolean).length
     const overLimit = wordCount > hard
 
-    await prisma.application.update({
+    await db.application.update({
       where: { id: applicationId },
       data: {
         // @ts-expect-error

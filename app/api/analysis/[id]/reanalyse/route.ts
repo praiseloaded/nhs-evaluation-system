@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
+import { getDb }  from '@/lib/db-router'
 import { getValidatedAIResult } from '@/modules/ai/retry'
 import { calculateNhsBandScore } from '@/lib/scoring/calculate-overall-score'
 import { detectEvidenceVault } from '@/lib/billing/detect-evidence-vault'
+
+export const runtime = 'nodejs'
 
 export async function POST(
   req: Request,
@@ -11,13 +14,14 @@ export async function POST(
 ) {
   const session = await auth()
   if (!session?.user?.id) {
+  const db = await getDb(session.user.id)
     return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
   }
 
   const { id } = await params
 
   // 1. Load existing record — ownership check
-  const record = await prisma.analysis.findUnique({ where: { id } })
+  const record = await db.analysis.findUnique({ where: { id } })
 
   if (!record || record.userId !== session.user.id) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -63,7 +67,7 @@ export async function POST(
   const result = { ...aiResult, scoredBreakdown, evidenceVault }
 
   // 5. Update the existing record — preserve all original fields, only update result
-  await prisma.analysis.update({
+  await db.analysis.update({
     where: { id },
     data:  { result },
   })

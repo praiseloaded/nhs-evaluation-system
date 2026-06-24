@@ -18,6 +18,8 @@ import { prisma } from "@/lib/prisma"
 import { withAdminAuth, logAdminAction } from "@/lib/admin-auth"
 import { cookies } from "next/headers"
 
+export const runtime = 'nodejs'
+
 const IMPERSONATE_COOKIE = "impersonate_uid"
 const MAX_DURATION_MS = 60 * 60 * 1000 // 1 hour hard cap, then auto-expires
 

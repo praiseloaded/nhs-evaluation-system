@@ -15,6 +15,7 @@ model User {
   password      String?
   emailVerified DateTime?
   image         String?
+  dbShard  String  @default("primary")  
 
   tier          String    @default("free")
   analysisUsed  Int       @default(0)
@@ -39,6 +40,7 @@ model User {
   stripeCustomerId     String?
   stripeSubscriptionId String?
 
+mentorshipThreads MentorshipThread[]
 
   role            String    @default("user")   // 'user' | 'admin'
   suspended       Boolean   @default(false)
@@ -523,4 +525,31 @@ model TierLimit {
   updatedAt DateTime @updatedAt
 
   @@unique([tier, key])
+}
+
+
+model MentorshipThread {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject       String
+  status        String    @default("open")
+  lastMessageAt DateTime  @default(now())
+    unreadByUser  Boolean   @default(false)   // ← add this
+  messages      MentorshipMessage[]
+  createdAt     DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model MentorshipMessage {
+  id        String   @id @default(cuid())
+  threadId  String
+  thread    MentorshipThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  fromAdmin Boolean  @default(false)
+    senderType  String   @default("user")    // ← add this ('user' | 'admin')
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([threadId])
 }

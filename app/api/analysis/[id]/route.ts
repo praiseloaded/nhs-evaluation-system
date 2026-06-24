@@ -6,6 +6,9 @@ import { getUserTier }             from '@/lib/billing/tier'
 import { sanitizeAnalysisForTier } from '@/lib/billing/sanitize-analysis'
 import { calculateNhsBandScore }   from '@/lib/scoring/calculate-overall-score'
 import { NextRequest }             from 'next/server'
+import { getDb }  from '@/lib/db-router'
+
+export const runtime = 'nodejs'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -20,9 +23,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
     }
 
     const userId = session.user.id as string
+    const db      = await getDb(userId)
 
     // ── Fetch ─────────────────────────────────────────────────────────────────
-    const record = await prisma.analysis.findUnique({ where: { id } })
+    const record = await db.analysis.findUnique({ where: { id } })
 
     if (!record) {
       return Response.json({ success: false, error: 'Not found' }, { status: 404 })

@@ -235,7 +235,7 @@ export default function HomePage() {
 
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
 
-          <div className={`max-w-2xl mb-14 transition-all duration-700 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}>
+          <div className={`max-w-4xl mb-14 transition-all duration-700 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}>
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 mb-7">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
               <span className="text-[13px] font-semibold text-blue-600 dark:text-blue-400">
@@ -341,7 +341,7 @@ export default function HomePage() {
       {/* ── Method / Five dimensions ── */}
       <section id="method" className="py-20 sm:py-32">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="max-w-2xl mb-14">
+          <div className="max-w-4xl mb-14">
             <span className="text-[13px] font-mono uppercase tracking-widest text-blue-600 dark:text-blue-400">The method</span>
             <h2 className="text-4xl sm:text-5xl font-bold text-foreground mt-3 mb-4 tracking-tight">
               Five dimensions. No guessing.
@@ -521,7 +521,7 @@ export default function HomePage() {
 
       {/* ── FAQ ── */}
       <section className="py-20 sm:py-32 bg-slate-50 dark:bg-slate-900/50">
-        <div className="mx-auto max-w-2xl px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-14">
             <span className="text-[13px] font-mono uppercase tracking-widest text-blue-600 dark:text-blue-400">Questions</span>
             <h2 className="text-4xl sm:text-5xl font-bold text-foreground mt-3 mb-4 tracking-tight">

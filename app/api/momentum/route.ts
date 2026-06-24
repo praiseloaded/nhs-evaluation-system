@@ -5,7 +5,10 @@
 // identifies trends (increasing / stable / declining), and explains why.
 
 import { prisma } from "@/lib/prisma"
+import { getDb }  from "@/lib/db-router"
 import { auth } from "@/auth"
+
+export const runtime = 'nodejs'
 
 type Outcome = 'pending' | 'shortlisted' | 'interview' | 'offer' | 'rejected' | 'withdrawn'
 
@@ -30,8 +33,9 @@ export async function GET() {
   try {
     const session = await auth()
     if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
+    const db      = await getDb(session.user.id)
 
-    const apps = await prisma.application.findMany({
+    const apps = await db.application.findMany({
       where: { userId: session.user.id },
       orderBy: { createdAt: 'desc' },
       select: {
@@ -201,12 +205,12 @@ export async function PATCH(req: Request) {
     const { id, outcome, outcomeNotes } = await req.json()
     if (!id || !outcome) return Response.json({ error: "id and outcome required" }, { status: 400 })
 
-    const app = await prisma.application.findUnique({ where: { id } })
+    const app = await db.application.findUnique({ where: { id } })
     if (!app || app.userId !== session.user.id) {
       return Response.json({ error: "Not found" }, { status: 404 })
     }
 
-    const updated = await prisma.application.update({
+    const updated = await db.application.update({
       where: { id },
       data: {
         // @ts-expect-error — new fields, requires prisma db push

@@ -4,8 +4,11 @@
 // shows which are backed by evidence vs just mentioned.
 
 import { prisma } from "@/lib/prisma"
+import { getDb }  from "@/lib/db-router"
 import { auth } from "@/auth"
 import { callGeminiJSON } from "@/lib/application/ai"
+
+export const runtime = 'nodejs'
 
 // ─── NHS Keyword Taxonomy ─────────────────────────────────────────────────────
 // Grouped by clinical domain. Each keyword has a weight (impact on shortlisting).
@@ -105,10 +108,12 @@ export async function POST(
     const { id } = await params
     const session = await auth()
 
-    if (!session?.user?.id)
-      return Response.json({ error: "Unauthorized" }, { status: 401 })
+ if (!session?.user?.id) {
+  return Response.json({ error: 'Unauthorized' }, { status: 401 })
+}
+const db = await getDb(session.user.id)
 
-    const analysis = await prisma.analysis.findUnique({
+    const analysis = await db.analysis.findUnique({
       where: { id },
     })
 
@@ -154,7 +159,7 @@ export async function POST(
     }
 
     try {
-      await prisma.analysis.update({
+      await db.analysis.update({
         where: { id },
         data: { keywordIntel: responseData },
       })
@@ -182,7 +187,7 @@ export async function GET(
     if (!session?.user?.id)
       return Response.json({ error: "Unauthorized" }, { status: 401 })
 
-    const analysis = await prisma.analysis.findUnique({
+    const analysis = await db.analysis.findUnique({
       where: { id },
     })
 

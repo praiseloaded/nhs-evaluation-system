@@ -8,6 +8,8 @@
 import { prisma } from "@/lib/prisma"
 import { withAdminAuth, logAdminAction } from "@/lib/admin-auth"
 
+export const runtime = 'nodejs'
+
 export const POST = withAdminAuth(async (req: Request, admin) => {
   const { userIds, action, value } = await req.json()
   if (!Array.isArray(userIds) || userIds.length === 0) {

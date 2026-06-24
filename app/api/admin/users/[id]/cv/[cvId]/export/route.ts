@@ -11,6 +11,8 @@
 import { prisma } from "@/lib/prisma"
 import { withAdminAuth } from "@/lib/admin-auth"
 import {
+
+export const runtime = 'nodejs'
   Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType,
   LevelFormat, BorderStyle, TabStopType, TabStopPosition,
 } from "docx"

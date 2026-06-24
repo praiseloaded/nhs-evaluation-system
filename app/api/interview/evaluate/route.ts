@@ -1,8 +1,11 @@
 // app/api/interview/evaluate/route.ts
 
 import { prisma } from "@/lib/prisma"
+import { getDb }  from "@/lib/db-router"
 import { auth } from "@/auth"
 import { getPanellistById } from "@/lib/interview/panellists"
+
+export const runtime = 'nodejs'
 
 function buildEvaluationPrompt(
   panellistName: string,
@@ -61,6 +64,7 @@ export async function POST(req: Request) {
     }
 
     const userId = session.user.id as string
+    const db      = await getDb(userId)
     const body = await req.json()
     const { interviewId, questionId, transcript } = body
 
@@ -69,7 +73,7 @@ export async function POST(req: Request) {
     }
 
     // Fetch interview
-    const interview = await prisma.interview.findUnique({ where: { id: interviewId } })
+    const interview = await db.interview.findUnique({ where: { id: interviewId } })
     if (!interview || interview.userId !== userId) {
       return Response.json({ success: false, error: "Interview not found" }, { status: 404 })
     }
@@ -142,7 +146,7 @@ export async function POST(req: Request) {
     const evaluation = JSON.parse(text)
 
     // Save the answer
-    const answer = await prisma.interviewAnswer.create({
+    const answer = await db.interviewAnswer.create({
       data: {
         interviewId,
         questionId,
@@ -154,7 +158,7 @@ export async function POST(req: Request) {
     })
 
     // Update interview status
-    await prisma.interview.update({
+    await db.interview.update({
       where: { id: interviewId },
       data: { status: "in_progress", startedAt: interview.startedAt ?? new Date() },
     })

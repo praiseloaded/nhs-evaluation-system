@@ -1,8 +1,11 @@
 // app/api/application/[id]/status/route.ts
 
 import { prisma } from "@/lib/prisma"
+import { getDb }  from "@/lib/db-router"
 import { auth } from "@/auth"
 import { NextRequest } from "next/server"
+
+export const runtime = 'nodejs'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -16,6 +19,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const { id } = await params
     const session = await auth()
     if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
+    const db      = await getDb(session.user.id)
 
     const body = await req.json()
     const { status, notes, deadlineDate, interviewDate } = body
@@ -24,7 +28,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       return Response.json({ error: `Invalid status. Allowed: ${VALID_STATUSES.join(", ")}` }, { status: 400 })
     }
 
-    const application = await prisma.application.findUnique({ where: { id } })
+    const application = await db.application.findUnique({ where: { id } })
     if (!application || application.userId !== session.user.id) {
       return Response.json({ error: "Not found" }, { status: 404 })
     }
@@ -45,7 +49,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (deadlineDate !== undefined) updateData.deadlineDate = deadlineDate ? new Date(deadlineDate) : null
     if (interviewDate !== undefined) updateData.interviewDate = interviewDate ? new Date(interviewDate) : null
 
-    const updated = await prisma.application.update({
+    const updated = await db.application.update({
       where: { id },
       data: updateData,
     })

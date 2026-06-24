@@ -178,12 +178,16 @@ function formatDate(value?: string): string {
 function LockedPill({ label, requiredTier = 'pro' }: { label: string; requiredTier?: string }) {
   const tierLabel = requiredTier === 'elite' ? 'Elite' : 'Pro'
   return (
-    <Link href="/upgrade" title={`${tierLabel} feature — upgrade to unlock ${label}`}
+    // button prevents nested <a> inside the parent row <a> — invalid HTML
+    <button
+      type="button"
+      onClick={e => { e.preventDefault(); e.stopPropagation(); window.location.href = '/upgrade' }}
+      title={`${tierLabel} feature — upgrade to unlock ${label}`}
       className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-muted/60 border border-border/60 hover:border-primary/30 transition-colors group">
       <Lock className="w-2.5 h-2.5 text-muted-foreground/40 group-hover:text-primary/50 transition-colors" />
       <span className="text-[10px] font-semibold text-muted-foreground/50">{label}</span>
       <span className="text-[9px] font-bold text-muted-foreground/30 group-hover:text-primary/40 transition-colors">{tierLabel}</span>
-    </Link>
+    </button>
   )
 }
 
@@ -588,14 +592,12 @@ export default function DashboardPage() {
     }
   }, [])
 
-  // Fetch the configured analysis limit for this user's tier.
-  // Only runs when the user can't access insights_advanced (i.e. free users).
+  // Analysis limit — set a default for free users
+  // (removed /api/tier-limit fetch — route not implemented)
+// Analysis limit — disabled until TierLimit table is configured
   useEffect(() => {
-    if (!showUpgradePrompts) return // paid users have no cap
-    fetch('/api/tier-limit?key=analysisLimit')
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.value !== undefined) setAnalysisLimit(d.value === -1 ? null : d.value) })
-      .catch(() => {})
+    if (!showUpgradePrompts) return
+    setAnalysisLimit(null) // null = no limit shown
   }, [showUpgradePrompts, userTier])
 
   useEffect(() => { load() }, [load])

@@ -6,16 +6,20 @@
 // before the user writes a new one from scratch.
 
 import { prisma } from "@/lib/prisma"
+import { getDb }  from "@/lib/db-router"
 import { auth } from "@/auth"
+
+export const runtime = 'nodejs'
 
 export async function POST(req: Request) {
   const session = await auth()
   if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
+  const db      = await getDb(session.user.id)
 
   const { criterionText } = await req.json()
   if (!criterionText) return Response.json({ error: "criterionText required" }, { status: 400 })
 
-  const entries = await prisma.evidenceEntry.findMany({ where: { userId: session.user.id } })
+  const entries = await db.evidenceEntry.findMany({ where: { userId: session.user.id } })
   if (entries.length === 0) return Response.json({ suggestions: [] })
 
   const lower = criterionText.toLowerCase()
@@ -70,13 +74,14 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   const session = await auth()
   if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
+  const db      = await getDb(session.user.id)
 
   const { id } = await req.json()
   if (!id) return Response.json({ error: "id required" }, { status: 400 })
 
-  const entry = await prisma.evidenceEntry.findUnique({ where: { id } })
+  const entry = await db.evidenceEntry.findUnique({ where: { id } })
   if (!entry || entry.userId !== session.user.id) return Response.json({ error: "Not found" }, { status: 404 })
 
-  await prisma.evidenceEntry.update({ where: { id }, data: { usageCount: { increment: 1 } } })
+  await db.evidenceEntry.update({ where: { id }, data: { usageCount: { increment: 1 } } })
   return Response.json({ success: true })
 }

@@ -1,13 +1,11 @@
 // lib/billing/sanitize-analysis.ts
 
-
-
-type Tier = 'free' | 'pro'
+type Tier = 'free' | 'pro' | 'elite'
 
 export function sanitizeAnalysisForTier(result: any, tier: Tier): any {
   if (!result) return {}
+  if (tier === 'pro' || tier === 'elite') return result
 
-  if (tier === 'pro') return result
 
   // ── Free tier ─────────────────────────────────────────────────────────────
   // Build a new object — never mutate the original (it is saved to the DB)
@@ -15,23 +13,22 @@ export function sanitizeAnalysisForTier(result: any, tier: Tier): any {
   return {
     // ── Always visible ───────────────────────────────────────────────────────
 
-    confidence:      result.confidence,
-    seniority:       result.seniority,
+    confidence:        result.confidence,
+    seniority:         result.seniority,
     criteriaInventory: result.criteriaInventory,
 
     // Statement surface scan — all flags visible free
-    statementScan:   result.statementScan,
+    statementScan: result.statementScan,
 
     // ATS keyword match — visible free
-    atsMatch:        result.atsMatch
+    atsMatch: result.atsMatch
       ? {
-          totalKeywords:  result.atsMatch.totalKeywords,
-          foundCount:     result.atsMatch.foundCount,
-          missingCount:   result.atsMatch.missingCount,
-          // Show found keywords free, missing grouped free (drives upgrade)
-          keywordsFound:  result.atsMatch.keywordsFound,
+          totalKeywords:   result.atsMatch.totalKeywords,
+          foundCount:      result.atsMatch.foundCount,
+          missingCount:    result.atsMatch.missingCount,
+          keywordsFound:   result.atsMatch.keywordsFound,
           keywordsMissing: result.atsMatch.keywordsMissing,
-          missingGrouped: result.atsMatch.missingGrouped,
+          missingGrouped:  result.atsMatch.missingGrouped,
         }
       : undefined,
 
@@ -43,24 +40,30 @@ export function sanitizeAnalysisForTier(result: any, tier: Tier): any {
       ? result.strengths.map((s: any) => ({ claim: s.claim }))
       : [],
 
+    // criteriaAnalysis — status visible free, criterion text blurred on page
+    criteriaAnalysis: Array.isArray(result.criteriaAnalysis)
+      ? result.criteriaAnalysis.map((c: any) => ({
+          criterion: c.criterion,
+          type:      c.type,
+          status:    c.status,
+          // evidence and improvement locked
+        }))
+      : [],
+
     // ── Scored breakdown — partial free ──────────────────────────────────────
-    // overallScore, criteriaCoverage, valuesAlignment visible free.
-    // starCompleteness, languageMirroring, specificity locked.
     scoredBreakdown: result.scoredBreakdown
       ? {
           overallScore:      result.scoredBreakdown.overallScore,
           criteriaCoverage:  result.scoredBreakdown.criteriaCoverage,
           valuesAlignment:   result.scoredBreakdown.valuesAlignment,
-          // Locked — return null so UI knows to render the locked bar
+          // Locked — null so UI renders locked bar
           starCompleteness:  null,
           languageMirroring: null,
           specificity:       null,
         }
       : undefined,
 
-    // Raw breakdown — criteria coverage counts visible free (needed for
-    // buildDimensionScores to render the criteria dimension card).
-    // STAR examples, language phrases, specificity tiers locked.
+    // Raw breakdown — criteria coverage counts visible free
     breakdown: result.breakdown
       ? {
           criteriaCoverage: result.breakdown.criteriaCoverage,
@@ -80,13 +83,13 @@ export function sanitizeAnalysisForTier(result: any, tier: Tier): any {
         }))
       : [],
 
-    // ── Locked for free ───────────────────────────────────────────────────────
-    // These fields are intentionally omitted — undefined in the returned object.
-    // The UI checks for their presence and renders the locked state.
+    // missingCriteria — criterion names visible free (shows what's not met)
+    missingCriteria: Array.isArray(result.missingCriteria)
+      ? result.missingCriteria
+      : [],
 
-    // criteriaAnalysis:   LOCKED
+    // ── Locked for free ───────────────────────────────────────────────────────
     // weaknesses:         LOCKED
-    // missingCriteria:    LOCKED
     // recommendations:    LOCKED
     // rejectionRisk:      LOCKED
     // operationalRealism: LOCKED

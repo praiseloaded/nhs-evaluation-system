@@ -1,8 +1,11 @@
 // app/api/stripe/webhook/route.ts
 
-import { prisma } from '@/lib/prisma'
+import { prisma }  from '@/lib/prisma'
+import { prisma2 } from '@/lib/db-router'
 import Stripe     from 'stripe'
 import { headers } from 'next/headers'
+
+export const runtime = 'nodejs'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-05-28.basil',
@@ -39,15 +42,17 @@ export async function POST(req: Request) {
         break
       }
 
-      await prisma.user.update({
-        where: { id: userId },
-        data:  {
-          tier:           'pro',
-          analysisLimit:  999,
-          stripeCustomerId:     session.customer as string ?? undefined,
-          stripeSubscriptionId: session.subscription as string ?? undefined,
-        },
-      })
+      // Update in whichever database this user belongs to
+      const updateData = {
+        tier:                 'pro' as const,
+        analysisLimit:        999,
+        stripeCustomerId:     session.customer as string ?? undefined,
+        stripeSubscriptionId: session.subscription as string ?? undefined,
+      }
+      const updatedInPrimary = await prisma.user.updateMany({ where: { id: userId }, data: updateData })
+      if (updatedInPrimary.count === 0) {
+        await prisma2.user.updateMany({ where: { id: userId }, data: updateData }).catch(() => {})
+      }
 
       console.log(`[webhook] User ${userId} upgraded to Pro`)
       break
@@ -64,10 +69,8 @@ export async function POST(req: Request) {
       const userId = sub.metadata?.userId
 
       if (userId) {
-        await prisma.user.update({
-          where: { id: userId },
-          data:  { tier: 'pro', analysisLimit: 999 },
-        })
+        const updated = await prisma.user.updateMany({ where: { id: userId }, data: { tier: 'pro', analysisLimit: 999 } })
+        if (updated.count === 0) await prisma2.user.updateMany({ where: { id: userId }, data: { tier: 'pro', analysisLimit: 999 } }).catch(() => {})
       }
       break
     }
@@ -80,16 +83,16 @@ export async function POST(req: Request) {
 
       if (!subId) break
 
-      // Find user by subscription ID
-      const user = await prisma.user.findFirst({
-        where: { stripeSubscriptionId: subId },
-      })
+      // Find user by subscription ID — check both databases
+      let user = await prisma.user.findFirst({ where: { stripeSubscriptionId: subId } })
+      let userDb = prisma
+      if (!user) {
+        user = await prisma2.user.findFirst({ where: { stripeSubscriptionId: subId } }).catch(() => null)
+        if (user) userDb = prisma2
+      }
 
       if (user) {
-        await prisma.user.update({
-          where: { id: user.id },
-          data:  { tier: 'free', analysisLimit: 1 },
-        })
+        await userDb.user.update({ where: { id: user.id }, data: { tier: 'free', analysisLimit: 1 } })
         console.log(`[webhook] User ${user.id} reverted to Free`)
       }
       break

@@ -17,6 +17,7 @@ import { notFound }     from 'next/navigation'
 import { buildDimensionScores } from '@/lib/types'
 import { auth }         from '@/auth'
 import { prisma }       from '@/lib/prisma'
+import { getDb }        from '@/lib/db-router'
 import { getUserTier }             from '@/lib/billing/tier'
 import { hasFeatureAccess }         from '@/lib/feature-access'
 import { sanitizeAnalysisForTier } from '@/lib/billing/sanitize-analysis'
@@ -46,7 +47,8 @@ function normalizeRecommendations(recs: any[]): string[] {
 
 async function getAnalysis(id: string, userId: string) {
   try {
-    const record = await prisma.analysis.findUnique({ where: { id } })
+    const db     = await getDb(userId)
+    const record = await db.analysis.findUnique({ where: { id } })
     if (!record || record.userId !== userId) return null
 
     const raw = (record.result as any) ?? {}
@@ -58,7 +60,9 @@ async function getAnalysis(id: string, userId: string) {
     }
 
     const userTier = await getUserTier(userId)
-    const tier     = ['pro','elite'].includes(userTier) ? 'pro' : 'free'
+    console.log('[getAnalysis] userTier:', userTier, 'userId:', userId)
+
+    const tier     = ['pro', 'elite'].includes(userTier) ? userTier as 'pro' | 'elite' : 'free'
     const filtered = sanitizeAnalysisForTier(raw, tier)
 
     return {
@@ -137,10 +141,34 @@ export default async function AnalysisPage({ params }: Params) {
   const dimLanguage = dimensions.find(d => d.id === 'languageMirroring')
   const dimDetail   = dimensions.find(d => d.id === 'specificity')
 
-  const essentialCriteria = result.criteriaAnalysis?.filter((c: any) => c.type === 'essential') ?? []
-  const desirableCriteria = result.criteriaAnalysis?.filter((c: any) => c.type === 'desirable') ?? []
-  const skillLines        = result.atsMatch?.keywordsFound ?? []
-  const valueLines        = result.nhsValues?.map((v: any) => v.name) ?? []
+  // Merge criteriaAnalysis + missingCriteria so all criteria show including not met
+  const criteriaRows   = result.criteriaAnalysis ?? []
+  const missingRows    = (result.missingCriteria ?? []).map((text: string) => ({
+    criterion:   text,
+    type:        'essential' as const,
+    status:      'not met'   as const,
+    evidence:    '',
+    improvement: '',
+  }))
+  const criteriaTexts  = new Set(criteriaRows.map((c: any) => c.criterion?.toLowerCase?.() ?? ''))
+  const uniqueMissing  = missingRows.filter((r: any) => !criteriaTexts.has(r.criterion?.toLowerCase?.() ?? ''))
+  const allCriteria    = [...criteriaRows, ...uniqueMissing]
+
+  const essentialCriteria = allCriteria.filter((c: any) => c.type === 'essential')
+  const desirableCriteria = allCriteria.filter((c: any) => c.type === 'desirable')
+
+  // Fallback counts when criteriaAnalysis rows are missing (chunked AI merge issue)
+  const coverage              = result.breakdown?.criteriaCoverage ?? {}
+  const essentialTotal        = (coverage.essentialMet ?? 0) + (coverage.essentialPartial ?? 0) + (coverage.essentialNotMet ?? 0)
+  const desirableTotal        = (coverage.desirableMet ?? 0) + (coverage.desirablePartial ?? 0) + (coverage.desirableNotMet ?? 0)
+  const showFallbackEssential = essentialCriteria.length === 0 && essentialTotal > 0
+  const showFallbackDesirable = desirableCriteria.length === 0 && desirableTotal > 0
+
+  // Free tier: blur criterion text — Pro/Elite see it clearly
+  const criteriaLocked = !['pro', 'elite'].includes(userTier)
+
+  const skillLines = result.atsMatch?.keywordsFound ?? []
+  const valueLines = result.nhsValues?.map((v: any) => v.name) ?? []
 
   const createdAt = new Date(analysis.createdAt).toLocaleDateString('en-GB', {
     day: 'numeric', month: 'long', year: 'numeric',
@@ -150,8 +178,6 @@ export default async function AnalysisPage({ params }: Params) {
     <div className="min-h-screen bg-background">
       <Navbar />
 
-      {/* isPro removed — ShortlistPopupTrigger's child (ShortlistScorePopup)
-          reads its own access via useFeatureAccess('shortlist_factors_pro') */}
       <ShortlistPopupTrigger
         analysisId={analysis.id}
         result={result}
@@ -170,7 +196,6 @@ export default async function AnalysisPage({ params }: Params) {
 
         <ReanalyseButton analysisId={analysis.id} />
 
-        {/* ScoreHeader reads its own feature access via hooks internally */}
         <ScoreHeader analysis={analysis} />
 
         <div className="flex flex-wrap gap-3">
@@ -188,8 +213,6 @@ export default async function AnalysisPage({ params }: Params) {
             <BookOpen className="w-4 h-4" />
             Generate Summary
           </Link>
-          {/* Report button — reads from FeatureFlag table via hasFeatureAccess.
-              Admin can change the required tier from /admin/settings without redeploy. */}
           {await hasFeatureAccess(userTier, 'full_report') ? (
             <Link
               href={`/dashboard/analysis/${analysis.id}/report`}
@@ -231,7 +254,6 @@ export default async function AnalysisPage({ params }: Params) {
           )}
         </div>
 
-        {/* AnalysisTabs and InsightsPanel read their own access via hooks */}
         <AnalysisTabs
           analysisId={analysis.id}
           jobTitle={analysis.jobTitle}
@@ -245,32 +267,74 @@ export default async function AnalysisPage({ params }: Params) {
                 <div className="px-4 py-3 border-b border-border bg-muted/40 flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-foreground/60">Essential</span>
                   <span className="text-xs text-muted-foreground">
-                    {essentialCriteria.filter((c: any) => c.status === 'met').length} of {essentialCriteria.length} met
+                    {showFallbackEssential
+                      ? `${coverage.essentialMet ?? 0} of ${essentialTotal} met`
+                      : `${essentialCriteria.filter((c: any) => c.status === 'met').length} of ${essentialCriteria.length} met`}
                   </span>
                 </div>
                 <ul className="divide-y divide-border">
                   {essentialCriteria.length > 0 ? essentialCriteria.map((c: any, i: number) => (
                     <li key={i} className="flex items-start gap-3 px-4 py-3">
                       <CriterionStatusIcon status={c.status} />
-                      <span className="text-sm text-foreground/80 leading-snug">{c.criterion}</span>
+                      <span className={`text-sm text-foreground/80 leading-snug ${criteriaLocked ? 'blur-sm select-none pointer-events-none' : ''}`}>
+                        {c.criterion}
+                      </span>
                     </li>
-                  )) : <li className="px-4 py-4 text-sm text-muted-foreground">None recorded</li>}
+                  )) : showFallbackEssential ? (
+                    <li className="px-4 py-4 space-y-1">
+                      <div className="flex gap-3 text-sm">
+                        <span className="text-emerald-600 font-semibold">{coverage.essentialMet ?? 0} met</span>
+                        <span className="text-amber-500 font-semibold">{coverage.essentialPartial ?? 0} partial</span>
+                        <span className="text-red-500 font-semibold">{coverage.essentialNotMet ?? 0} not met</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">Re-analyse to get individual criteria detail</p>
+                    </li>
+                  ) : <li className="px-4 py-4 text-sm text-muted-foreground">None recorded</li>}
+                  {criteriaLocked && essentialCriteria.length > 0 && (
+                    <li className="px-4 py-2.5 bg-muted/40 border-t border-border">
+                      <Link href="/upgrade" className="flex items-center justify-between gap-2 group">
+                        <span className="text-xs text-muted-foreground">Upgrade to Pro or Elite to read criteria</span>
+                        <span className="text-xs font-bold text-primary group-hover:underline shrink-0">Upgrade →</span>
+                      </Link>
+                    </li>
+                  )}
                 </ul>
               </div>
               <div className="rounded-xl border border-border bg-card overflow-hidden">
                 <div className="px-4 py-3 border-b border-border bg-muted/40 flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-foreground/60">Desirable</span>
                   <span className="text-xs text-muted-foreground">
-                    {desirableCriteria.filter((c: any) => c.status === 'met').length} of {desirableCriteria.length} met
+                    {showFallbackDesirable
+                      ? `${coverage.desirableMet ?? 0} of ${desirableTotal} met`
+                      : `${desirableCriteria.filter((c: any) => c.status === 'met').length} of ${desirableCriteria.length} met`}
                   </span>
                 </div>
                 <ul className="divide-y divide-border">
                   {desirableCriteria.length > 0 ? desirableCriteria.map((c: any, i: number) => (
                     <li key={i} className="flex items-start gap-3 px-4 py-3">
                       <CriterionStatusIcon status={c.status} />
-                      <span className="text-sm text-foreground/80 leading-snug">{c.criterion}</span>
+                      <span className={`text-sm text-foreground/80 leading-snug ${criteriaLocked ? 'blur-sm select-none pointer-events-none' : ''}`}>
+                        {c.criterion}
+                      </span>
                     </li>
-                  )) : <li className="px-4 py-4 text-sm text-muted-foreground">None recorded</li>}
+                  )) : showFallbackDesirable ? (
+                    <li className="px-4 py-4 space-y-1">
+                      <div className="flex gap-3 text-sm">
+                        <span className="text-emerald-600 font-semibold">{coverage.desirableMet ?? 0} met</span>
+                        <span className="text-amber-500 font-semibold">{coverage.desirablePartial ?? 0} partial</span>
+                        <span className="text-red-500 font-semibold">{coverage.desirableNotMet ?? 0} not met</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">Re-analyse to get individual criteria detail</p>
+                    </li>
+                  ) : <li className="px-4 py-4 text-sm text-muted-foreground">None recorded</li>}
+                  {criteriaLocked && desirableCriteria.length > 0 && (
+                    <li className="px-4 py-2.5 bg-muted/40 border-t border-border">
+                      <Link href="/upgrade" className="flex items-center justify-between gap-2 group">
+                        <span className="text-xs text-muted-foreground">Upgrade to Pro or Elite to read criteria</span>
+                        <span className="text-xs font-bold text-primary group-hover:underline shrink-0">Upgrade →</span>
+                      </Link>
+                    </li>
+                  )}
                 </ul>
               </div>
             </div>
@@ -317,7 +381,6 @@ export default async function AnalysisPage({ params }: Params) {
             </div>
           </Section>
 
-          {/* Advanced Dimensions — featureKey drives each gate via admin Settings */}
           <Section label="Advanced Dimensions" badge="Pro" badgeColor="purple">
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <PremiumGate label="STAR structure analysis" reason="star" featureKey="score_star">
@@ -332,7 +395,6 @@ export default async function AnalysisPage({ params }: Params) {
             </div>
           </Section>
 
-          {/* InsightsPanel reads each section's own feature access via hooks */}
           <InsightsPanel analysis={analysis} />
 
         </AnalysisTabs>

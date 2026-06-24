@@ -2,15 +2,19 @@
 // GET, PATCH (autosave), DELETE for a single CV profile
 
 import { prisma } from "@/lib/prisma"
+import { getDb }  from "@/lib/db-router"
 import { auth } from "@/auth"
+
+export const runtime = 'nodejs'
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const session = await auth()
     if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
+    const db      = await getDb(session.user.id)
 
-    const profile = await prisma.cvProfile.findUnique({ where: { id } })
+    const profile = await db.cvProfile.findUnique({ where: { id } })
     if (!profile || profile.userId !== session.user.id) {
       return Response.json({ error: "Not found" }, { status: 404 })
     }
@@ -26,7 +30,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const session = await auth()
     if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
 
-    const existing = await prisma.cvProfile.findUnique({ where: { id } })
+    const existing = await db.cvProfile.findUnique({ where: { id } })
     if (!existing || existing.userId !== session.user.id) {
       return Response.json({ error: "Not found" }, { status: 404 })
     }
@@ -42,7 +46,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       if (key in body) data[key] = body[key]
     }
 
-    const updated = await prisma.cvProfile.update({ where: { id }, data })
+    const updated = await db.cvProfile.update({ where: { id }, data })
     return Response.json({ success: true, profile: updated })
   } catch (error: any) {
     console.error("CV_UPDATE_ERROR:", error)
@@ -56,12 +60,12 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     const session = await auth()
     if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
 
-    const existing = await prisma.cvProfile.findUnique({ where: { id } })
+    const existing = await db.cvProfile.findUnique({ where: { id } })
     if (!existing || existing.userId !== session.user.id) {
       return Response.json({ error: "Not found" }, { status: 404 })
     }
 
-    await prisma.cvProfile.delete({ where: { id } })
+    await db.cvProfile.delete({ where: { id } })
     return Response.json({ success: true })
   } catch (error: any) {
     return Response.json({ error: error?.message ?? "Failed" }, { status: 500 })

@@ -1,9 +1,12 @@
 // app/api/application/[id]/shortlist-assessment/route.ts
 
 import { prisma } from "@/lib/prisma"
+import { getDb }  from "@/lib/db-router"
 import { auth } from "@/auth"
 import { NextRequest } from "next/server"
 import { buildShortlistPrompt } from "@/lib/shortlisting/prompt"
+
+export const runtime = 'nodejs'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -12,6 +15,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
     const { id } = await params
     const session = await auth()
     if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
+    const db      = await getDb(session.user.id)
 
     // Pro-only
     const { getUserTier } = await import("@/lib/billing/tier")
@@ -20,7 +24,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
       return Response.json({ error: "Shortlisting Intelligence requires Pro plan", blocked: true }, { status: 402 })
     }
 
-    const application = await prisma.application.findUnique({
+    const application = await db.application.findUnique({
       where: { id },
       include: { criteria: { orderBy: { order: "asc" } } },
     })
@@ -90,7 +94,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
     assessment.assessedAt = new Date().toISOString()
 
     // Save to application
-    await prisma.application.update({
+    await db.application.update({
       where: { id },
       data: { shortlistAssessment: assessment },
     })
@@ -109,7 +113,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     const session = await auth()
     if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
 
-    const application = await prisma.application.findUnique({
+    const application = await db.application.findUnique({
       where: { id },
       select: { userId: true, shortlistAssessment: true },
     })

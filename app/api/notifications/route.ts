@@ -3,16 +3,20 @@
 // (userId, read) that's now in the schema for the unread count query.
 
 import { prisma } from "@/lib/prisma"
+import { getDb }  from "@/lib/db-router"
 import { auth } from "@/auth"
+
+export const runtime = 'nodejs'
 
 export async function GET() {
   const session = await auth()
   if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
+  const db      = await getDb(session.user.id)
 
   const userId = session.user.id
 
   const [notifications, unreadCount] = await Promise.all([
-    prisma.notification.findMany({
+    db.notification.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
       take: 20, // reduced from 30 — fewer rows to deserialise
@@ -21,7 +25,7 @@ export async function GET() {
         linkUrl: true, read: true, createdAt: true,
       },
     }),
-    prisma.notification.count({
+    db.notification.count({
       where: { userId, read: false }, // hits the (userId, read) index
     }),
   ])

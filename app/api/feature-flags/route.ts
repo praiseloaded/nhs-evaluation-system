@@ -14,6 +14,8 @@
 import { prisma } from "@/lib/prisma"
 import { FEATURE_CATALOG } from "@/lib/feature-access"
 
+export const runtime = 'nodejs'
+
 export async function GET() {
   try {
     // Seed any missing flags from the catalog so the table is never empty.

@@ -1,11 +1,12 @@
 // app/api/analysis/[id]/evidence-gaps/route.ts
 // MOAT 4 — Missing Evidence Detector™
-// Analyses every essential and desirable criterion from the job spec,
-// shows which have zero/weak evidence, severity, and exact action to fix.
 
-import { prisma } from "@/lib/prisma"
-import { auth } from "@/auth"
+import { prisma }        from "@/lib/prisma"
+import { getDb }         from "@/lib/db-router"
+import { auth }          from "@/auth"
 import { callGeminiJSON } from "@/lib/application/ai"
+
+export const runtime = 'nodejs'
 
 function buildGapsPrompt(
   statement: string,
@@ -49,7 +50,6 @@ IMPORTANT — output format:
 - Respond ONLY with JSON, no markdown, no commentary.
 - Keep every text field SHORT: criterion max 12 words, what_was_found max 15 words,
   gap_description max 15 words, how_to_fix max 20 words, example_language max 20 words.
-- Be concise so the full response fits well within the token limit.
 
 {
   "gaps": [
@@ -79,53 +79,52 @@ export async function POST(
     const { id } = await params
 
     const session = await auth()
-    if (!session?.user?.id)
-      return Response.json({ error: "Unauthorized" }, { status: 401 })
+    if (!session?.user?.id) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-    const analysis = await prisma.analysis.findUnique({
-      where: { id },
-    })
 
+
+    const db = await getDb(session.user.id)
+
+    const analysis = await db.analysis.findUnique({ where: { id } })
     if (!analysis || analysis.userId !== session.user.id) {
-      return Response.json({ error: "Not found" }, { status: 404 })
+      return Response.json({ error: 'Not found' }, { status: 404 })
     }
 
     const result = await callGeminiJSON(
       buildGapsPrompt(
-        analysis.statement ?? "",
-        analysis.cv ?? "",
-        analysis.jobDescription ?? "",
-        analysis.essentialCriteria ?? "",
-        analysis.desirableCriteria ?? ""
+        analysis.statement         ?? '',
+        analysis.cv                ?? '',
+        analysis.jobDescription    ?? '',
+        analysis.essentialCriteria ?? '',
+        analysis.desirableCriteria ?? '',
       ),
-      8000
+      8000,
     )
 
     const gaps = Array.isArray(result?.gaps) ? result.gaps : []
 
     const responseData = {
-      success: true,
+      success:         true,
       overallGapScore: result?.overallGapScore ?? 0,
-      summary: result?.summary ?? "",
+      summary:         result?.summary         ?? '',
       gaps,
-      updatedAt: new Date().toISOString(),
+      updatedAt:       new Date().toISOString(),
     }
 
     try {
-      await prisma.analysis.update({
+      await db.analysis.update({
         where: { id },
-        data: { evidenceGaps: responseData },
+        data:  { evidenceGaps: responseData },
       })
     } catch (e) {
-      console.warn("Save skipped:", (e as any)?.message)
+      console.warn('Save skipped:', (e as any)?.message)
     }
 
     return Response.json(responseData)
   } catch (error: any) {
-    return Response.json(
-      { error: error?.message ?? "Failed" },
-      { status: 500 }
-    )
+    return Response.json({ error: error?.message ?? 'Failed' }, { status: 500 })
   }
 }
 
@@ -137,25 +136,18 @@ export async function GET(
     const { id } = await params
 
     const session = await auth()
-    if (!session?.user?.id)
-      return Response.json({ error: "Unauthorized" }, { status: 401 })
+    if (!session?.user?.id) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const db = await getDb(session.user.id)
 
-    const analysis = await prisma.analysis.findUnique({
-      where: { id },
-    })
-
+    const analysis = await db.analysis.findUnique({ where: { id } })
     if (!analysis || analysis.userId !== session.user.id) {
-      return Response.json({ error: "Not found" }, { status: 404 })
+      return Response.json({ error: 'Not found' }, { status: 404 })
     }
 
-    return Response.json({
-      success: true,
-      data: analysis.evidenceGaps ?? null,
-    })
+    return Response.json({ success: true, data: analysis.evidenceGaps ?? null })
   } catch (error: any) {
-    return Response.json(
-      { error: error?.message ?? "Failed" },
-      { status: 500 }
-    )
+    return Response.json({ error: error?.message ?? 'Failed' }, { status: 500 })
   }
 }

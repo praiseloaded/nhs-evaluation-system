@@ -9,6 +9,7 @@
 // Also accepts pre-detected nation + word limit from the launcher UI.
 
 import { prisma }                  from "@/lib/prisma"
+import { getDb }                   from "@/lib/db-router"
 import { auth }                    from "@/auth"
 import { callGeminiJSON }          from "@/lib/application/ai"
 import { buildParserPrompt, postProcessParsedSpec } from "@/lib/application/parser"
@@ -20,6 +21,7 @@ export async function POST(req: Request) {
     const session = await auth()
     if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
     const userId = session.user.id as string
+    const db     = await getDb(userId)
 
     const body = await req.json()
     const {
@@ -61,7 +63,7 @@ export async function POST(req: Request) {
     if (combinedLower.includes("notice period") || combinedLower.includes("start date")) q3Triggers.push("notice_period")
 
     // Create application
-    const application = await prisma.application.create({
+    const application = await db.application.create({
       data: {
         userId,
         jobTitle,
@@ -90,7 +92,7 @@ export async function POST(req: Request) {
       ...parsed.desirableCriteria.map((c: any, i: number) => ({ ...c, order: i + 100 })),
     ]
     for (const c of allCriteria) {
-      await prisma.applicationCriterion.create({
+      await db.applicationCriterion.create({
         data: {
           applicationId: application.id,
           criterionText: c.text,
@@ -105,7 +107,7 @@ export async function POST(req: Request) {
     // Sends as soon as the job spec is parsed and criteria are extracted.
     // The score at this point reflects criteria coverage only (no statement yet)
     // — we show it as an "analysis ready" notification so the user comes back.
-    const userRow = await prisma.user.findUnique({
+    const userRow = await db.user.findUnique({
       where:  { id: userId },
       select: { email: true, name: true },
     })

@@ -1,7 +1,10 @@
 // app/api/interview/list/route.ts
 
 import { prisma } from "@/lib/prisma"
+import { getDb }  from "@/lib/db-router"
 import { auth } from "@/auth"
+
+export const runtime = 'nodejs'
 
 export async function GET() {
   try {
@@ -11,8 +14,9 @@ export async function GET() {
     }
 
     const userId = session.user.id as string
+    const db      = await getDb(userId)
 
-    const interviews = await prisma.interview.findMany({
+    const interviews = await db.interview.findMany({
       where: { userId },
       orderBy: { createdAt: "desc" },
       take: 20,

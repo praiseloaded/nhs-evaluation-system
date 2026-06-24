@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { auth }     from '@/auth'
 import { prisma }   from '@/lib/prisma'
+import { getDb }    from '@/lib/db-router'
 import { Navbar }   from '@/components/navbar'
 import Link         from 'next/link'
 import { FeatureGate } from '@/components/feature-gate'
@@ -642,7 +643,8 @@ export default async function RecruiterSimPage({ params }: Params) {
   const session = await auth()
   if (!session?.user?.id) notFound()
 
-  const record = await prisma.analysis.findUnique({ where: { id } })
+  const db     = await getDb(session.user.id)
+  const record = await db.analysis.findUnique({ where: { id } })
   if (!record || record.userId !== session.user.id) notFound()
 
   const result = (record.result as any) ?? {}

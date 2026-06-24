@@ -1,8 +1,11 @@
 // app/api/application/[id]/cv-optimise/route.ts
 
 import { prisma } from "@/lib/prisma"
+import { getDb }  from "@/lib/db-router"
 import { auth } from "@/auth"
 import { NextRequest } from "next/server"
+
+export const runtime = 'nodejs'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -125,8 +128,9 @@ export async function POST(req: NextRequest, { params }: Params) {
     const { id } = await params
     const session = await auth()
     if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
+    const db      = await getDb(session.user.id)
 
-    const application = await prisma.application.findUnique({ where: { id } })
+    const application = await db.application.findUnique({ where: { id } })
     if (!application || application.userId !== session.user.id) {
       return Response.json({ error: "Not found" }, { status: 404 })
     }
@@ -184,7 +188,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     const cvScore = JSON.parse(text)
 
     // Save CV score and CV text
-    await prisma.application.update({
+    await db.application.update({
       where: { id },
       data: {
         cvScore,

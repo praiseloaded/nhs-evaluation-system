@@ -65,7 +65,7 @@ export default function AdminAnalysisDetailPage() {
   const atsMatch = result.atsMatch ?? {}
 
   return (
-    <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
+    <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
       <Link href={`/admin/users/${id}`} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
         <ArrowLeft className="w-3.5 h-3.5" /> Back to user
       </Link>

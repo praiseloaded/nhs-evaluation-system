@@ -3,14 +3,18 @@
 // Includes statementQ1/Q2 so the list view can show "Statement ready" vs "In progress"
 
 import { prisma } from "@/lib/prisma"
+import { getDb }  from "@/lib/db-router"
 import { auth } from "@/auth"
+
+export const runtime = 'nodejs'
 
 export async function GET() {
   try {
     const session = await auth()
     if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
+    const db      = await getDb(session.user.id)
 
-    const applications = await prisma.application.findMany({
+    const applications = await db.application.findMany({
       where: { userId: session.user.id },
       orderBy: { updatedAt: "desc" },
       select: {
