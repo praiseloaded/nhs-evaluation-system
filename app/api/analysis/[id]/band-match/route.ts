@@ -3,9 +3,6 @@
 import { auth }        from '@/auth'
 import { prisma }      from '@/lib/prisma'
 import { NextRequest } from 'next/server'
-import { getDb }  from '@/lib/db-router'
-
-export const runtime = 'nodejs'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -146,6 +143,17 @@ function buildPrompt(record: any, result: any): string {
   const weaknesses     = (result.weaknesses ?? []).slice(0, 5)
   const sb             = result.scoredBreakdown ?? {}
 
+  // Fallback data when criteriaAnalysis is missing (chunked AI merge issue)
+  const cov            = result.breakdown?.criteriaCoverage ?? {}
+  const missingList    = (result.missingCriteria ?? []).slice(0, 6)
+  const hasCriteria    = metCriteria.length > 0 || partialCriteria.length > 0 || notMetCriteria.length > 0
+  const coverageFallback = !hasCriteria && (cov.essentialMet !== undefined)
+    ? `Coverage counts: ${cov.essentialMet ?? 0} essential met, ${cov.essentialPartial ?? 0} partial, ${cov.essentialNotMet ?? 0} not met, ${cov.desirableMet ?? 0} desirable met`
+    : ''
+  const bandCoaching   = result.bandCoaching ?? null
+  const seniority      = result.seniority ?? null
+  const atsMatch       = result.atsMatch ?? null
+
   return `You are a senior NHS workforce development specialist and recruitment expert.
 
 Analyse this candidate's application and produce a detailed band-level match assessment across all 7 NHS bands.
@@ -156,13 +164,18 @@ Overall score: ${sb.overallScore ?? 'N/A'}%
 Criteria coverage: ${sb.criteriaCoverage ?? 'N/A'}%
 Values alignment: ${sb.valuesAlignment ?? 'N/A'}%
 
-Criteria MET (${metCriteria.length}): ${metCriteria.join(' | ') || 'None'}
-Criteria PARTIALLY MET (${partialCriteria.length}): ${partialCriteria.join(' | ') || 'None'}
-Criteria NOT MET (${notMetCriteria.length}): ${notMetCriteria.join(' | ') || 'None'}
+Criteria MET (${metCriteria.length}): ${metCriteria.join(' | ') || 'None recorded'}
+Criteria PARTIALLY MET (${partialCriteria.length}): ${partialCriteria.join(' | ') || 'None recorded'}
+Criteria NOT MET (${notMetCriteria.length}): ${notMetCriteria.join(' | ') || 'None recorded'}
+${coverageFallback ? `Coverage summary: ${coverageFallback}` : ''}
+${missingList.length > 0 ? `Missing criteria flagged: ${missingList.join(' | ')}` : ''}
+${seniority ? `Seniority: demonstrated Band ${seniority.demonstratedBand ?? 'unknown'}, target Band ${seniority.targetBand ?? 'unknown'}, gap ${seniority.bandGap ?? 0}` : ''}
+${atsMatch ? `ATS match: ${atsMatch.foundCount ?? 0}/${atsMatch.totalKeywords ?? 0} keywords found` : ''}
+${bandCoaching ? `Band coaching target: ${bandCoaching.bandLabel ?? ''} — ${bandCoaching.mostCriticalBandGap ?? ''}` : ''}
 
 NHS Values demonstrated: ${valuesShown.join(', ') || 'None identified'}
-Key strengths: ${strengthsList.join(' | ') || 'None'}
-Key weaknesses: ${weaknesses.join(' | ') || 'None'}
+Key strengths: ${strengthsList.join(' | ') || 'None identified'}
+Key weaknesses: ${weaknesses.join(' | ') || 'Use criteria coverage and missing criteria above'}
 
 Job description: ${(record.jobDescription ?? '').slice(0, 600)}
 Essential criteria: ${(record.essentialCriteria ?? '').slice(0, 400)}
@@ -197,6 +210,9 @@ Rules:
 - Max 2 developmentPlan per band (12 words each max)
 - verdict max 12 words
 - suitability: "Ready now" or "6-12 months" or "1-2 years" or "2+ years" or "Not applicable"
+- If criteria detail is sparse, use the overall score %, seniority info, and coverage counts to infer band fit
+- NEVER return "Insufficient data" — always produce a best-effort assessment from whatever data is available
+- Base band fit on job title, scores, seniority band gap, and any available criteria
 
 Return JSON object with bands array. Be concise to avoid truncation.`.trim()
 }
@@ -206,9 +222,8 @@ export async function POST(_req: NextRequest, { params }: Params) {
     const { id }  = await params
     const session = await auth()
     if (!session?.user?.id) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-    const db      = await getDb(session.user.id)
 
-    const record = await db.analysis.findUnique({ where: { id } })
+    const record = await prisma.analysis.findUnique({ where: { id } })
     if (!record || record.userId !== session.user.id) return Response.json({ error: 'Not found' }, { status: 404 })
 
     const result = (record.result as any) ?? {}
@@ -245,7 +260,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
     console.log('[band-match] First normalised band:', JSON.stringify(resultBands[0]).slice(0, 200))
 
     // Save
-    await db.analysis.update({
+    await prisma.analysis.update({
       where: { id },
       data:  { result: { ...result, bandMatch: resultBands } },
     })
