@@ -6,40 +6,41 @@ import { useSession } from "next-auth/react"
 import {
   Menu, X, LayoutDashboard, Plus, Files,
   PenLine, ListChecks, Video, Settings,
-  FolderOpen, Target, MapPin, Sparkles, ChevronLeft, ChevronRight,
-  BarChart3, FileText, MessageCircle, Lock,
+  FolderOpen, Target, MapPin, Sparkles,
+  ChevronLeft, ChevronRight, BarChart3,
+  FileText, MessageCircle, Lock, FlaskConical, Flame,
+  Globe,
 } from "lucide-react"
 import { useState, useEffect } from "react"
 import { ThemeSwitcher } from "./theme-switcher"
 import { NotificationBell } from "./notification-bell"
 
-// ── Which feature keys (matching FeatureFlag.key) each nav item is gated by.
-// Items with no featureKey are always visible (no gate).
-// Items with a featureKey show a lock icon when the user's tier doesn't meet
-// the configured minTier — they're still clickable (the page shows the upgrade
-// prompt), the lock just signals it upfront.
 const NAV_GROUPS = [
   {
     label: "Overview",
     items: [
-      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/dashboard/new-analysis", label: "New Analysis", icon: Plus },
-      { href: "/dashboard/saved-analyses", label: "Saved Analyses", icon: Files },
+      { href: "/dashboard",               label: "Dashboard",            icon: LayoutDashboard },
+      { href: "/dashboard/new-analysis",  label: "New Analysis",         icon: Plus            },
+      { href: "/dashboard/saved-analyses",label: "My Analyses",          icon: Files           },
     ],
   },
   {
     label: "Tools",
     items: [
-      { href: "/dashboard/application", label: "Statement Builder", icon: PenLine },
-      { href: "/dashboard/applications", label: "Track Applications", icon: ListChecks },
-      { href: "/dashboard/shortlist-probability", label: "Shortlist Probability™", icon: Target },
-      { href: "/dashboard/momentum", label: "Momentum Score™", icon: BarChart3 },
-      { href: "/dashboard/interview", label: "Interview Simulator", icon: Video, badge: "AI", featureKey: "interview_simulator" },
-      { href: "/dashboard/career-gps", label: "Career GPS™", icon: MapPin, featureKey: "career_gps" },
-      { href: "/dashboard/evidence-vault", label: "EvidenceVault™", icon: FolderOpen },
-      { href: "/dashboard/interview-probability", label: "Interview Probability™", icon: Target, badge: "NEW", featureKey: "interview_probability" },
-      { href: "/dashboard/cv-builder", label: "CV Builder", icon: FileText },
-      { href: "/dashboard/mentorship", label: "Mentorship", icon: MessageCircle, featureKey: "mentorship" },
+      { href: "/dashboard/application",           label: "Statement Builder",     icon: PenLine,       },
+      { href: "/dashboard/ab-test",               label: "A/B Statement Test",    icon: FlaskConical,  badge: "NEW" },
+      { href: "/dashboard/criteria-explorer",      label: "Shortlist Intelligence™", icon: Flame,         badge: "NEW" },
+      { href: "/dashboard/cos-navigator",           label: "COS Navigator™",          icon: Globe,         badge: "NEW" },
+      { href: "/dashboard/applications",          label: "Track Applications",    icon: ListChecks,    },
+      { href: "/dashboard/shortlist-probability", label: "Shortlist Probability™",icon: Target,        },
+      { href: "/dashboard/momentum",              label: "Momentum Score™",       icon: BarChart3,     },
+      { href: "/dashboard/interview",             label: "Interview Simulator",   icon: Video,         badge: "AI", featureKey: "interview_simulator"   },
+      { href: "/dashboard/career-gps",            label: "Career GPS™",           icon: MapPin,        featureKey: "career_gps"                     },
+      { href: "/dashboard/evidence-vault",        label: "EvidenceVault™",        icon: FolderOpen,    },
+      { href: "/dashboard/evidence-vault/match",  label: "Auto-Match Evidence",   icon: Sparkles,      badge: "NEW" },
+      { href: "/dashboard/interview-probability", label: "Interview Probability™",icon: Target,        featureKey: "interview_probability"          },
+      { href: "/dashboard/cv-builder",            label: "CV Builder",            icon: FileText,      },
+      { href: "/dashboard/mentorship",            label: "Mentorship",            icon: MessageCircle, featureKey: "mentorship"                     },
     ],
   },
   {
@@ -50,32 +51,24 @@ const NAV_GROUPS = [
   },
 ]
 
-// Tier rank so we can compare without hitting the DB from the client
 const TIER_RANK: Record<string, number> = { free: 0, pro: 1, elite: 2 }
-
-// The feature-flag minTier values come from the FeatureFlag table via the API.
-// We cache them here for the lifetime of the session so the sidebar doesn't
-// re-fetch on every route change.
 type FlagMap = Record<string, { minTier: string; enabled: boolean }>
 
 export function Sidebar() {
-  const pathname = usePathname()
+  const pathname  = usePathname()
   const { data: session } = useSession()
-  const userTier = (session?.user as any)?.tier ?? "free"
-  const userRank = TIER_RANK[userTier] ?? 0
+  const userTier  = (session?.user as any)?.tier ?? "free"
+  const userRank  = TIER_RANK[userTier] ?? 0
 
-  const [isOpen, setIsOpen] = useState(false)
+  const [isOpen,    setIsOpen]    = useState(false)
   const [collapsed, setCollapsed] = useState(false)
-  const [flagMap, setFlagMap] = useState<FlagMap>({})
+  const [flagMap,   setFlagMap]   = useState<FlagMap>({})
 
-  // Persist collapsed state
   useEffect(() => {
     const saved = localStorage.getItem("sidebar-collapsed")
     if (saved === "true") setCollapsed(true)
   }, [])
 
-  // Load feature flags once from the PUBLIC endpoint (no auth required).
-  // Falls back silently if the table doesn't exist yet.
   useEffect(() => {
     fetch("/api/feature-flags")
       .then(r => r.ok ? r.json() : null)
@@ -98,12 +91,11 @@ export function Sidebar() {
   const isActive = (href: string) =>
     href === "/dashboard" ? pathname === href : pathname.startsWith(href)
 
-  // Returns true if this nav item is behind a tier gate the current user doesn't meet
   const isLocked = (featureKey?: string): boolean => {
     if (!featureKey) return false
     const flag = flagMap[featureKey]
-    if (!flag) return false // not configured yet — don't lock
-    if (!flag.enabled) return true // globally disabled
+    if (!flag) return false
+    if (!flag.enabled) return true
     return userRank < (TIER_RANK[flag.minTier] ?? 0)
   }
 
@@ -112,7 +104,7 @@ export function Sidebar() {
       {/* Mobile toggle */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed md:hidden bottom-5 right-5 z-50 p-3.5 rounded-2xl bg-gradient-to-br from-[#005EB8] to-[#003D7A] text-white shadow-lg shadow-blue-900/30 active:scale-95 transition-transform"
+        className="fixed md:hidden bottom-5 right-5 z-50 p-3.5 rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-500/30 active:scale-95 transition-transform"
         aria-label="Toggle navigation"
       >
         {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -121,58 +113,49 @@ export function Sidebar() {
       {/* Overlay */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/40 md:hidden z-40 backdrop-blur-sm"
+          className="fixed inset-0 bg-black/50 md:hidden z-40 backdrop-blur-sm"
           onClick={() => setIsOpen(false)}
         />
       )}
 
       {/* Sidebar */}
-      <aside
-        className={`fixed left-0 top-0 h-screen border-r border-border bg-background transition-all duration-300 z-40 md:translate-x-0 flex flex-col ${
-          isOpen ? "translate-x-0" : "-translate-x-full"
-        } ${collapsed ? "w-[76px]" : "w-64"}`}
+      <aside className={`fixed left-0 top-0 h-screen flex flex-col z-40 transition-all duration-300 md:translate-x-0
+        bg-card border-r border-border
+        ${isOpen ? "translate-x-0" : "-translate-x-full"}
+        ${collapsed ? "w-[68px]" : "w-[228px]"}`}
       >
-        {/* Brand header */}
-        <div className={`h-16 flex items-center border-b border-border shrink-0 ${collapsed ? "justify-center px-0" : "px-4"}`}>
-          <Link
-            href="/"
-            className={`flex items-center gap-3 hover:bg-accent/40 rounded-xl transition-colors relative overflow-hidden flex-1 ${collapsed ? "justify-center p-2" : "p-1"}`}
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-[#005EB8]/[0.04] to-transparent pointer-events-none" />
-            <div className="relative h-9 w-9 rounded-xl bg-gradient-to-br from-[#005EB8] to-[#003D7A] text-white flex items-center justify-center font-bold text-[11px] tracking-wide shrink-0 shadow-sm shadow-blue-900/20">
-              NHS
-            </div>
-            {!collapsed && (
-              <div className="relative min-w-0">
-                <p className="text-sm font-bold leading-none tracking-tight">JobReady AI</p>
-                <p className="text-[10px] text-muted-foreground leading-none mt-1 flex items-center gap-1">
-                  <Sparkles className="w-2.5 h-2.5 text-[#005EB8]" /> Evaluation Engine
-                </p>
-              </div>
-            )}
-          </Link>
 
-          {/* Notification bell — only show when not collapsed */}
+        {/* ── Brand ───────────────────────────────────────────────────── */}
+        <div className={`h-[56px] flex items-center gap-3 border-b border-border shrink-0 ${collapsed ? "justify-center px-3" : "px-4"}`}>
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-blue-500 flex items-center justify-center shrink-0 shadow-sm shadow-blue-500/25">
+            <span className="text-white text-[9px] font-black tracking-tight">OJR</span>
+          </div>
           {!collapsed && (
-            <div className="shrink-0 ml-1">
-              <NotificationBell />
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] font-black text-foreground tracking-tight leading-none">OmniJobReady</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1 leading-none">
+                <Sparkles className="w-2.5 h-2.5 text-blue-500 shrink-0" />
+                <span>AI™ Platform</span>
+              </p>
             </div>
           )}
+          {!collapsed && <div className="shrink-0"><NotificationBell /></div>}
         </div>
 
-        {/* Nav groups */}
-        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5 scrollbar-thin">
+        {/* ── Nav ─────────────────────────────────────────────────────── */}
+        <nav className="flex-1 overflow-y-auto py-3 space-y-5 scrollbar-thin">
           {NAV_GROUPS.map((group) => (
-            <div key={group.label}>
+            <div key={group.label} className={collapsed ? "px-2" : "px-3"}>
               {!collapsed && (
-                <p className="text-[10px] font-semibold tracking-[0.15em] text-muted-foreground/70 uppercase px-3 mb-1.5">
+                <p className="text-[9px] font-bold tracking-[0.18em] text-muted-foreground/40 uppercase px-2 mb-1.5">
                   {group.label}
                 </p>
               )}
-              {collapsed && <div className="h-px bg-border mx-2 mb-2" />}
+              {collapsed && <div className="h-px bg-border/60 mb-2" />}
+
               <div className="space-y-0.5">
                 {group.items.map((item) => {
-                  const Icon = item.icon
+                  const Icon   = item.icon
                   const active = isActive(item.href)
                   const locked = isLocked((item as any).featureKey)
 
@@ -182,34 +165,35 @@ export function Sidebar() {
                       href={item.href}
                       onClick={() => setIsOpen(false)}
                       title={collapsed ? item.label : undefined}
-                      className={`group relative flex items-center gap-3 rounded-xl text-sm transition-all duration-150 ${
-                        collapsed ? "justify-center px-0 py-2.5" : "px-3 py-2.5"
-                      } ${
-                        active
-                          ? "bg-gradient-to-r from-[#005EB8]/10 to-[#005EB8]/[0.03] text-[#005EB8] dark:text-blue-300 font-semibold"
+                      className={`group relative flex items-center gap-2.5 rounded-lg text-[12.5px] font-medium transition-all duration-150
+                        ${collapsed ? "justify-center py-2.5 px-1" : "px-2.5 py-2"}
+                        ${active
+                          ? "bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400"
                           : locked
-                            ? "text-muted-foreground/50 hover:bg-accent/50 hover:text-muted-foreground"
-                            : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                      }`}
+                          ? "text-muted-foreground/35 hover:bg-muted/40 cursor-default"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                        }`}
                     >
-                      {/* active indicator bar */}
-                      {active && (
-                        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-full bg-[#005EB8]" />
+                      {/* Active bar */}
+                      {active && !collapsed && (
+                        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-[18px] w-[3px] rounded-r-full bg-blue-600 dark:bg-blue-400" />
                       )}
 
-                      <Icon className={`h-4 w-4 shrink-0 transition-transform ${active ? "scale-105" : "group-hover:scale-105"}`} />
+                      <Icon className={`h-[15px] w-[15px] shrink-0 transition-all
+                        ${active ? "text-blue-600 dark:text-blue-400" : ""}
+                        ${!active && !locked ? "group-hover:scale-110" : ""}
+                      `} />
 
                       {!collapsed && (
                         <>
                           <span className="flex-1 truncate">{item.label}</span>
-                          {/* Show either a lock icon OR a badge, not both */}
                           {locked ? (
-                            <Lock className="w-3 h-3 shrink-0 opacity-50" />
+                            <Lock className="w-3 h-3 shrink-0 opacity-30" />
                           ) : (item as any).badge ? (
-                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${
+                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full shrink-0 tracking-wide ${
                               (item as any).badge === "NEW"
-                                ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300"
-                                : "bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300"
+                                ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300"
+                                : "bg-violet-100 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300"
                             }`}>
                               {(item as any).badge}
                             </span>
@@ -217,16 +201,11 @@ export function Sidebar() {
                         </>
                       )}
 
-                      {/* Collapsed: badge dot or lock dot */}
-                      {collapsed && (
-                        <>
-                          {locked && (
-                            <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-muted-foreground/30" />
-                          )}
-                          {!locked && (item as any).badge && (
-                            <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                          )}
-                        </>
+                      {/* Collapsed badge dot */}
+                      {collapsed && !locked && (item as any).badge && (
+                        <span className={`absolute top-1 right-1 w-1.5 h-1.5 rounded-full ${
+                          (item as any).badge === 'NEW' ? 'bg-emerald-400' : 'bg-violet-400'
+                        }`} />
                       )}
                     </Link>
                   )
@@ -236,27 +215,51 @@ export function Sidebar() {
           ))}
         </nav>
 
-        {/* Footer */}
-        <div className={`border-t border-border shrink-0 ${collapsed ? "px-2 py-3 space-y-2" : "px-4 py-3"}`}>
-          <div className={`flex items-center ${collapsed ? "flex-col gap-2" : "justify-between"}`}>
-            {!collapsed && <span className="text-xs text-muted-foreground font-medium">Theme</span>}
-            <ThemeSwitcher />
-            {/* Collapsed: move bell to footer */}
-            {collapsed && <NotificationBell />}
-          </div>
+        {/* ── Footer ──────────────────────────────────────────────────── */}
+        <div className={`border-t border-border shrink-0 py-3 ${collapsed ? "px-2 flex flex-col items-center gap-2" : "px-3 space-y-2"}`}>
+
+          {/* Tier + theme */}
+          {!collapsed ? (
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full ${
+                  userTier === 'elite' ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800' :
+                  userTier === 'pro'   ? 'bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800' :
+                                         'bg-muted text-muted-foreground border border-border'
+                }`}>
+                  {userTier}
+                </span>
+                {userTier === 'free' && (
+                  <Link href="/upgrade" className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline font-semibold">
+                    Upgrade
+                  </Link>
+                )}
+              </div>
+              <ThemeSwitcher />
+            </div>
+          ) : (
+            <>
+              <NotificationBell />
+              <ThemeSwitcher />
+            </>
+          )}
 
           {/* Collapse toggle — desktop only */}
           <button
             onClick={toggleCollapsed}
-            className={`hidden md:flex items-center gap-2 w-full rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors mt-2 px-2 py-2 ${collapsed ? "justify-center" : "justify-start"}`}
+            className={`hidden md:flex items-center w-full rounded-lg text-[11px] text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors px-2 py-1.5 ${collapsed ? "justify-center" : "gap-2"}`}
           >
-            {collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <><ChevronLeft className="w-3.5 h-3.5" /> Collapse</>}
+            {collapsed
+              ? <ChevronRight className="w-3.5 h-3.5" />
+              : <><ChevronLeft className="w-3.5 h-3.5" /><span>Collapse</span></>
+            }
           </button>
         </div>
+
       </aside>
 
-      {/* Spacer */}
-      <div className={`hidden md:block shrink-0 transition-all duration-300 ${collapsed ? "w-[76px]" : "w-64"}`} />
+      {/* Desktop spacer */}
+      <div className={`hidden md:block shrink-0 transition-all duration-300 ${collapsed ? "w-[68px]" : "w-[228px]"}`} />
     </>
   )
 }

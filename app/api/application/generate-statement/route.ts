@@ -8,7 +8,6 @@
 //   If absent  → falls back to the original criterion paragraph path.
 
 import { prisma }                   from "@/lib/prisma"
-import { getDb }                    from "@/lib/db-router"
 import { auth }                     from "@/auth"
 import { callGeminiJSON }           from "@/lib/application/ai"
 import { scoreApplication }         from "@/lib/application/scoring"
@@ -111,14 +110,26 @@ ADDITIONAL CONTEXT:
 - Why this role: ${input.careerMotivation ?? "not specified"}
 ${input.nhsValuesText ? `\nVALUES DOC (for tone only — do NOT reproduce):\n${input.nhsValuesText.slice(0, 500)}` : ""}
 
+BANNED PHRASES — do NOT use any of these openers or fillers:
+❌ "I am eager to", "I am committed to", "I am keen to", "I look forward to"
+❌ "I hope to", "I aspire to", "I wish to", "I would like to", "I am passionate about"
+❌ "I am applying for", "I believe I am", "I feel I am", "I am a dedicated"
+Using any banned phrase will cause instant rejection — avoid them completely.
+
+STAR STRUCTURE — every competency paragraph MUST follow this pattern:
+Situation (what was happening) → Action (what YOU specifically did) → Result (measurable outcome)
+- Write in PAST TENSE about things you have ACTUALLY DONE
+- "I led...", "I identified...", "I implemented...", "I reduced...", "I supported..."
+- Results must be specific: numbers, timeframes, names — not "improved outcomes"
+
 WRITING RULES:
-1. Write ONE flowing paragraph per competency — not per criterion. This produces a human statement.
-2. Open with the applicant's strongest clinical or professional skill. NOT "I am applying for..."
-3. Each competency paragraph: specific example + outcome. Compress evidence into tight prose.
-4. Do NOT copy evidence verbatim — rewrite in first person, professional NHS tone.
-5. Developing areas: one sentence showing commitment, placed naturally at the end.
-6. Qualifications and motivation: 1–2 sentences each, woven in where natural.
-7. Closing: one forward-looking sentence.
+1. Write ONE flowing paragraph per competency in PAST TENSE — not per criterion.
+2. Open with your single strongest clinical achievement. One sentence, past tense, specific.
+3. Each paragraph: SITUATION → ACTION → RESULT compressed into 3–5 sentences.
+4. Do NOT copy evidence verbatim — rewrite tightly in first person, professional NHS tone.
+5. Developing areas: ONE sentence max. "I am currently..." is acceptable here only.
+6. Qualifications and motivation: 1–2 sentences, woven in naturally.
+7. Closing: one forward-looking sentence (only place future tense is allowed).
 8. NO bullet points, NO headers — pure flowing prose throughout.
 9. NHS values motivation belongs in Q2 NOT here.
 10. Active voice. Every sentence earns its place.
@@ -193,13 +204,25 @@ ADDITIONAL CONTEXT:
 - Why this role: ${input.careerMotivation ?? "not specified"}
 ${input.nhsValuesText ? `\nVALUES DOC (tone only):\n${input.nhsValuesText.slice(0, 500)}` : ""}
 
+BANNED PHRASES — NEVER use these in any sentence:
+❌ "I am eager to", "I am committed to", "I am keen to", "I look forward to"
+❌ "I hope to", "I aspire to", "I wish to", "I am passionate about", "I am applying for"
+❌ "I am dedicated to developing", "I am excited to", "I am motivated to"
+These signal zero evidence and cause automatic rejection.
+
+STAR REQUIREMENT — every criterion paragraph must follow Situation → Action → Result:
+- Write in PAST TENSE: "I delivered...", "I identified...", "I led...", "I reduced..."
+- Results must be concrete: numbers, names, timeframes — NOT "improved patient outcomes"
+- If evidence is thin, write the best short STAR example possible — never write aspirational filler
+
 WRITING RULES:
-1. Open with the applicant's strongest clinical skill. NOT "I am applying for..."
-2. Each criterion: ~${wordsPerCriterion} words. One STAR sentence. Compress — do NOT copy verbatim.
-3. Knowledge: 1–2 sentences. Motivation: 1–2 sentences. Closing: 1 sentence.
-4. NHS values motivation belongs in Q2.
-5. NO bullet points, NO headers — pure prose.
-6. Active voice. Aim for ${input.targetLimit} words. STOP at ${input.hardLimit}.
+1. Open with the applicant's single strongest PAST achievement — one punchy sentence.
+2. Each criterion: ~${wordsPerCriterion} words. One compressed STAR story. Do NOT copy verbatim.
+3. Knowledge: 1–2 sentences naming specific quals/systems. Motivation: 1–2 sentences, past + future.
+4. Closing: one forward-looking sentence (only future tense allowed in the whole statement).
+5. NHS values motivation belongs in Q2 — do not include it here.
+6. NO bullet points, NO headers — pure flowing prose.
+7. Active voice throughout. Aim for ${input.targetLimit} words. STOP at ${input.hardLimit}.
 ${isScotland ? "\nJobtrain NHS Scotland Q1 — values (Q2) and personal circumstances (Q3) go in their own boxes." : ""}
 
 Respond ONLY with JSON (no markdown):
@@ -226,8 +249,7 @@ export async function POST(req: Request) {
 
     if (!applicationId) return Response.json({ error: "applicationId required" }, { status: 400 })
 
-    const db          = await getDb(session.user.id)
-    const application = await db.application.findUnique({
+    const application = await prisma.application.findUnique({
       where:   { id: applicationId },
       include: { criteria: { orderBy: { order: "asc" } } },
     })
@@ -405,7 +427,7 @@ Respond ONLY with JSON: {"q1":"expanded text","wordCount":0}
 
     const liveScore = scoreApplication(criteriaInputs, q1Text, "", q1Text, parsed?.nhsValues ?? [])
 
-    await db.application.update({
+    await prisma.application.update({
       where: { id: applicationId },
       data: {
         statementQ1:   q1Text,
@@ -417,13 +439,13 @@ Respond ONLY with JSON: {"q1":"expanded text","wordCount":0}
       },
     })
 
-    await db.applicationDraft.create({
+    await prisma.applicationDraft.create({
       data: { applicationId, content: q1Text, wordCount, score: liveScore },
     })
 
     // ── Email — only when all three questions are complete ────────────────────
     // Q1 just saved above. Check if Q2 and Q3 already exist from a previous session.
-    const freshApp = await db.application.findUnique({
+    const freshApp = await prisma.application.findUnique({
       where:  { id: applicationId },
       select: {
         statementQ1: true, wordCountQ1: true,
@@ -434,7 +456,7 @@ Respond ONLY with JSON: {"q1":"expanded text","wordCount":0}
     })
 
     if (freshApp?.statementQ1 && freshApp?.statementQ2 && freshApp?.statementQ3) {
-      const userRow = await db.user.findUnique({
+      const userRow = await prisma.user.findUnique({
         where:  { id: session.user.id },
         select: { email: true, name: true },
       })

@@ -42,11 +42,19 @@ export function NotificationBell() {
   const ref = useRef<HTMLDivElement>(null)
 
   const load = async () => {
-    const res = await fetch('/api/notifications')
-    const d = await res.json()
-    setNotifications(d.notifications ?? [])
-    setUnreadCount(d.unreadCount ?? 0)
-    setLoading(false)
+    try {
+      const res = await fetch('/api/notifications')
+      if (!res.ok) { setLoading(false); return }
+      const text = await res.text()
+      if (!text) { setLoading(false); return }
+      const d = JSON.parse(text)
+      setNotifications(d.notifications ?? [])
+      setUnreadCount(d.unreadCount ?? 0)
+    } catch {
+      // silently fail — bell shows empty rather than crashing
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -64,13 +72,13 @@ export function NotificationBell() {
   }, [])
 
   const markRead = async (id: string) => {
-    await fetch('/api/notifications/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+    await fetch('/api/notifications', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }).catch(() => {})
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
     setUnreadCount(c => Math.max(0, c - 1))
   }
 
   const markAllRead = async () => {
-    await fetch('/api/notifications/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ all: true }) })
+    await fetch('/api/notifications', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }).catch(() => {})
     setNotifications(prev => prev.map(n => ({ ...n, read: true })))
     setUnreadCount(0)
   }

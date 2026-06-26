@@ -15,13 +15,15 @@ model User {
   password      String?
   emailVerified DateTime?
   image         String?
-  dbShard  String  @default("primary")  
+  dbShard       String    @default("primary")
 
   tier          String    @default("free")
   analysisUsed  Int       @default(0)
   analysisLimit Int       @default(1)
-  careerGpsData   Json?
+  careerGpsData Json?
 
+  abTests           ABTest[]
+  criteriaExplorers CriteriaExplorer[]
 
   evidenceEntries   EvidenceEntry[]
   certificates      Certificate[]
@@ -29,39 +31,37 @@ model User {
   interviewVault    InterviewVaultEntry[]
   referenceEntries  ReferenceEntry[]
 
-
   accounts      Account[]
   sessions      Session[]
   analyses      Analysis[]
   interviews    Interview[]
   applications  Application[]
-  cvProfiles      CvProfile[]
+  cvProfiles    CvProfile[]
+
+  mentorshipThreads MentorshipThread[]
 
   stripeCustomerId     String?
   stripeSubscriptionId String?
 
-mentorshipThreads MentorshipThread[]
-
-  role            String    @default("user")   // 'user' | 'admin'
+  role            String    @default("user")
   suspended       Boolean   @default(false)
   suspendedAt     DateTime?
   suspendedReason String?
 
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
-
 
 model AdminAuditLog {
   id          String   @id @default(cuid())
   adminId     String
-  adminEmail  String                          // denormalised so log survives admin deletion
-  action      String                          // 'tier_change' | 'suspend' | 'unsuspend' | 'delete_user' | 'impersonate' | 'refund' | 'edit_record'
-  targetType  String                          // 'user' | 'analysis' | 'application' | 'cvProfile' | 'subscription'
+  adminEmail  String
+  action      String
+  targetType  String
   targetId    String?
   targetEmail String?
-  before      Json?                           // snapshot before change
-  after       Json?                           // snapshot after change
+  before      Json?
+  after       Json?
   notes       String?  @db.Text
   ipAddress   String?
   createdAt   DateTime @default(now())
@@ -78,31 +78,30 @@ model Account {
   provider          String
   providerAccountId String
 
-  refresh_token     String?
-  access_token      String?
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String?
-  session_state     String?
+  refresh_token String?
+  access_token  String?
+  expires_at    Int?
+  token_type    String?
+  scope         String?
+  id_token      String?
+  session_state String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
 }
 
-
 model SystemEvent {
-  id         String   @id @default(cuid())
-  type       String                           // 'ai_call' | 'ai_error' | 'api_error' | 'scrape_failure' | 'payment_event'
-  provider   String?                          // 'gemini' | 'groq' | 'stripe' | 'nhs_jobs' | 'ukvi_register'
-  userId     String?
-  endpoint   String?                          // e.g. '/api/analysis', '/api/cv/[id]/export'
-  statusCode Int?
-  durationMs Int?
-  errorMessage String? @db.Text
-  metadata   Json?                            // free-form: tokens used, model name, etc.
-  createdAt  DateTime @default(now())
+  id           String   @id @default(cuid())
+  type         String
+  provider     String?
+  userId       String?
+  endpoint     String?
+  statusCode   Int?
+  durationMs   Int?
+  errorMessage String?  @db.Text
+  metadata     Json?
+  createdAt    DateTime @default(now())
 
   @@index([type])
   @@index([createdAt])
@@ -110,12 +109,12 @@ model SystemEvent {
 }
 
 model ImpersonationSession {
-  id         String    @id @default(cuid())
-  adminId    String
+  id           String    @id @default(cuid())
+  adminId      String
   targetUserId String
-  startedAt  DateTime  @default(now())
-  endedAt    DateTime?
-  reason     String?
+  startedAt    DateTime  @default(now())
+  endedAt      DateTime?
+  reason       String?
 
   @@index([adminId])
   @@index([targetUserId])
@@ -139,10 +138,10 @@ model VerificationToken {
 }
 
 model Analysis {
-  id                String   @id @default(uuid())
+  id                String @id @default(uuid())
 
   userId            String
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   jobTitle          String
   jobDescription    String
@@ -153,41 +152,41 @@ model Analysis {
   values            String
   sourceUrl         String?
 
-  cv                String?
-  statement         String?
+  cv        String?
+  statement String?
 
-  result            Json
-  keywordIntel      Json?
-  evidenceGaps      Json?
-  interviews        Interview[]
-  interviewProbability  Json?  
+  result               Json
+  keywordIntel         Json?
+  evidenceGaps         Json?
+  interviews           Interview[]
+  interviewProbability Json?
 
-  createdAt         DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([userId])
   @@index([createdAt])
 }
 
 model Interview {
-  id          String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  analysisId  String
-  analysis    Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  analysisId String
+  analysis   Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
 
-  jobTitle    String
-  band        String?
+  jobTitle String
+  band     String?
 
-  panellists  Json
-  questions   Json
+  panellists Json
+  questions  Json
 
-  status      String   @default("pending")
-  totalScore  Int?
-  feedback    Json?
+  status    String @default("pending")
+  totalScore Int?
+  feedback  Json?
 
-  answers     InterviewAnswer[]
+  answers InterviewAnswer[]
 
   startedAt   DateTime?
   completedAt DateTime?
@@ -199,70 +198,64 @@ model Interview {
 }
 
 model InterviewAnswer {
-  id            String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  interviewId   String
-  interview     Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  interviewId String
+  interview   Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
 
-  questionId    String
-  panellistId   String
+  questionId  String
+  panellistId String
 
-  audioUrl      String?
-  transcript    String?
+  audioUrl   String?
+  transcript String?
 
-  score         Int?
-  evaluation    Json?
+  score      Int?
+  evaluation Json?
 
-  answeredAt    DateTime  @default(now())
+  answeredAt DateTime @default(now())
 
   @@index([interviewId])
   @@index([questionId])
 }
 
 model Application {
-  id              String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // ── Job details ───────────────────────────────────────────────────────────
-  jobTitle        String
-  band            String?
-  employer        String?
-  sourceUrl       String?
-  jobDescription  String
-  personSpec      String?   // person spec stored separately from job description
+  jobTitle       String
+  band           String?
+  employer       String?
+  sourceUrl      String?
+  jobDescription String
+  personSpec     String?
 
-  parsedSpec      Json?     // AI-extracted criteria, nation, word limits, q3 triggers
+  parsedSpec Json?
 
-  // ── Applicant context ─────────────────────────────────────────────────────
-  cvText          String?
-  nhsValuesText   String?   // uploaded Trust/Board values document — used in Q2
+  cvText        String?
+  nhsValuesText String?
   yearsExperience Int?
   currentBand     Int?
   currentRole     String?
 
-  // ── Legacy single-statement fields (kept for backwards compatibility) ─────
-  introduction    String?
-  closing         String?
-  fullStatement   String?
-  wordCount       Int?
+  introduction  String?
+  closing       String?
+  fullStatement String?
+  wordCount     Int?
 
-  outcome         String?   // 'pending' | 'shortlisted' | 'interview' | 'offer' | 'rejected' | 'withdrawn'
-  outcomeDate     DateTime?
-  outcomeNotes    String?   @db.Text
+  outcome      String?
+  outcomeDate  DateTime?
+  outcomeNotes String?  @db.Text
 
-  // ── Three-question statement fields (Scotland = 3 separate boxes) ─────────
-  // For England/Wales/NI these are the three sections combined into one paste
-  statementQ1     String?   // Q1: Why are you suitable? (suitability + STAR evidence)
-  statementQ2     String?   // Q2: Why do you want to work here? (values + employer-specific)
-  statementQ3     String?   // Q3: Any other relevant information? (gaps, GIS, relocation etc.)
-  wordCountQ1     Int?
-  wordCountQ2     Int?
-  wordCountQ3     Int?
-  q3Context       Json?     // stores career gap, GIS, relocation, part-time flags
+  statementQ1 String?
+  statementQ2 String?
+  statementQ3 String?
+  wordCountQ1 Int?
+  wordCountQ2 Int?
+  wordCountQ3 Int?
+  q3Context   Json?
 
-  // ── Tracker fields ────────────────────────────────────────────────────────
   notes           String?
   submittedAt     DateTime?
   interviewDate   DateTime?
@@ -270,226 +263,223 @@ model Application {
   cvScore         Json?
   shortlistAssessment Json?
   liveScore       Json?
-  completeness    Float    @default(0)
-  status          String   @default("draft")
+  completeness    Float   @default(0)
+  status          String  @default("draft")
 
-  criteria        ApplicationCriterion[]
-  drafts          ApplicationDraft[]
+  criteria ApplicationCriterion[]
+  drafts   ApplicationDraft[]
 
   deadlineReminderSent Boolean @default(false)
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([status])
 }
 
 model ApplicationCriterion {
-  id              String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  applicationId   String
-  application     Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
-  criterionText   String
-  type            String
-  category        String?
-  order           Int      @default(0)
+  criterionText String
+  type          String
+  category      String?
+  order         Int    @default(0)
 
-  situation       String?
-  task            String?
-  action          String?
-  result          String?
+  situation String?
+  task      String?
+  action    String?
+  result    String?
 
-  metrics         String?
-  mdtContext      String?
-  reflection      String?
-  nhsValues       String?
+  metrics    String?
+  mdtContext String?
+  reflection String?
+  nhsValues  String?
 
   generatedParagraph String?
   paragraphScore     Int?
 
-  status          String   @default("pending")
+  status String @default("pending")
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([applicationId])
   @@index([type])
 }
 
 model ApplicationDraft {
-  id              String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  applicationId   String
-  application     Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
-  version         Int      @default(1)
-  content         String
-  wordCount       Int?
-  score           Json?
-  feedback        String?
+  version   Int    @default(1)
+  content   String
+  wordCount Int?
+  score     Json?
+  feedback  String?
 
-  createdAt       DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([applicationId])
 }
 
 model EvidenceEntry {
-  id            String   @id @default(uuid())
-  userId        String
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  title         String              // short label, e.g. "Dementia patient research visit"
-  category      String              // clinical | patient_interaction | research | audit | training | leadership | other
-  situation     String   @db.Text
-  task          String   @db.Text
-  action        String   @db.Text
-  result        String   @db.Text
+  title    String
+  category String
+  situation String @db.Text
+  task      String @db.Text
+  action    String @db.Text
+  result    String @db.Text
 
-  skillTags     String[]            // e.g. ["venepuncture", "consent", "communication"]
-  nhsValueTags  String[]            // e.g. ["Care and Compassion", "Dignity and Respect"]
+  skillTags    String[]
+  nhsValueTags String[]
 
-  dateOccurred  DateTime?
-  employer      String?             // where this happened
-  usageCount    Int      @default(0) // how many times used in statements
+  dateOccurred DateTime?
+  employer     String?
+  usageCount   Int      @default(0)
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([category])
 }
 
 model Certificate {
-  id            String   @id @default(uuid())
-  userId        String
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  name          String              // e.g. "Phlebotomy Certificate"
-  issuer        String?             // e.g. "Skills for Health"
-  certNumber    String?
-  dateIssued    DateTime?
-  expiryDate    DateTime?
-  fileUrl       String?             // uploaded document link
-  category      String   @default("training") // training | mandatory | professional_registration | qualification
+  name       String
+  issuer     String?
+  certNumber String?
+  dateIssued DateTime?
+  expiryDate DateTime?
+  fileUrl    String?
+  category   String @default("training")
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
 }
 
 model Competency {
-  id            String   @id @default(uuid())
-  userId        String
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  skillName     String              // e.g. "Venepuncture"
-  status        String   @default("training") // competent | training | not_started
-  evidenceId    String?             // optional link to EvidenceEntry
+  skillName     String
+  status        String   @default("training")
+  evidenceId    String?
   notes         String?  @db.Text
-  signedOffBy   String?             // assessor name
+  signedOffBy   String?
   signedOffDate DateTime?
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@unique([userId, skillName])
 }
 
 model InterviewVaultEntry {
-  id            String   @id @default(uuid())
-  userId        String
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  question      String   @db.Text   // e.g. "Tell us about yourself"
-  category      String   @default("general") // general | teamwork | difficult_situation | values | leadership | clinical
-  answer        String   @db.Text
-  linkedEvidenceId String?          // optional link to EvidenceEntry used for this answer
+  question         String @db.Text
+  category         String @default("general")
+  answer           String @db.Text
+  linkedEvidenceId String?
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
 }
 
 model ReferenceEntry {
-  id              String   @id @default(uuid())
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  employer        String
-  jobTitle        String
-  startDate       DateTime?
-  endDate         DateTime?         // null = current role
+  employer         String
+  jobTitle         String
+  startDate        DateTime?
+  endDate          DateTime?
   responsibilities String  @db.Text
-  achievements    String?  @db.Text
+  achievements     String? @db.Text
 
-  refereeName     String?
-  refereeRole     String?
-  refereeEmail    String?
-  refereePhone    String?
+  refereeName  String?
+  refereeRole  String?
+  refereeEmail String?
+  refereePhone String?
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
 }
 
-
 model CvProfile {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  title       String   @default("My CV")        // user-facing label, e.g. "Nursing CV"
-  template    String   @default("clinical")      // 'clinical' | 'nonClinical' | 'newToNhs'
+  title    String @default("My CV")
+  template String @default("clinical")
 
-  // Personal details
-  fullName    String?
-  email       String?
-  phone       String?
-  location    String?
-  professionalRegistration String?  // e.g. NMC PIN, HCPC number — shown if present
+  fullName                 String?
+  email                    String?
+  phone                    String?
+  location                 String?
+  professionalRegistration String?
 
-  // Sections stored as JSON — flexible, ordered arrays
   personalStatement String?  @db.Text
-  workExperience    Json?    // [{ jobTitle, employer, location, startDate, endDate, current, bullets: string[] }]
-  education         Json?    // [{ qualification, institution, location, startDate, endDate, grade }]
-  skills            Json?    // [{ category, items: string[] }] or string[]
-  certifications    Json?    // [{ name, issuer, date, expiryDate }]
+  workExperience    Json?
+  education         Json?
+  skills            Json?
+  certifications    Json?
   additionalInfo    String?  @db.Text
-  references        Json?    // [{ name, role, organisation, relationship, email, phone }] — usually "available on request"
+  references        Json?
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
-
 model AdminNote {
-  id          String   @id @default(cuid())
-  userId      String                          // the user this note is about
-  adminId     String
-  adminEmail  String
-  body        String   @db.Text
-  pinned      Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  userId     String
+  adminId    String
+  adminEmail String
+  body       String   @db.Text
+  pinned     Boolean  @default(false)
+  createdAt  DateTime @default(now())
 
   @@index([userId])
   @@index([createdAt])
 }
 
 model Notification {
-  id          String   @id @default(cuid())
-  userId      String                          // recipient
-  type        String                          // 'mentorship_reply' | 'mentorship_thread_closed' | 'account_tier_changed' | 'account_suspended' | 'account_unsuspended' | future types
-  title       String
-  body        String?
-  linkUrl     String?                         // where clicking the notification should go
-  read        Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  id      String  @id @default(cuid())
+  userId  String
+  type    String
+  title   String
+  body    String?
+  linkUrl String?
+  read    Boolean @default(false)
+
+  createdAt DateTime @default(now())
 
   @@index([userId])
   @@index([userId, read])
@@ -497,59 +487,98 @@ model Notification {
 }
 
 model NotificationPreference {
-  id        String   @id @default(cuid())
-  userId    String
-  type      String                            // matches Notification.type
-  muted     Boolean  @default(true)            // a row only exists when muted=true in practice
+  id     String  @id @default(cuid())
+  userId String
+  type   String
+  muted  Boolean @default(true)
 
   @@unique([userId, type])
   @@index([userId])
 }
 
-
 model FeatureFlag {
   id          String   @id @default(cuid())
-  key         String   @unique                // e.g. 'mentorship', 'interview_simulator', 'career_gps'
-  label       String                           // display name for the admin settings grid
+  key         String   @unique
+  label       String
   description String?
-  minTier     String   @default("free")        // 'free' | 'pro' | 'elite'
-  enabled     Boolean  @default(true)          // global kill switch, independent of tier
+  minTier     String   @default("free")
+  enabled     Boolean  @default(true)
   updatedAt   DateTime @updatedAt
 }
 
 model TierLimit {
-  id        String   @id @default(cuid())
-  tier      String                             // 'free' | 'pro' | 'elite'
-  key       String                             // e.g. 'analysisLimit', 'cvProfileLimit', 'evidenceEntryLimit'
-  value     Int                                // -1 means unlimited
+  id    String @id @default(cuid())
+  tier  String
+  key   String
+  value Int
   updatedAt DateTime @updatedAt
 
   @@unique([tier, key])
 }
 
-
 model MentorshipThread {
-  id            String    @id @default(cuid())
+  id            String   @id @default(cuid())
   userId        String
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   subject       String
-  status        String    @default("open")
-  lastMessageAt DateTime  @default(now())
-    unreadByUser  Boolean   @default(false)   // ← add this
+  status        String   @default("open")
+  lastMessageAt DateTime @default(now())
+  unreadByUser  Boolean  @default(false)
   messages      MentorshipMessage[]
-  createdAt     DateTime  @default(now())
+  createdAt     DateTime @default(now())
 
   @@index([userId])
 }
 
 model MentorshipMessage {
-  id        String   @id @default(cuid())
-  threadId  String
-  thread    MentorshipThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  fromAdmin Boolean  @default(false)
-    senderType  String   @default("user")    // ← add this ('user' | 'admin')
-  body      String   @db.Text
-  createdAt DateTime @default(now())
+  id         String           @id @default(cuid())
+  threadId   String
+  thread     MentorshipThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  fromAdmin  Boolean          @default(false)
+  senderType String           @default("user")
+  body       String           @db.Text
+  createdAt  DateTime         @default(now())
 
   @@index([threadId])
+}
+
+model ABTest {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  jobTitle   String
+  jobSpec    String @db.Text
+  statementA String @db.Text
+  statementB String @db.Text
+
+  scoreA Int     @default(0)
+  scoreB Int     @default(0)
+  winner String?
+
+  resultA    Json?
+  resultB    Json?
+  comparison Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model CriteriaExplorer {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  jobTitle String
+  jobSpec  String  @db.Text
+  cvText   String? @db.Text
+
+  result Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
 }
