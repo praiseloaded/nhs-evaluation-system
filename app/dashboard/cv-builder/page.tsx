@@ -4,11 +4,11 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
-import { CvPreviewRouter, CV_TEMPLATES, type CvData as CvDataBase } from '@/components/cv-preview-templates'
+import { CvPreviewRouter, CV_TEMPLATES, TEMPLATE_CATEGORIES, type CvData as CvDataBase } from '@/components/cv-preview-templates'
 import {
   ArrowLeft, Plus, Trash2, Download, Loader2, FileText,
   Briefcase, GraduationCap, Award, User, ListChecks, Users,
-  ChevronDown, Check, Layout, Save, Sparkles, X,
+  ChevronDown, Check, Layout, Save, Sparkles, X, Upload, FileUp, AlertCircle,
 } from 'lucide-react'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -34,6 +34,7 @@ interface CvData {
   location: string
   professionalRegistration: string
   personalStatement: string
+  profilePhoto?: string
   workExperience: WorkExperienceItem[]
   education: EducationItem[]
   skills: SkillGroup[]
@@ -62,16 +63,11 @@ const uid = () => Math.random().toString(36).slice(2, 10)
 
 const emptyCv = (): CvData => ({
   id: '', title: 'My CV', template: 'classic',
-  fullName: '', email: '', phone: '', location: '', professionalRegistration: '',
+  fullName: '', email: '', phone: '', location: '', professionalRegistration: '', profilePhoto: '',
   personalStatement: '',
   workExperience: [], education: [], skills: [], certifications: [], references: [],
   additionalInfo: '',
 })
-
-// ── A4 preview sizing ───────────────────────────────────────────────────────
-// CSS px equivalent of 210mm / 297mm at 96 CSS px per inch (1in = 25.4mm).
-const A4_WIDTH_PX = 793.7007874015748
-const A4_HEIGHT_PX = 1122.5196850393701
 
 // ── Reusable bits ─────────────────────────────────────────────────────────
 function FieldLabel({ children }: { children: React.ReactNode }) {
@@ -115,43 +111,16 @@ export default function CvBuilderPage() {
   const [saving, setSaving] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false)
+  const [templatePanelOpen, setTemplatePanelOpen] = useState(false)
+  const [templateCatFilter, setTemplateCatFilter] = useState('All')
   const [roleTemplateOpen, setRoleTemplateOpen] = useState(false)
-  const [roleFilter, setRoleFilter] = useState('')
+  const [roleFilter, setRoleFilter]   = useState('')
+  const [uploadOpen, setUploadOpen]     = useState(false)
+  const [uploadFile, setUploadFile]     = useState<File|null>(null)
+  const [uploading, setUploading]       = useState(false)
+  const [uploadError, setUploadError]   = useState<string|null>(null)
+  const [uploadDragging, setUploadDragging] = useState(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  // ── Live preview: scale A4 page to fit whatever width its container has ──
-  const previewContainerRef = useRef<HTMLDivElement>(null)
-  const previewContentRef = useRef<HTMLDivElement>(null)
-  const [previewScale, setPreviewScale] = useState(1)
-  const [previewContentHeight, setPreviewContentHeight] = useState(A4_HEIGHT_PX)
-
-  // Recompute scale whenever the container is resized (window resize, sidebar
-  // collapse, orientation change, etc.) — keeps the A4 sheet fully visible
-  // and proportionally sized instead of overflowing on small screens.
-  useEffect(() => {
-    const el = previewContainerRef.current
-    if (!el) return
-    const recalc = () => {
-      const w = el.clientWidth
-      if (w > 0) setPreviewScale(Math.min(w / A4_WIDTH_PX, 1))
-    }
-    recalc()
-    const ro = new ResizeObserver(recalc)
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
-
-  // Track the *actual* rendered height of the CV content (it can exceed one
-  // A4 page) so the scroll area always matches the real, scaled height.
-  useEffect(() => {
-    const el = previewContentRef.current
-    if (!el) return
-    const recalc = () => setPreviewContentHeight(el.scrollHeight)
-    recalc()
-    const ro = new ResizeObserver(recalc)
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [cv])
 
   // ── Load profile list ──
   useEffect(() => {
@@ -178,6 +147,7 @@ export default function CvBuilderPage() {
         fullName: p.fullName ?? '', email: p.email ?? '', phone: p.phone ?? '',
         location: p.location ?? '', professionalRegistration: p.professionalRegistration ?? '',
         personalStatement: p.personalStatement ?? '',
+        profilePhoto: p.profilePhoto ?? '',
         workExperience: (p.workExperience ?? []).map((w: any) => ({ id: w.id ?? uid(), ...w, bullets: w.bullets ?? [''] })),
         education: (p.education ?? []).map((e: any) => ({ id: e.id ?? uid(), ...e })),
         skills: Array.isArray(p.skills) ? p.skills.map((s: any) => ({ id: s.id ?? uid(), category: s.category ?? '', items: Array.isArray(s.items) ? s.items.join(', ') : (s.items ?? '') })) : [],
@@ -188,6 +158,46 @@ export default function CvBuilderPage() {
       setActiveId(p.id)
     }
     setLoading(false)
+  }
+
+  const handleUpload = async () => {
+    if (!uploadFile) return
+    setUploading(true); setUploadError(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', uploadFile)
+      if (cv.id) fd.append('saveId', cv.id)
+      const res  = await fetch('/api/cv/upload', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Upload failed')
+
+      const e = data.extracted
+      const uid2 = () => Math.random().toString(36).slice(2,8)
+      // Populate the CV with extracted data
+      const next: Partial<CvData> = {
+        fullName:                e.fullName ?? '',
+        email:                   e.email ?? '',
+        phone:                   e.phone ?? '',
+        location:                e.location ?? '',
+        professionalRegistration: e.professionalRegistration ?? '',
+        personalStatement:       e.personalStatement ?? '',
+        workExperience: (e.workExperience ?? []).map((w: any) => ({ id: uid2(), ...w, bullets: w.bullets ?? [] })),
+        education:      (e.education      ?? []).map((x: any) => ({ id: uid2(), ...x })),
+        skills:         (e.skills         ?? []).map((s: any) => ({ id: uid2(), category: s.category ?? '', items: Array.isArray(s.items) ? s.items.join(', ') : (s.items ?? '') })),
+        certifications: (e.certifications ?? []).map((c: any) => ({ id: uid2(), ...c })),
+        additionalInfo: e.additionalInfo ?? '',
+        references:     (e.references     ?? []).map((r: any) => ({ id: uid2(), ...r })),
+      }
+      // If a new profile was created, load it
+      if (data.profileId && !cv.id) {
+        await loadProfile(data.profileId)
+      } else {
+        update(next)
+      }
+      setUploadOpen(false)
+      setUploadFile(null)
+    } catch(e: any) { setUploadError(e.message) }
+    finally { setUploading(false) }
   }
 
   const applyRoleTemplate = (t: typeof NHS_ROLE_TEMPLATES[0]) => {
@@ -234,6 +244,7 @@ export default function CvBuilderPage() {
           fullName: next.fullName, email: next.email, phone: next.phone,
           location: next.location, professionalRegistration: next.professionalRegistration,
           personalStatement: next.personalStatement,
+          profilePhoto: next.profilePhoto,
           workExperience: next.workExperience.map(({ id, ...w }) => w),
           education: next.education.map(({ id, ...e }) => e),
           skills: next.skills.map(s => ({ category: s.category, items: s.items.split(',').map(x => x.trim()).filter(Boolean) })),
@@ -268,6 +279,7 @@ export default function CvBuilderPage() {
           fullName: cv.fullName, email: cv.email, phone: cv.phone,
           location: cv.location, professionalRegistration: cv.professionalRegistration,
           personalStatement: cv.personalStatement,
+          profilePhoto: cv.profilePhoto,
           workExperience: cv.workExperience.map(({ id, ...w }) => w),
           education: cv.education.map(({ id, ...e }) => e),
           skills: cv.skills.map(s => ({ category: s.category, items: s.items.split(',').map(x => x.trim()).filter(Boolean) })),
@@ -320,19 +332,22 @@ export default function CvBuilderPage() {
         <ArrowLeft className="w-3.5 h-3.5" /> Dashboard
       </Link>
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+      <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight flex items-center gap-2">
             <FileText className="w-6 h-6 text-primary" /> NHS CV Builder
           </h1>
           <p className="text-sm text-muted-foreground mt-1">NHS-acceptable format — reverse chronological, no photo, clear headings.</p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
           {profiles.length > 1 && (
-            <select value={activeId ?? ''} onChange={e => loadProfile(e.target.value)} className="text-sm rounded-lg border border-border bg-card px-3 py-2 max-w-[160px] sm:max-w-none">
+            <select value={activeId ?? ''} onChange={e => loadProfile(e.target.value)} className="text-sm rounded-lg border border-border bg-card px-3 py-2">
               {profiles.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
             </select>
           )}
+          <button onClick={() => setUploadOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm font-medium text-foreground hover:bg-accent transition-colors">
+            <FileUp className="w-3.5 h-3.5" /> Upload CV
+          </button>
           <button onClick={createNew} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm font-medium text-foreground hover:bg-accent transition-colors">
             <Plus className="w-3.5 h-3.5" /> New CV
           </button>
@@ -345,37 +360,28 @@ export default function CvBuilderPage() {
         </div>
       </div>
 
-      {/* Template picker */}
-      <div className="relative mb-6">
-        <button onClick={() => setRoleTemplateOpen(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-primary/40 bg-primary/5 text-primary text-sm font-semibold hover:bg-primary/10 transition-colors w-full justify-center mb-3">
-          <Sparkles className="w-4 h-4" /> Apply NHS Role Template
-        </button>
-        <button onClick={() => setTemplatePickerOpen(o => !o)} className="w-full flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 hover:border-primary/40 transition-colors">
-          <div className="flex items-center gap-3 min-w-0">
-            <Layout className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-            <div className="text-left min-w-0">
-              <p className="text-sm font-semibold text-foreground truncate">{TEMPLATES.find(t => t.id === cv.template)?.label} template</p>
-              <p className="text-[11px] text-muted-foreground truncate">{TEMPLATES.find(t => t.id === cv.template)?.desc}</p>
+      {/* Template picker bar */}
+      <div className="flex gap-2 mb-6">
+        <button onClick={() => setTemplatePanelOpen(true)}
+          className="flex-1 flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 hover:border-primary/40 transition-colors group">
+          {/* Mini thumbnail of current template */}
+          <div style={{ width: 36, height: 51, overflow: 'hidden', borderRadius: 3, flexShrink: 0, border: '1px solid #e2e8f0', background: '#fff' }}>
+            <div style={{ transform: 'scale(0.12)', transformOrigin: 'top left', width: '833%', height: '833%', pointerEvents: 'none' }}>
+              <CvPreviewRouter cv={{ ...cv }} />
             </div>
           </div>
-          <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform flex-shrink-0 ${templatePickerOpen ? 'rotate-180' : ''}`} />
-        </button>
-        {templatePickerOpen && (
-          <div className="absolute z-10 mt-1 w-full rounded-xl border border-border bg-card shadow-lg overflow-hidden max-h-[60vh] overflow-y-auto">
-            {TEMPLATES.map(t => (
-              <button key={t.id} onClick={() => { update({ template: t.id }); setTemplatePickerOpen(false) }}
-                className={`w-full text-left px-4 py-3 hover:bg-accent transition-colors ${t.id === cv.template ? 'bg-primary/5' : ''} flex items-start gap-3`}>
-                <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: (t as any).color ?? '#1B3A5C', marginTop: 4, flexShrink: 0 }} />
-                <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-foreground">{t.label}</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">{t.desc}</p>
-                {(t as any).best && <p className="text-[10px] font-semibold mt-0.5" style={{ color: (t as any).color ?? '#1B3A5C' }}>Best for: {(t as any).best}</p>}
-                </div>
-              </button>
-            ))}
+          <div className="flex-1 text-left min-w-0">
+            <p className="text-xs text-muted-foreground">Active template</p>
+            <p className="text-sm font-bold text-foreground truncate">{TEMPLATES.find(t => t.id === cv.template)?.label ?? 'NHS Classic'}</p>
           </div>
-        )}
+          <div className="flex items-center gap-1.5 text-xs text-primary font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
+            <Layout className="w-3.5 h-3.5" /> Change
+          </div>
+        </button>
+        <button onClick={() => setRoleTemplateOpen(true)}
+          className="flex items-center gap-2 px-4 py-3 rounded-xl border border-primary/40 bg-primary/5 text-primary text-sm font-semibold hover:bg-primary/10 transition-colors whitespace-nowrap">
+          <Sparkles className="w-4 h-4" /> NHS Role
+        </button>
       </div>
 
       <div className="grid lg:grid-cols-[1fr_480px] gap-6">
@@ -390,6 +396,29 @@ export default function CvBuilderPage() {
               <div><FieldLabel>Phone</FieldLabel><TextInput value={cv.phone} onChange={e => update({ phone: e.target.value })} placeholder="07700 900000" /></div>
               <div><FieldLabel>Location</FieldLabel><TextInput value={cv.location} onChange={e => update({ location: e.target.value })} placeholder="Glasgow, UK" /></div>
               <div className="sm:col-span-2"><FieldLabel>Professional registration (optional)</FieldLabel><TextInput value={cv.professionalRegistration} onChange={e => update({ professionalRegistration: e.target.value })} placeholder="e.g. NMC PIN: 21A1234E" /></div>
+              <div className="sm:col-span-2">
+                <FieldLabel>Profile photo (optional — only shows on photo-enabled templates)</FieldLabel>
+                <div className="flex items-center gap-4">
+                  {cv.profilePhoto && <img src={cv.profilePhoto} alt="Profile" className="w-16 h-16 rounded-full object-cover border-2 border-border shrink-0" />}
+                  <div className="flex-1">
+                    <label className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-muted text-sm font-medium text-foreground hover:bg-accent cursor-pointer transition-colors">
+                      <Upload className="w-3.5 h-3.5" />
+                      {cv.profilePhoto ? 'Change photo' : 'Upload photo'}
+                      <input type="file" accept="image/*" className="hidden" onChange={e => {
+                        const file = e.target.files?.[0]
+                        if (!file) return
+                        const reader = new FileReader()
+                        reader.onload = ev => update({ profilePhoto: ev.target?.result as string })
+                        reader.readAsDataURL(file)
+                      }} />
+                    </label>
+                    {cv.profilePhoto && (
+                      <button onClick={() => update({ profilePhoto: '' })} className="ml-2 text-xs text-red-500 hover:text-red-700 transition-colors">Remove</button>
+                    )}
+                    <p className="text-[10px] text-muted-foreground mt-1">JPG or PNG · Appears in: NHS Royal, NHS Emerald, Adobe Azure, International, Corporate, Magazine, Gradient, Canvas, Spectrum and more.</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </SectionCard>
 
@@ -487,31 +516,15 @@ export default function CvBuilderPage() {
 
         {/* ── Live preview ── */}
         <div className="order-1 lg:order-2">
-          <div className="lg:sticky lg:top-6">
+          <div className="sticky top-6">
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Live preview · A4</p>
               <span className="text-[10px] text-muted-foreground">210 × 297 mm</span>
             </div>
-            {/* Container is full-width and fluid; the A4 sheet inside is scaled
-                to fit it via transform, so it never overflows on mobile. */}
-            <div
-              ref={previewContainerRef}
-              className="rounded-xl shadow-lg border border-border bg-muted/20 overflow-y-auto overflow-x-hidden"
-              style={{ maxHeight: 'calc(100vh - 160px)' }}
-            >
-              <div style={{ width: '100%', height: previewContentHeight * previewScale }}>
-                <div
-                  ref={previewContentRef}
-                  style={{
-                    width: A4_WIDTH_PX,
-                    minHeight: A4_HEIGHT_PX,
-                    background: '#fff',
-                    margin: 0,
-                    padding: 0,
-                    transform: `scale(${previewScale})`,
-                    transformOrigin: 'top left',
-                  }}
-                >
+            {/* A4 = 210mm wide. Scroll vertically, fixed width */}
+            <div className="overflow-y-auto rounded-xl shadow-lg border border-border" style={{ maxHeight: 'calc(100vh - 160px)' }}>
+              <div style={{ width: '210mm', minHeight: '297mm', background: '#fff', margin: 0, padding: 0, overflow: 'hidden' }}>
+                <div style={{ margin: 0, padding: 0 }}>
                   <CvPreviewRouter cv={cv} />
                 </div>
               </div>
@@ -521,6 +534,171 @@ export default function CvBuilderPage() {
 
       </div>
 
+
+      {/* ── Template Picker Panel (Adobe-style) ── */}
+      {templatePanelOpen && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
+              <div>
+                <h2 className="text-base font-black text-foreground">Choose a template</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">{TEMPLATES.length} designs — click any to preview instantly</p>
+              </div>
+              <button onClick={() => setTemplatePanelOpen(false)} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
+
+            {/* Category filters */}
+            <div className="flex items-center gap-2 px-6 py-3 border-b border-border overflow-x-auto shrink-0">
+              {TEMPLATE_CATEGORIES.map(cat => (
+                <button key={cat} onClick={() => setTemplateCatFilter(cat)}
+                  className={`text-xs font-bold px-3 py-1.5 rounded-full whitespace-nowrap transition-all ${templateCatFilter === cat ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            {/* Template grid */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {TEMPLATES.filter(t => templateCatFilter === 'All' || (t as any).category === templateCatFilter || (templateCatFilter === '📷 Photo' && (t as any).hasPhoto)).map(t => {
+                  const isSelected = cv.template === t.id
+                  return (
+                    <button key={t.id} onClick={() => { update({ template: t.id }); setTemplatePanelOpen(false) }}
+                      className="group text-left">
+                      {/* Scaled preview */}
+                      <div style={{
+                        width: '100%',
+                        aspectRatio: '210/297',
+                        overflow: 'hidden',
+                        borderRadius: 8,
+                        position: 'relative',
+                        border: isSelected ? '3px solid #3b82f6' : '2px solid #e2e8f0',
+                        boxShadow: isSelected ? '0 0 0 3px rgba(59,130,246,0.25)' : '0 1px 4px rgba(0,0,0,0.06)',
+                        transition: 'all 0.15s',
+                        background: '#fff',
+                        cursor: 'pointer',
+                      }}
+                      className="hover:border-blue-400 hover:shadow-md">
+                        <div style={{ transform: 'scale(0.28)', transformOrigin: 'top left', width: '357%', height: '357%', pointerEvents: 'none' }}>
+                          <CvPreviewRouter cv={{ ...cv, template: t.id }} />
+                        </div>
+                        {isSelected && (
+                          <div className="absolute top-2 right-2 bg-blue-500 rounded-full w-5 h-5 flex items-center justify-center">
+                            <Check className="w-3 h-3 text-white" />
+                          </div>
+                        )}
+                        {(t as any).hasPhoto && !isSelected && (
+                          <div className="absolute top-2 left-2 bg-black/60 rounded-full px-1.5 py-0.5 text-[8px] text-white font-bold">📷</div>
+                        )}
+                        {/* Hover overlay */}
+                        <div className="absolute inset-0 bg-blue-500/0 group-hover:bg-blue-500/5 transition-colors rounded-md" />
+                      </div>
+                      {/* Label */}
+                      <div className="mt-2 px-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <span style={{ background: (t as any).color ?? '#1B3A5C' }} className="w-2 h-2 rounded-full shrink-0 inline-block" />
+                          <p className="text-[11px] font-bold text-foreground truncate">{t.label}</p>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{(t as any).best ?? ''}</p>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-3 border-t border-border bg-muted/30 shrink-0 flex items-center justify-between">
+              <p className="text-[11px] text-muted-foreground">Changing template updates the live preview instantly. Download to get the Word document.</p>
+              <button onClick={() => setTemplatePanelOpen(false)} className="text-xs font-semibold text-primary hover:underline">Done</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Upload CV Modal ── */}
+      {uploadOpen && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <div>
+                <h2 className="text-base font-black text-foreground flex items-center gap-2">
+                  <Upload className="w-4 h-4 text-primary" /> Upload Existing CV
+                </h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Upload a PDF or Word document — AI extracts and converts it to any template.</p>
+              </div>
+              <button onClick={() => { setUploadOpen(false); setUploadFile(null); setUploadError(null) }} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Drop zone */}
+              <div
+                onDragOver={e => { e.preventDefault(); setUploadDragging(true) }}
+                onDragLeave={() => setUploadDragging(false)}
+                onDrop={e => { e.preventDefault(); setUploadDragging(false); const f = e.dataTransfer.files[0]; if(f) setUploadFile(f) }}
+                onClick={() => document.getElementById('cv-file-input')?.click()}
+                className={`relative border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all ${
+                  uploadDragging ? 'border-primary bg-primary/5' : uploadFile ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/20' : 'border-border hover:border-primary/50 hover:bg-muted/30'
+                }`}>
+                <input id="cv-file-input" type="file" accept=".pdf,.doc,.docx" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if(f) setUploadFile(f) }} />
+                {uploadFile ? (
+                  <div className="space-y-2">
+                    <div className="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center mx-auto">
+                      <FileUp className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <p className="text-sm font-bold text-foreground">{uploadFile.name}</p>
+                    <p className="text-xs text-muted-foreground">{(uploadFile.size / 1024).toFixed(0)} KB · Click to change</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center mx-auto">
+                      <Upload className="w-6 h-6 text-muted-foreground" />
+                    </div>
+                    <p className="text-sm font-bold text-foreground">Drop your CV here</p>
+                    <p className="text-xs text-muted-foreground">PDF, DOC or DOCX · Max 10MB</p>
+                  </div>
+                )}
+              </div>
+
+              {/* What happens info */}
+              <div className="rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 p-4 space-y-1.5">
+                <p className="text-xs font-bold text-blue-700 dark:text-blue-300">What happens next</p>
+                {['AI reads and extracts all your CV content', 'Populates name, contact, experience, education, skills', 'You choose any of the 12 NHS templates', 'Download as a polished Word document'].map((s, i) => (
+                  <p key={i} className="text-xs text-blue-600 dark:text-blue-400 flex gap-2">
+                    <span className="font-bold shrink-0">{i+1}.</span>{s}
+                  </p>
+                ))}
+              </div>
+
+              {cv.id && (
+                <p className="text-[11px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+                  ⚠ This will replace your current CV content. Your template choice is kept.
+                </p>
+              )}
+
+              {uploadError && (
+                <div className="flex items-center gap-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3">
+                  <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                  <p className="text-sm text-red-600 dark:text-red-400">{uploadError}</p>
+                </div>
+              )}
+
+              <button onClick={handleUpload} disabled={!uploadFile || uploading}
+                className="w-full py-3.5 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-bold flex items-center justify-center gap-2 transition-colors">
+                {uploading
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Extracting CV content…</>
+                  : <><Sparkles className="w-4 h-4" /> Extract & Convert CV</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* NHS Role Template Modal */}
       {roleTemplateOpen && (

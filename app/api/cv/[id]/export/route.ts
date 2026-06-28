@@ -32,12 +32,12 @@ function bul(text:string): Paragraph {
 }
 
 // ── Page geometry ─────────────────────────────────────────────────────────────
-// A4 in DXA (1440 DXA = 1 inch). Margin kept small so the CV fills the page,
+// A4 in DXA (1440 DXA = 1 inch). Small margin so the CV fills the page
 // while staying clear of Word's edge-clipping / printer-safe area.
-const PAGE_MARGIN   = 200                                // DXA — fill the page edge-to-edge
-const PAGE_WIDTH    = 11906                             // A4 width, DXA
-const PAGE_HEIGHT   = 16838                             // A4 height, DXA
-const CONTENT_WIDTH = PAGE_WIDTH - PAGE_MARGIN * 2      // 10906 DXA
+const PAGE_MARGIN   = 200                            // DXA — edge-to-edge fill
+const PAGE_WIDTH    = 11906                          // A4 width in DXA
+const PAGE_HEIGHT   = 16838                          // A4 height in DXA
+const CONTENT_WIDTH = PAGE_WIDTH - PAGE_MARGIN * 2  // 10906 DXA usable width
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const P: Record<string,{h:string;a:string;m:string;bg:string;font:string}> = {
@@ -53,6 +53,34 @@ const P: Record<string,{h:string;a:string;m:string;bg:string;font:string}> = {
   bold:         {h:'B91C1C',a:'B91C1C',m:'9CA3AF',bg:'FFFFFF',font:'Arial'},
   compact:      {h:'1D4ED8',a:'1D4ED8',m:'9CA3AF',bg:'FFFFFF',font:'Arial'},
   minimal:      {h:'09090B',a:'71717A',m:'A1A1AA',bg:'FFFFFF',font:'Helvetica'},
+  // NHS Extended
+  'nhs-ocean':    {h:'0369A1',a:'0369A1',m:'64748B',bg:'FFFFFF',font:'Arial'},
+  'nhs-slate':    {h:'22D3EE',a:'22D3EE',m:'94A3B8',bg:'FFFFFF',font:'Arial'},
+  'nhs-royal':    {h:'1D4ED8',a:'1D4ED8',m:'6B7280',bg:'FFFFFF',font:'Arial'},
+  'nhs-emerald':  {h:'065F46',a:'059669',m:'6B7280',bg:'FFFFFF',font:'Arial'},
+  // Adobe Extended
+  'adobe-coral':  {h:'E8522A',a:'E8522A',m:'9CA3AF',bg:'FFFFFF',font:'Arial'},
+  'adobe-split':  {h:'0F766E',a:'0F766E',m:'6B7280',bg:'FFFFFF',font:'Arial'},
+  'adobe-duo':    {h:'4338CA',a:'4338CA',m:'6B7280',bg:'FFFFFF',font:'Arial'},
+  'adobe-arc':    {h:'7C3AED',a:'7C3AED',m:'9CA3AF',bg:'FFFFFF',font:'Arial'},
+  'adobe-ember':  {h:'C2410C',a:'C2410C',m:'9CA3AF',bg:'FFFFFF',font:'Arial'},
+  'adobe-azure':  {h:'0284C7',a:'0284C7',m:'6B7280',bg:'FFFFFF',font:'Arial'},
+  'adobe-prism':  {h:'6D28D9',a:'0891B2',m:'9CA3AF',bg:'FFFFFF',font:'Arial'},
+  'adobe-night':  {h:'A78BFA',a:'A78BFA',m:'C4B5FD',bg:'FFFFFF',font:'Arial'},
+  'adobe-blush':  {h:'BE185D',a:'BE185D',m:'9CA3AF',bg:'FFFFFF',font:'Arial'},
+  // International & Modern
+  international:  {h:'2563EB',a:'2563EB',m:'6B7280',bg:'FFFFFF',font:'Arial'},
+  scandinavia:    {h:'1A1A1A',a:'555555',m:'888888',bg:'F9F9F8',font:'Arial'},
+  swiss:          {h:'DC2626',a:'DC2626',m:'555555',bg:'FFFFFF',font:'Arial'},
+  // Corporate & City
+  corporate:      {h:'0F172A',a:'CA8A04',m:'94A3B8',bg:'FFFFFF',font:'Arial'},
+  city:           {h:'0EA5E9',a:'0EA5E9',m:'93C5FD',bg:'FFFFFF',font:'Arial'},
+  metro:          {h:'F59E0B',a:'F59E0B',m:'9CA3AF',bg:'FFFFFF',font:'Arial'},
+  gradient:       {h:'7C3AED',a:'2563EB',m:'9CA3AF',bg:'FFFFFF',font:'Arial'},
+  // Creative
+  magazine:       {h:'111827',a:'FBBF24',m:'9CA3AF',bg:'FFFFFF',font:'Arial'},
+  canvas:         {h:'1E1B4B',a:'0891B2',m:'6B7280',bg:'FFFFFF',font:'Arial'},
+  spectrum:       {h:'7C3AED',a:'0891B2',m:'9CA3AF',bg:'FFFFFF',font:'Arial'},
 }
 
 // ── Shared content builder ────────────────────────────────────────────────────
@@ -162,8 +190,8 @@ function buildSingleCol(profile:any, template:string, jobs:Job[], edus:Edu[], ce
 // PROFESSIONAL — Navy sidebar via two-cell table spanning full page height
 function buildProfessional(profile:any, jobs:Job[], edus:Edu[], certs:Cert[], refs:Ref[], skills:Skill[]): any[] {
   const p = P.professional
-  const SIDEBAR = 2900                       // DXA
-  const MAIN    = CONTENT_WIDTH - SIDEBAR    // DXA, fills the rest of the page
+  const SIDEBAR = 2400  // DXA ~1.67 inches
+  const MAIN    = 6626  // DXA remaining (9026 - 2400)
 
   const sidebarCells: Paragraph[] = [
     new Paragraph({ spacing:{after:80}, children:[new TextRun({ text:profile.fullName||'Your Name', bold:true, size:28, color:'FFFFFF', font:p.font })] }),
@@ -221,7 +249,7 @@ function buildProfessional(profile:any, jobs:Job[], edus:Edu[], certs:Cert[], re
   }
 
   return [new Table({
-    width:{ size:CONTENT_WIDTH, type:WidthType.DXA },
+    width:{ size:9026, type:WidthType.DXA },
     columnWidths:[SIDEBAR, MAIN],
     rows:[new TableRow({ children:[
       new TableCell({
@@ -247,11 +275,11 @@ function buildExecutive(profile:any, jobs:Job[], edus:Edu[], certs:Cert[], refs:
   const contact = [profile.phone,profile.email,profile.location].filter(Boolean)
 
   const headerRow = new Table({
-    width:{ size:CONTENT_WIDTH, type:WidthType.DXA },
-    columnWidths:[CONTENT_WIDTH],
+    width:{ size:9026, type:WidthType.DXA },
+    columnWidths:[9026],
     rows:[new TableRow({ children:[
       new TableCell({
-        width:{ size:CONTENT_WIDTH, type:WidthType.DXA },
+        width:{ size:9026, type:WidthType.DXA },
         borders:NO_BORDERS,
         shading:{ fill:'111827', type:ShadingType.CLEAR },
         margins:{ top:360, bottom:300, left:400, right:400 },
@@ -265,10 +293,10 @@ function buildExecutive(profile:any, jobs:Job[], edus:Edu[], certs:Cert[], refs:
   })
 
   const goldBar = new Table({
-    width:{ size:CONTENT_WIDTH, type:WidthType.DXA },
-    columnWidths:[CONTENT_WIDTH],
+    width:{ size:9026, type:WidthType.DXA },
+    columnWidths:[9026],
     rows:[new TableRow({ children:[
-      new TableCell({ width:{ size:CONTENT_WIDTH, type:WidthType.DXA }, borders:NO_BORDERS, shading:{ fill:'B45309', type:ShadingType.CLEAR }, margins:{ top:30, bottom:30, left:0, right:0 }, children:[new Paragraph({children:[]})] })
+      new TableCell({ width:{ size:9026, type:WidthType.DXA }, borders:NO_BORDERS, shading:{ fill:'B45309', type:ShadingType.CLEAR }, margins:{ top:30, bottom:30, left:0, right:0 }, children:[new Paragraph({children:[]})] })
     ]})]
   })
 
@@ -282,11 +310,11 @@ function buildBold(profile:any, jobs:Job[], edus:Edu[], certs:Cert[], refs:Ref[]
   const contact = [profile.phone,profile.email,profile.location].filter(Boolean)
 
   const headerRow = new Table({
-    width:{ size:CONTENT_WIDTH, type:WidthType.DXA },
-    columnWidths:[CONTENT_WIDTH],
+    width:{ size:9026, type:WidthType.DXA },
+    columnWidths:[9026],
     rows:[new TableRow({ children:[
       new TableCell({
-        width:{ size:CONTENT_WIDTH, type:WidthType.DXA },
+        width:{ size:9026, type:WidthType.DXA },
         borders:NO_BORDERS,
         shading:{ fill:'B91C1C', type:ShadingType.CLEAR },
         margins:{ top:360, bottom:280, left:400, right:400 },
@@ -300,10 +328,10 @@ function buildBold(profile:any, jobs:Job[], edus:Edu[], certs:Cert[], refs:Ref[]
   })
 
   const darkBar = new Table({
-    width:{ size:CONTENT_WIDTH, type:WidthType.DXA },
-    columnWidths:[CONTENT_WIDTH],
+    width:{ size:9026, type:WidthType.DXA },
+    columnWidths:[9026],
     rows:[new TableRow({ children:[
-      new TableCell({ width:{ size:CONTENT_WIDTH, type:WidthType.DXA }, borders:NO_BORDERS, shading:{ fill:'7F1D1D', type:ShadingType.CLEAR }, margins:{ top:25, bottom:25, left:0, right:0 }, children:[new Paragraph({children:[]})] })
+      new TableCell({ width:{ size:9026, type:WidthType.DXA }, borders:NO_BORDERS, shading:{ fill:'7F1D1D', type:ShadingType.CLEAR }, margins:{ top:25, bottom:25, left:0, right:0 }, children:[new Paragraph({children:[]})] })
     ]})]
   })
 
@@ -314,8 +342,7 @@ function buildBold(profile:any, jobs:Job[], edus:Edu[], certs:Cert[], refs:Ref[]
 // LATERAL — Indigo sidebar
 function buildLateral(profile:any, jobs:Job[], edus:Edu[], certs:Cert[], refs:Ref[], skills:Skill[]): any[] {
   const p = P.lateral
-  const SIDE = 2660                       // DXA
-  const MAIN = CONTENT_WIDTH - SIDE       // DXA, fills the rest of the page
+  const SIDE = 2200; const MAIN = 6826
 
   const sidebar: Paragraph[] = [
     new Paragraph({ spacing:{after:80}, children:[new TextRun({ text:profile.fullName||'Your Name', bold:true, size:30, color:'FFFFFF', font:p.font })] }),
@@ -338,7 +365,7 @@ function buildLateral(profile:any, jobs:Job[], edus:Edu[], certs:Cert[], refs:Re
   const main: Paragraph[] = contentBlocks(profile,'lateral',jobs,edus,certs,refs,skills)
 
   return [new Table({
-    width:{ size:CONTENT_WIDTH, type:WidthType.DXA },
+    width:{ size:9026, type:WidthType.DXA },
     columnWidths:[SIDE,MAIN],
     rows:[new TableRow({ children:[
       new TableCell({ width:{ size:SIDE, type:WidthType.DXA }, borders:NO_BORDERS, shading:{ fill:'1E1B4B', type:ShadingType.CLEAR }, margins:{ top:360, bottom:360, left:280, right:220 }, children:sidebar }),
@@ -346,6 +373,151 @@ function buildLateral(profile:any, jobs:Job[], edus:Edu[], certs:Cert[], refs:Re
     ]})]
   })]
 }
+
+
+// ── Generic coloured header builder ──────────────────────────────────────────
+// Used by: nhs-ocean, nhs-emerald, adobe-coral, adobe-ember, corporate,
+//          metro, gradient, magazine, canvas, nhs-royal (centred variant)
+function buildColorHeader(
+  profile:any, template:string,
+  headerBg:string, nameFg:string, subFg:string, contactFg:string,
+  accentBarBg:string|null,
+  jobs:Job[], edus:Edu[], certs:Cert[], refs:Ref[], skills:Skill[]
+): any[] {
+  const p = P[template]??P.classic
+  const contact = [profile.phone,profile.email,profile.location].filter(Boolean)
+
+  const headerRow = new Table({
+    width:{ size:CONTENT_WIDTH, type:WidthType.DXA },
+    columnWidths:[CONTENT_WIDTH],
+    rows:[new TableRow({ children:[
+      new TableCell({
+        width:{ size:CONTENT_WIDTH, type:WidthType.DXA },
+        borders:NO_BORDERS,
+        shading:{ fill:headerBg, type:ShadingType.CLEAR },
+        margins:{ top:320, bottom:240, left:360, right:360 },
+        children:[
+          new Paragraph({ children:[new TextRun({ text:profile.fullName||'Your Name', bold:true, size:48, color:nameFg, font:p.font })] }),
+          ...(profile.professionalRegistration?[new Paragraph({ spacing:{after:60}, children:[new TextRun({ text:profile.professionalRegistration, size:18, color:subFg, bold:true, font:p.font })] })]:[]),
+          new Paragraph({ children:[new TextRun({ text:contact.join('   ·   '), size:18, color:contactFg, font:p.font })] }),
+        ],
+      })
+    ]})]
+  })
+
+  const result: any[] = [headerRow]
+
+  if(accentBarBg) {
+    result.push(new Table({
+      width:{ size:CONTENT_WIDTH, type:WidthType.DXA },
+      columnWidths:[CONTENT_WIDTH],
+      rows:[new TableRow({ children:[
+        new TableCell({ width:{ size:CONTENT_WIDTH, type:WidthType.DXA }, borders:NO_BORDERS, shading:{ fill:accentBarBg, type:ShadingType.CLEAR }, margins:{ top:28, bottom:28, left:0, right:0 }, children:[new Paragraph({children:[]})] })
+      ]})]
+    }))
+  }
+
+  result.push(...contentBlocks(profile, template, jobs, edus, certs, refs, skills))
+  return result
+}
+
+// ── Generic dark sidebar builder ──────────────────────────────────────────────
+// Used by: nhs-slate, adobe-night, city
+function buildDarkSidebar(
+  profile:any, template:string,
+  sidebarBg:string, nameColor:string, accentColor:string, textColor:string,
+  sidebarWidth:number,
+  jobs:Job[], edus:Edu[], certs:Cert[], refs:Ref[], skills:Skill[]
+): any[] {
+  const p = P[template]??P.classic
+  const MAIN = CONTENT_WIDTH - sidebarWidth
+
+  const sidebar: Paragraph[] = [
+    new Paragraph({ spacing:{after:80}, children:[new TextRun({ text:profile.fullName||'Your Name', bold:true, size:26, color:nameColor, font:p.font })] }),
+  ]
+  if(profile.professionalRegistration){
+    sidebar.push(new Paragraph({ spacing:{after:100}, children:[new TextRun({ text:profile.professionalRegistration, size:16, color:accentColor, bold:true, font:p.font })] }))
+  }
+  for(const c of [profile.phone,profile.email,profile.location].filter(Boolean) as string[]){
+    sidebar.push(new Paragraph({ spacing:{after:40}, children:[new TextRun({ text:c, size:17, color:textColor, font:p.font })] }))
+  }
+  if(skills.length){
+    sidebar.push(new Paragraph({ spacing:{before:160,after:60}, children:[new TextRun({ text:'SKILLS', bold:true, size:15, color:accentColor, font:p.font })] }))
+    for(const s of skills){
+      for(const item of si(s).split(',').map((x:string)=>x.trim()).filter(Boolean)){
+        sidebar.push(new Paragraph({ spacing:{after:25}, children:[new TextRun({ text:`· ${item}`, size:16, color:textColor, font:p.font })] }))
+      }
+    }
+  }
+  if(edus.length){
+    sidebar.push(new Paragraph({ spacing:{before:160,after:60}, children:[new TextRun({ text:'EDUCATION', bold:true, size:15, color:accentColor, font:p.font })] }))
+    for(const e of edus){
+      sidebar.push(new Paragraph({ spacing:{after:20}, children:[new TextRun({ text:e.qualification, bold:true, size:17, color:nameColor, font:p.font })] }))
+      sidebar.push(new Paragraph({ spacing:{after:40}, children:[new TextRun({ text:e.institution, size:15, color:textColor, font:p.font })] }))
+    }
+  }
+  if(certs.length){
+    sidebar.push(new Paragraph({ spacing:{before:160,after:60}, children:[new TextRun({ text:'CERTS', bold:true, size:15, color:accentColor, font:p.font })] }))
+    for(const c of certs){
+      sidebar.push(new Paragraph({ spacing:{after:20}, children:[new TextRun({ text:c.name, bold:true, size:16, color:nameColor, font:p.font })] }))
+    }
+  }
+
+  const main = contentBlocks(profile, template, jobs, edus, certs, refs, skills)
+
+  return [new Table({
+    width:{ size:CONTENT_WIDTH, type:WidthType.DXA },
+    columnWidths:[sidebarWidth, MAIN],
+    rows:[new TableRow({ children:[
+      new TableCell({ width:{ size:sidebarWidth, type:WidthType.DXA }, borders:NO_BORDERS, shading:{ fill:sidebarBg, type:ShadingType.CLEAR }, margins:{ top:320, bottom:320, left:240, right:200 }, children:sidebar }),
+      new TableCell({ width:{ size:MAIN, type:WidthType.DXA }, borders:NO_BORDERS, margins:{ top:320, bottom:320, left:360, right:240 }, children:main }),
+    ]})]
+  })]
+}
+
+// ── Metro — split dark header (two-column header table) ───────────────────────
+function buildMetro(profile:any, jobs:Job[], edus:Edu[], certs:Cert[], refs:Ref[], skills:Skill[]): any[] {
+  const p = P.metro
+  const LEFT = Math.floor(CONTENT_WIDTH * 0.55)
+  const RIGHT = CONTENT_WIDTH - LEFT
+
+  const headerTable = new Table({
+    width:{ size:CONTENT_WIDTH, type:WidthType.DXA },
+    columnWidths:[LEFT, RIGHT],
+    rows:[new TableRow({ children:[
+      new TableCell({
+        width:{ size:LEFT, type:WidthType.DXA }, borders:NO_BORDERS,
+        shading:{ fill:'1F2937', type:ShadingType.CLEAR },
+        margins:{ top:280, bottom:280, left:360, right:240 },
+        children:[
+          new Paragraph({ children:[new TextRun({ text:profile.fullName||'Your Name', bold:true, size:44, color:'FFFFFF', font:p.font })] }),
+          ...(profile.professionalRegistration?[new Paragraph({ children:[new TextRun({ text:profile.professionalRegistration, size:17, color:'F59E0B', bold:true, font:p.font })] })]:[]),
+        ],
+      }),
+      new TableCell({
+        width:{ size:RIGHT, type:WidthType.DXA }, borders:NO_BORDERS,
+        shading:{ fill:'1F2937', type:ShadingType.CLEAR },
+        margins:{ top:280, bottom:280, left:240, right:360 },
+        children:[
+          ...[profile.phone,profile.email,profile.location].filter(Boolean).map((c:string)=>
+            new Paragraph({ spacing:{after:40}, children:[new TextRun({ text:c, size:17, color:'9CA3AF', font:p.font })] })
+          ),
+        ],
+      }),
+    ]})]
+  })
+
+  const accentBar = new Table({
+    width:{ size:CONTENT_WIDTH, type:WidthType.DXA },
+    columnWidths:[CONTENT_WIDTH],
+    rows:[new TableRow({ children:[
+      new TableCell({ width:{ size:CONTENT_WIDTH, type:WidthType.DXA }, borders:NO_BORDERS, shading:{ fill:'F59E0B', type:ShadingType.CLEAR }, margins:{ top:28, bottom:28, left:0, right:0 }, children:[new Paragraph({children:[]})] })
+    ]})]
+  })
+
+  return [headerTable, accentBar, ...contentBlocks(profile, 'metro', jobs, edus, certs, refs, skills)]
+}
+
 
 // ── Main route ────────────────────────────────────────────────────────────────
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -372,16 +544,45 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
     // Pick layout builder
     let children: any[]
-    if (template === 'professional') {
-      children = buildProfessional(profile, jobs, edus, certs, refs, skills)
-    } else if (template === 'executive') {
-      children = buildExecutive(profile, jobs, edus, certs, refs, skills)
-    } else if (template === 'bold') {
-      children = buildBold(profile, jobs, edus, certs, refs, skills)
-    } else if (template === 'lateral') {
-      children = buildLateral(profile, jobs, edus, certs, refs, skills)
-    } else {
-      children = buildSingleCol(profile, template, jobs, edus, certs, refs, skills)
+    switch(template) {
+      // ── Sidebar layouts ──
+      case 'professional':
+        children = buildProfessional(profile, jobs, edus, certs, refs, skills); break
+      case 'lateral':
+        children = buildLateral(profile, jobs, edus, certs, refs, skills); break
+      case 'nhs-slate':
+        children = buildDarkSidebar(profile, template, '1E293B', 'FFFFFF', '22D3EE', '94A3B8', 2700, jobs, edus, certs, refs, skills); break
+      case 'adobe-night':
+        children = buildDarkSidebar(profile, template, '1E1B4B', 'FFFFFF', 'A78BFA', 'C4B5FD', 2600, jobs, edus, certs, refs, skills); break
+      case 'city':
+        children = buildDarkSidebar(profile, template, '0C1A2E', 'FFFFFF', '0EA5E9', '93C5FD', 2500, jobs, edus, certs, refs, skills); break
+      // ── Coloured header layouts ──
+      case 'executive':
+        children = buildExecutive(profile, jobs, edus, certs, refs, skills); break
+      case 'bold':
+        children = buildBold(profile, jobs, edus, certs, refs, skills); break
+      case 'nhs-ocean':
+        children = buildColorHeader(profile, template, '0C4A6E', 'FFFFFF', 'BAE6FD', 'BAE6FD', '0369A1', jobs, edus, certs, refs, skills); break
+      case 'nhs-emerald':
+        children = buildColorHeader(profile, template, '065F46', 'FFFFFF', '6EE7B7', 'A7F3D0', null, jobs, edus, certs, refs, skills); break
+      case 'adobe-coral':
+        children = buildColorHeader(profile, template, 'E8522A', 'FFFFFF', 'FFFFFF', 'FECACA', null, jobs, edus, certs, refs, skills); break
+      case 'adobe-ember':
+        children = buildColorHeader(profile, template, 'EA580C', 'FFFFFF', 'FED7AA', 'FED7AA', 'FDBA74', jobs, edus, certs, refs, skills); break
+      case 'corporate':
+        children = buildColorHeader(profile, template, '0F172A', 'FFFFFF', 'CA8A04', '94A3B8', 'CA8A04', jobs, edus, certs, refs, skills); break
+      case 'gradient':
+        children = buildColorHeader(profile, template, '7C3AED', 'FFFFFF', 'FFFFFF', 'C4B5FD', null, jobs, edus, certs, refs, skills); break
+      case 'magazine':
+        children = buildColorHeader(profile, template, '111827', 'FFFFFF', 'FBBF24', '9CA3AF', null, jobs, edus, certs, refs, skills); break
+      case 'canvas':
+        children = buildColorHeader(profile, template, '1E1B4B', 'FFFFFF', 'A78BFA', 'C4B5FD', null, jobs, edus, certs, refs, skills); break
+      // ── Metro split header ──
+      case 'metro':
+        children = buildMetro(profile, jobs, edus, certs, refs, skills); break
+      // ── All others — single column with accent headings ──
+      default:
+        children = buildSingleCol(profile, template, jobs, edus, certs, refs, skills)
     }
 
     const doc = new Document({
@@ -398,12 +599,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         style:{ paragraph:{ indent:{ left:420, hanging:240 } } },
       }]}]},
       sections:[{
-        properties:{
-          page:{
-            size:   { width: PAGE_WIDTH, height: PAGE_HEIGHT },
-            margin: { top: PAGE_MARGIN, right: PAGE_MARGIN, bottom: PAGE_MARGIN, left: PAGE_MARGIN },
-          },
-        },
+        properties:{ page:{ size:{ width:11906, height:16838 }, margin:{ top:900, right:1000, bottom:900, left:1000 } } },
         children,
       }],
     })

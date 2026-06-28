@@ -1,71 +1,68 @@
 // lib/db-router.ts
-// Routes users to their assigned database.
-//
-// HOW IT WORKS:
-//   Registration → getDbForNewUser() assigns the less-loaded DB → saves dbShard on user
-//   All subsequent requests → getDb(userId) checks primary first, then secondary
-//   All data for a user (applications, statements, analysis) stays in same DB
+import { PrismaClient } from '@prisma/client'
+import { prisma }       from '@/lib/prisma'
 
-import { PrismaClient }  from '@prisma/client'
-import { prisma }        from '@/lib/prisma'
+// ── Secondary client ──────────────────────────────────────────────────────────
+const globalForPrisma2 = globalThis as unknown as { prisma2: PrismaClient | undefined }
 
-// ── Secondary database client ─────────────────────────────────────────────────
-
-const g = globalThis as unknown as { prisma2: PrismaClient | undefined }
-
-export const prisma2 = g.prisma2 ?? new PrismaClient({
+export const prisma2 = globalForPrisma2.prisma2 ?? new PrismaClient({
   datasources: { db: { url: process.env.DATABASE_URL_2 } },
-  log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
 })
 
-if (process.env.NODE_ENV !== 'production') g.prisma2 = prisma2
+if (process.env.NODE_ENV !== 'production') globalForPrisma2.prisma2 = prisma2
 
-// ── Get the right database for an existing user ───────────────────────────────
-// 1. Check primary DB first — reads dbShard field if present
-// 2. If not found in primary, check secondary (user was registered there)
-// 3. Default to primary as final fallback
+// ── In-memory shard cache — avoids 2 DB lookups per request ──────────────────
+// Maps userId → 'primary' | 'secondary'
+// Cache is per-process and resets on server restart — safe, no stale data risk
+const shardCache = new Map<string, 'primary' | 'secondary'>()
 
+// ── getDb — route a userId to the correct shard ───────────────────────────────
+// Checks BOTH shards in parallel (not serial) so neither shard has priority.
+// Throws a clear error if user is not found in either — prevents silent
+// fallback to the wrong shard which causes FK constraint violations.
 export async function getDb(userId: string): Promise<PrismaClient> {
-  if (!process.env.DATABASE_URL_2) return prisma
+  // Return cached result if available
+  const cached = shardCache.get(userId)
+  if (cached) return cached === 'primary' ? prisma : prisma2
 
-  // Check primary database
-  const userInPrimary = await prisma.user.findUnique({
-    where:  { id: userId },
-    select: { id: true, dbShard: true },
-  }).catch(() => null)
+  // Check both shards simultaneously
+  const [inPrimary, inSecondary] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { id: true } }).catch(() => null),
+    prisma2.user.findUnique({ where: { id: userId }, select: { id: true } }).catch(() => null),
+  ])
 
-  if (userInPrimary) {
-    // Found in primary — return secondary if that's where they were assigned
-    return userInPrimary.dbShard === 'secondary' ? prisma2 : prisma
+  if (inPrimary) {
+    shardCache.set(userId, 'primary')
+    return prisma
   }
 
-  // Not in primary — check secondary database
-  const userInSecondary = await prisma2.user.findUnique({
-    where:  { id: userId },
-    select: { id: true },
-  }).catch(() => null)
+  if (inSecondary) {
+    shardCache.set(userId, 'secondary')
+    return prisma2
+  }
 
-  if (userInSecondary) return prisma2
-
-  // Final fallback — should not happen but never crash
-  return prisma
+  // User not found in either shard — surface a clear error instead of
+  // silently returning primary (which causes FK violations)
+  throw new Error(
+    `User ${userId} not found in any database shard. ` +
+    `The session may be stale — please sign out and sign back in.`
+  )
 }
 
-// ── Pick database for a new user registration ─────────────────────────────────
-
-export async function getDbForNewUser(): Promise<{
-  client: PrismaClient
-  shard:  'primary' | 'secondary'
-}> {
-  if (!process.env.DATABASE_URL_2) {
-    return { client: prisma, shard: 'primary' }
-  }
+// ── getDbForNewUser — pick the shard with fewer users for load balancing ──────
+export async function getDbForNewUser(): Promise<PrismaClient> {
+  if (!process.env.DATABASE_URL_2) return prisma
 
   const [count1, count2] = await Promise.all([
     prisma.user.count().catch(() => 0),
     prisma2.user.count().catch(() => 0),
   ])
 
-  if (count2 < count1) return { client: prisma2, shard: 'secondary' }
-  return { client: prisma, shard: 'primary' }
+  return count2 < count1 ? prisma2 : prisma
+}
+
+// ── clearShardCache — call after user deletion or shard migration ─────────────
+export function clearShardCache(userId?: string) {
+  if (userId) shardCache.delete(userId)
+  else shardCache.clear()
 }
