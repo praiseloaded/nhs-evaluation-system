@@ -68,6 +68,11 @@ const emptyCv = (): CvData => ({
   additionalInfo: '',
 })
 
+// ── A4 preview sizing ───────────────────────────────────────────────────────
+// CSS px equivalent of 210mm / 297mm at 96 CSS px per inch (1in = 25.4mm).
+const A4_WIDTH_PX = 793.7007874015748
+const A4_HEIGHT_PX = 1122.5196850393701
+
 // ── Reusable bits ─────────────────────────────────────────────────────────
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return <label className="block text-xs font-semibold text-muted-foreground mb-1">{children}</label>
@@ -113,6 +118,40 @@ export default function CvBuilderPage() {
   const [roleTemplateOpen, setRoleTemplateOpen] = useState(false)
   const [roleFilter, setRoleFilter] = useState('')
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // ── Live preview: scale A4 page to fit whatever width its container has ──
+  const previewContainerRef = useRef<HTMLDivElement>(null)
+  const previewContentRef = useRef<HTMLDivElement>(null)
+  const [previewScale, setPreviewScale] = useState(1)
+  const [previewContentHeight, setPreviewContentHeight] = useState(A4_HEIGHT_PX)
+
+  // Recompute scale whenever the container is resized (window resize, sidebar
+  // collapse, orientation change, etc.) — keeps the A4 sheet fully visible
+  // and proportionally sized instead of overflowing on small screens.
+  useEffect(() => {
+    const el = previewContainerRef.current
+    if (!el) return
+    const recalc = () => {
+      const w = el.clientWidth
+      if (w > 0) setPreviewScale(Math.min(w / A4_WIDTH_PX, 1))
+    }
+    recalc()
+    const ro = new ResizeObserver(recalc)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  // Track the *actual* rendered height of the CV content (it can exceed one
+  // A4 page) so the scroll area always matches the real, scaled height.
+  useEffect(() => {
+    const el = previewContentRef.current
+    if (!el) return
+    const recalc = () => setPreviewContentHeight(el.scrollHeight)
+    recalc()
+    const ro = new ResizeObserver(recalc)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [cv])
 
   // ── Load profile list ──
   useEffect(() => {
@@ -281,16 +320,16 @@ export default function CvBuilderPage() {
         <ArrowLeft className="w-3.5 h-3.5" /> Dashboard
       </Link>
 
-      <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight flex items-center gap-2">
             <FileText className="w-6 h-6 text-primary" /> NHS CV Builder
           </h1>
           <p className="text-sm text-muted-foreground mt-1">NHS-acceptable format — reverse chronological, no photo, clear headings.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {profiles.length > 1 && (
-            <select value={activeId ?? ''} onChange={e => loadProfile(e.target.value)} className="text-sm rounded-lg border border-border bg-card px-3 py-2">
+            <select value={activeId ?? ''} onChange={e => loadProfile(e.target.value)} className="text-sm rounded-lg border border-border bg-card px-3 py-2 max-w-[160px] sm:max-w-none">
               {profiles.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
             </select>
           )}
@@ -313,22 +352,22 @@ export default function CvBuilderPage() {
           <Sparkles className="w-4 h-4" /> Apply NHS Role Template
         </button>
         <button onClick={() => setTemplatePickerOpen(o => !o)} className="w-full flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 hover:border-primary/40 transition-colors">
-          <div className="flex items-center gap-3">
-            <Layout className="w-4 h-4 text-muted-foreground" />
-            <div className="text-left">
-              <p className="text-sm font-semibold text-foreground">{TEMPLATES.find(t => t.id === cv.template)?.label} template</p>
-              <p className="text-[11px] text-muted-foreground">{TEMPLATES.find(t => t.id === cv.template)?.desc}</p>
+          <div className="flex items-center gap-3 min-w-0">
+            <Layout className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+            <div className="text-left min-w-0">
+              <p className="text-sm font-semibold text-foreground truncate">{TEMPLATES.find(t => t.id === cv.template)?.label} template</p>
+              <p className="text-[11px] text-muted-foreground truncate">{TEMPLATES.find(t => t.id === cv.template)?.desc}</p>
             </div>
           </div>
-          <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${templatePickerOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform flex-shrink-0 ${templatePickerOpen ? 'rotate-180' : ''}`} />
         </button>
         {templatePickerOpen && (
-          <div className="absolute z-10 mt-1 w-full rounded-xl border border-border bg-card shadow-lg overflow-hidden">
+          <div className="absolute z-10 mt-1 w-full rounded-xl border border-border bg-card shadow-lg overflow-hidden max-h-[60vh] overflow-y-auto">
             {TEMPLATES.map(t => (
               <button key={t.id} onClick={() => { update({ template: t.id }); setTemplatePickerOpen(false) }}
                 className={`w-full text-left px-4 py-3 hover:bg-accent transition-colors ${t.id === cv.template ? 'bg-primary/5' : ''} flex items-start gap-3`}>
                 <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: (t as any).color ?? '#1B3A5C', marginTop: 4, flexShrink: 0 }} />
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-foreground">{t.label}</p>
                 <p className="text-[11px] text-muted-foreground mt-0.5">{t.desc}</p>
                 {(t as any).best && <p className="text-[10px] font-semibold mt-0.5" style={{ color: (t as any).color ?? '#1B3A5C' }}>Best for: {(t as any).best}</p>}
@@ -448,15 +487,33 @@ export default function CvBuilderPage() {
 
         {/* ── Live preview ── */}
         <div className="order-1 lg:order-2">
-          <div className="sticky top-6">
+          <div className="lg:sticky lg:top-6">
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Live preview · A4</p>
               <span className="text-[10px] text-muted-foreground">210 × 297 mm</span>
             </div>
-            {/* A4 = 210mm wide. Scroll vertically, fixed width */}
-            <div className="overflow-y-auto rounded-xl shadow-lg border border-border" style={{ maxHeight: 'calc(100vh - 160px)' }}>
-              <div style={{ width: '210mm', minHeight: '297mm', background: '#fff' }}>
-                <CvPreviewRouter cv={cv} />
+            {/* Container is full-width and fluid; the A4 sheet inside is scaled
+                to fit it via transform, so it never overflows on mobile. */}
+            <div
+              ref={previewContainerRef}
+              className="rounded-xl shadow-lg border border-border bg-muted/20 overflow-y-auto overflow-x-hidden"
+              style={{ maxHeight: 'calc(100vh - 160px)' }}
+            >
+              <div style={{ width: '100%', height: previewContentHeight * previewScale }}>
+                <div
+                  ref={previewContentRef}
+                  style={{
+                    width: A4_WIDTH_PX,
+                    minHeight: A4_HEIGHT_PX,
+                    background: '#fff',
+                    margin: 0,
+                    padding: 0,
+                    transform: `scale(${previewScale})`,
+                    transformOrigin: 'top left',
+                  }}
+                >
+                  <CvPreviewRouter cv={cv} />
+                </div>
               </div>
             </div>
           </div>
