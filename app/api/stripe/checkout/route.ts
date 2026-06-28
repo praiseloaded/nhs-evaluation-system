@@ -4,7 +4,7 @@ import { auth }   from '@/auth'
 import Stripe     from 'stripe'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-05-28.basil',
+  apiVersion: '2025-07-30.basil' as any,
 })
 
 export async function POST(req: Request) {

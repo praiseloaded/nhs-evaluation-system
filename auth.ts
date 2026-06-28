@@ -1,4 +1,4 @@
-// auth.ts — clean version, no Node.js imports
+// auth.ts
 import NextAuth           from "next-auth"
 import Google             from "next-auth/providers/google"
 import Credentials        from "next-auth/providers/credentials"
@@ -14,13 +14,30 @@ declare module "next-auth" {
       name?:  string | null
       email?: string | null
       image?: string | null
-      tier:   "free" | "pro"
+      tier:   "free" | "pro" | "elite"  // ← elite added
+      role:   "user" | "admin"           // ← role added
     }
   }
   interface JWT {
     id:   string
-    tier: "free" | "pro"
+    tier: "free" | "pro" | "elite"
+    role: "user" | "admin"
   }
+}
+
+// ── Helper: check both databases ──────────────────────────────────────────────
+async function getDbUser(id: string) {
+  return (
+    await prisma.user.findUnique({
+      where:  { id },
+      select: { tier: true, role: true },
+    }).catch(() => null)
+  ) ?? (
+    await prisma2.user.findUnique({
+      where:  { id },
+      select: { tier: true, role: true },
+    }).catch(() => null)
+  )
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -34,18 +51,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
     Credentials({
       credentials: {
-        email:    { label: "Email",    type: "email" },
+        email:    { label: "Email",    type: "email"    },
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null
 
-        // Check primary database first
         let user = await prisma.user.findUnique({
           where: { email: credentials.email as string },
-        })
+        }).catch(() => null)
 
-        // If not found check secondary
         if (!user) {
           user = await prisma2.user.findUnique({
             where: { email: credentials.email as string },
@@ -65,7 +80,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           name:  user.name,
           email: user.email,
           image: user.image,
-          tier:  user.tier as "free" | "pro",
+          tier:  user.tier  as "free" | "pro" | "elite",
+          role:  (user.role ?? "user") as "user" | "admin",
         }
       },
     }),
@@ -73,13 +89,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
   session: { strategy: "jwt" },
 
-  // ── Google sign-up welcome email ──────────────────────────────────────────
-  // Handled via a separate API route to keep auth.ts free of Node.js imports.
-  // See app/api/auth/welcome/route.ts — called by the signIn callback below.
   callbacks: {
     async signIn({ user, account }) {
-      // For Google sign-ins, trigger welcome email via internal API call
-      // This runs server-side so we can use fetch to our own Node.js route
       if (account?.provider === 'google' && user.email) {
         fetch(`${process.env.NEXTAUTH_URL}/api/auth/welcome`, {
           method:  'POST',
@@ -89,44 +100,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             name:   user.name ?? '',
             secret: process.env.NEXTAUTH_SECRET,
           }),
-        }).catch(() => {})  // fire and forget — never block sign-in
+        }).catch(() => {})
       }
       return true
     },
 
-    async jwt({ token, user, trigger }) {
+    async jwt({ token, user }) {
+      // ── First login: seed from the user object ──────────────────────────
       if (user) {
-        token.id = user.id!
-
-        let dbUser = await prisma.user.findUnique({
-          where:  { id: user.id! },
-          select: { tier: true },
-        }).catch(() => null)
-
-        if (!dbUser) {
-          dbUser = await prisma2.user.findUnique({
-            where:  { id: user.id! },
-            select: { tier: true },
-          }).catch(() => null)
-        }
-
-        token.tier = (dbUser?.tier ?? "free") as "free" | "pro"
+        token.id   = user.id!
+        token.tier = ((user as any).tier ?? "free") as "free" | "pro" | "elite"
+        token.role = ((user as any).role ?? "user") as "user" | "admin"
       }
 
-      if (trigger === "update") {
-        let dbUser = await prisma.user.findUnique({
-          where:  { id: token.id as string },
-          select: { tier: true },
-        }).catch(() => null)
-
-        if (!dbUser) {
-          dbUser = await prisma2.user.findUnique({
-            where:  { id: token.id as string },
-            select: { tier: true },
-          }).catch(() => null)
+      // ── Every request: refresh tier + role from DB ──────────────────────
+      // This ensures tier changes (upgrades, admin grants) take effect
+      // on the next request without waiting for a full sign-out/sign-in.
+      const userId = (token.id ?? token.sub) as string | undefined
+      if (userId) {
+        const dbUser = await getDbUser(userId)
+        if (dbUser) {
+          // Admin always gets elite in the session too
+          token.tier = (dbUser.role === 'admin' ? 'elite' : dbUser.tier ?? 'free') as "free" | "pro" | "elite"
+          token.role = (dbUser.role ?? 'user') as "user" | "admin"
         }
-
-        if (dbUser) token.tier = dbUser.tier as "free" | "pro"
       }
 
       return token
@@ -134,8 +131,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
     async session({ session, token }) {
       if (session.user) {
-        session.user.id   = token.id   as string
-        session.user.tier = token.tier as "free" | "pro"
+        session.user.id   = (token.id ?? token.sub) as string
+        session.user.tier = (token.tier ?? "free") as "free" | "pro" | "elite"
+        session.user.role = (token.role ?? "user") as "user" | "admin"
       }
       return session
     },

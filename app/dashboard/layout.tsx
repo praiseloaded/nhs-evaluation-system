@@ -1,15 +1,14 @@
-import { AppLayout } from '@/components/app-layout'
-import { FeatureAccessProvider } from '@/components/providers/feature-access-provider'
-import { ReactNode } from 'react'
+// app/dashboard/layout.tsx
+import { AppLayout }              from '@/components/app-layout'
+import { FeatureAccessProvider }  from '@/components/providers/feature-access-provider'
+import { ImpersonationBanner }    from '@/components/impersonation-banner'
+import { ReactNode }              from 'react'
 
-interface DashboardLayoutProps {
-  children: ReactNode
-}
-
-export default function DashboardLayout({ children }: DashboardLayoutProps) {
+export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
     <AppLayout>
       <FeatureAccessProvider>
+        <ImpersonationBanner />
         {children}
       </FeatureAccessProvider>
     </AppLayout>

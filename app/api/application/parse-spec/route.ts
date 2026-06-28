@@ -1,15 +1,5 @@
-// app/api/application/parse-spec/route.ts
-//
-// Accepts four separate document texts:
-//   jobDescription    — the job advert text
-//   personSpec        — person specification (may overlap with jobDescription)
-//   cvText            — applicant CV
-//   nhsValuesText     — Trust/Board NHS values document (used in Q2 generation)
-//
-// Also accepts pre-detected nation + word limit from the launcher UI.
-
-import { prisma }                  from "@/lib/prisma"
-import { getDb }                   from "@/lib/db-router"
+﻿
+import { getDb }  from "@/lib/db-router"
 import { auth }                    from "@/auth"
 import { callGeminiJSON }          from "@/lib/application/ai"
 import { buildParserPrompt, postProcessParsedSpec } from "@/lib/application/parser"
@@ -51,7 +41,7 @@ export async function POST(req: Request) {
     const raw    = await callGeminiJSON(prompt, 6000)
     const parsed = postProcessParsedSpec(raw)
 
-    const resolvedEmployer = employer ?? parsed.employer ?? raw.employer ?? null
+    const resolvedEmployer = employer ?? (parsed as any).employer ?? raw.employer ?? null
     const resolvedNation   = detectedNation ?? raw.detectedNation ?? "unknown"
 
     // Q3 trigger detection
@@ -73,15 +63,14 @@ export async function POST(req: Request) {
         jobDescription,
         personSpec:   personSpec   ?? null,
         cvText:       cvText       ?? null,
-        // @ts-expect-error — new fields
         nhsValuesText: nhsValuesText ?? null,
-        parsedSpec: {
+        parsedSpec: (({
           ...parsed,
           q3Triggers,
           resolvedBoard:      resolvedEmployer,
           detectedNation:     resolvedNation,
           statementWordLimit: statementWordLimit ?? null,
-        },
+        }) as any),
         status: "draft",
       },
     })
@@ -103,10 +92,10 @@ export async function POST(req: Request) {
       })
     }
 
-    // ── Analysis complete email ────────────────────────────────────────────────
+    // â”€â”€ Analysis complete email â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Sends as soon as the job spec is parsed and criteria are extracted.
     // The score at this point reflects criteria coverage only (no statement yet)
-    // — we show it as an "analysis ready" notification so the user comes back.
+    // â€” we show it as an "analysis ready" notification so the user comes back.
     const userRow = await db.user.findUnique({
       where:  { id: userId },
       select: { email: true, name: true },
@@ -120,7 +109,7 @@ export async function POST(req: Request) {
 
       sendEmail({
         to:      userRow.email,
-        subject: `Analysis ready: ${jobTitle} — OmniJobReady AI™`,
+        subject: `Analysis ready: ${jobTitle} â€” OmniJobReady AIâ„¢`,
         html:    analysisCompleteEmail({
           name:              userRow.name ?? "",
           jobTitle,

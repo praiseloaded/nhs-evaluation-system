@@ -317,14 +317,14 @@ ${formData.sourceUrl}
             <div key={s.number} className="flex items-center flex-1 last:flex-none">
               <div className="flex flex-col items-center gap-1">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                  s.number < step ? 'bg-blue-600 text-white' : s.number === step ? 'bg-blue-600 text-white ring-4 ring-blue-100' : 'bg-gray-100 text-gray-400'
+                  s.number < step ? 'bg-gradient-to-br from-red-500 to-amber-500 text-white' : s.number === step ? 'bg-gradient-to-br from-red-500 to-amber-500 text-white ring-4 ring-blue-100' : 'bg-gray-100 text-gray-400'
                 }`}>
                   {s.number < step ? '✓' : s.number}
                 </div>
                 <span className={`text-[10px] font-medium whitespace-nowrap ${s.number === step ? 'text-blue-600' : 'text-gray-400'}`}>{s.title}</span>
               </div>
               {i < STEPS.length - 1 && (
-                <div className={`h-px flex-1 mx-2 mb-4 transition-colors ${s.number < step ? 'bg-blue-600' : 'bg-gray-200'}`} />
+                <div className={`h-px flex-1 mx-2 mb-4 transition-colors ${s.number < step ? 'bg-gradient-to-br from-red-500 to-amber-500' : 'bg-gray-200'}`} />
               )}
             </div>
           ))}
@@ -359,7 +359,7 @@ ${formData.sourceUrl}
               <FileUploadZone label="Person Specification" hint="Upload the person spec — essentials & desirables will be extracted automatically." file={personSpecFile} onFile={setPersonSpecFile} onClear={() => { setPersonSpecFile(null); setExtractionStatus('idle') }} />
             </div>
             <button type="button" onClick={() => extractFromSource()} disabled={extractionStatus === 'extracting' || !canExtract}
-              className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${extractionStatus === 'success' ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}>
+              className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${extractionStatus === 'success' ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gradient-to-br from-red-500 to-amber-500 hover:bg-blue-700 text-white'}`}>
               {extractionStatus === 'extracting' ? (<><Loader2 className="w-4 h-4 animate-spin" />Extracting…</>)
                 : extractionStatus === 'success' ? (<><CheckCircle2 className="w-4 h-4" />Extracted! Click Next to review</>)
                 : (<><Sparkles className="w-4 h-4" />Extract Job Details</>)}
@@ -422,7 +422,7 @@ ${formData.sourceUrl}
           <span className="text-xs text-gray-400">Step {step} of {STEPS.length}</span>
           {step < 4 ? (
             <button type="button" onClick={handleNext}
-              className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors">
+              className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-gradient-to-br from-red-500 to-amber-500 hover:bg-blue-700 text-white text-sm font-medium transition-colors">
               Next <ChevronRight className="w-4 h-4" />
             </button>
           ) : (

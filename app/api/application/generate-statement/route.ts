@@ -1,13 +1,6 @@
 // app/api/application/generate-statement/route.ts
-//
-// Generates Q1 — "Why are you suitable for this role?"
-//
-// LAYER 4 UPDATE:
-//   Checks parsedSpec.competencyEvidence first.
-//   If present → writes around competencies (produces more human output).
-//   If absent  → falls back to the original criterion paragraph path.
 
-import { prisma }                   from "@/lib/prisma"
+import { getDb }                    from "@/lib/db-router"
 import { auth }                     from "@/auth"
 import { callGeminiJSON }           from "@/lib/application/ai"
 import { scoreApplication }         from "@/lib/application/scoring"
@@ -237,6 +230,9 @@ export async function POST(req: Request) {
     const session = await auth()
     if (!session?.user?.id) return Response.json({ error: "Unauthorized" }, { status: 401 })
 
+    const userId = session.user.id
+    const db     = await getDb(userId)
+
     const body = await req.json()
     const {
       applicationId,
@@ -249,11 +245,11 @@ export async function POST(req: Request) {
 
     if (!applicationId) return Response.json({ error: "applicationId required" }, { status: 400 })
 
-    const application = await prisma.application.findUnique({
+    const application = await db.application.findUnique({
       where:   { id: applicationId },
       include: { criteria: { orderBy: { order: "asc" } } },
     })
-    if (!application || application.userId !== session.user.id) {
+    if (!application || application.userId !== userId) {
       return Response.json({ error: "Not found" }, { status: 404 })
     }
 
@@ -262,7 +258,6 @@ export async function POST(req: Request) {
     const totalLimit = bodyWordLimit ?? parsed?.statementWordLimit ?? (nation === "scotland" || nation === "unknown" ? 500 : 1500)
     const { hard, target } = getQ1WordLimit(nation, totalLimit)
 
-    // ── Decide which path to use ──────────────────────────────────────────────
     const competencyEvidence = parsed?.competencyEvidence as Record<string, any> | undefined
     const useLayer4 = competencyEvidence && Object.keys(competencyEvidence).length > 0
 
@@ -270,10 +265,8 @@ export async function POST(req: Request) {
     let omittedCount = 0
 
     if (useLayer4) {
-      // ── Layer 4 path: competency-based generation ─────────────────────────
       console.log(`[Q1] Layer 4 path — ${Object.keys(competencyEvidence!).length} competencies`)
 
-      // ── Anti-hallucination guard ──────────────────────────────────────────
       const essentialCriterionIds = new Set(
         application.criteria.filter(c => c.type === "essential").map(c => c.id)
       )
@@ -327,7 +320,6 @@ export async function POST(req: Request) {
         competencies,
       })
     } else {
-      // ── Legacy path: criterion paragraph generation ───────────────────────
       console.log("[Q1] Legacy path — criterion paragraphs")
 
       const allCriterionParagraphs = application.criteria
@@ -427,25 +419,24 @@ Respond ONLY with JSON: {"q1":"expanded text","wordCount":0}
 
     const liveScore = scoreApplication(criteriaInputs, q1Text, "", q1Text, parsed?.nhsValues ?? [])
 
-    await prisma.application.update({
+    await db.application.update({
       where: { id: applicationId },
       data: {
         statementQ1:   q1Text,
         wordCountQ1:   wordCount,
         fullStatement: q1Text,
         wordCount,
-        liveScore,
+        liveScore:     liveScore as any,
         status:        "in_progress",
       },
     })
 
-    await prisma.applicationDraft.create({
-      data: { applicationId, content: q1Text, wordCount, score: liveScore },
+    await db.applicationDraft.create({
+      data: { applicationId, content: q1Text, wordCount, score: liveScore as any },
     })
 
     // ── Email — only when all three questions are complete ────────────────────
-    // Q1 just saved above. Check if Q2 and Q3 already exist from a previous session.
-    const freshApp = await prisma.application.findUnique({
+    const freshApp = await db.application.findUnique({
       where:  { id: applicationId },
       select: {
         statementQ1: true, wordCountQ1: true,
@@ -456,8 +447,8 @@ Respond ONLY with JSON: {"q1":"expanded text","wordCount":0}
     })
 
     if (freshApp?.statementQ1 && freshApp?.statementQ2 && freshApp?.statementQ3) {
-      const userRow = await prisma.user.findUnique({
-        where:  { id: session.user.id },
+      const userRow = await db.user.findUnique({
+        where:  { id: userId },
         select: { email: true, name: true },
       })
       if (userRow?.email) {

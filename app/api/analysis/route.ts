@@ -1,15 +1,12 @@
 // app/api/analysis/route.ts
 
-import { prisma }                from "@/lib/prisma"
 import { getValidatedAIResult }  from "@/modules/ai/retry"
 import { getUserTier }           from "@/lib/billing/tier"
 import { sanitizeAnalysisForTier } from "@/lib/billing/sanitize-analysis"
 import { auth }                  from "@/auth"
 import { calculateNhsBandScore } from "@/lib/scoring/calculate-overall-score"
 import { detectEvidenceVault } from "@/lib/billing/detect-evidence-vault"
-import { getDb }  from '@/lib/db-router'
-
-export const runtime = 'nodejs'
+import { getDb }                 from "@/lib/db-router"
 
 function normalize(value?: string) {
   return value?.trim() || ""
@@ -37,9 +34,6 @@ function buildJobSpec(parts: {
 
 export async function POST(req: Request) {
   try {
-    // ───────────────────────────────
-    // 0. AUTH
-    // ───────────────────────────────
     const session = await auth()
 
     if (!session?.user?.id) {
@@ -50,12 +44,8 @@ export async function POST(req: Request) {
     }
 
     const userId = session.user.id as string
-    const db      = await getDb(userId)
+    const db     = await getDb(userId)
     const body   = await req.json()
-
-    // ───────────────────────────────
-    // 1. TIER CHECK
-    // ───────────────────────────────
     const userTier = await getUserTier(userId)
 
     const today = new Date()
@@ -79,10 +69,6 @@ export async function POST(req: Request) {
         { status: 402 },
       )
     }
-
-    // ───────────────────────────────
-    // 2. INPUT
-    // ───────────────────────────────
     const jobTitle  = normalize(body.jobTitle)
     const jobSpec   = normalize(body.jobSpec)
     const cv        = normalize(body.cv)
@@ -96,16 +82,13 @@ export async function POST(req: Request) {
       skills:            normalize(body.skills),
       values:            normalize(body.values),
     })
-
-    // ───────────────────────────────
-    // 3. AI ANALYSIS
-    // ───────────────────────────────
+    const tier: "free" | "paid" = userTier === 'free' ? 'free' : 'paid'
     const aiResult = await getValidatedAIResult({
       jobTitle,
       jobSpec: combinedJobSpec,
       cv,
       statement,
-      tier: userTier,
+      tier,
     })
 
 
@@ -117,10 +100,6 @@ export async function POST(req: Request) {
   desirableCriteria: normalize(body.desirableCriteria),
   personSpec:        normalize(body.personSpec),
 })
-
-    // ───────────────────────────────
-    // 4. ENGINE SCORING
-    // ───────────────────────────────
     const scoredBreakdown = calculateNhsBandScore(aiResult)
 
     const result = {
@@ -129,9 +108,6 @@ export async function POST(req: Request) {
         evidenceVault, 
     }
 
-    // ───────────────────────────────
-    // 5. SAVE
-    // ───────────────────────────────
     const saved = await db.analysis.create({
       data: {
         userId,
@@ -148,10 +124,6 @@ export async function POST(req: Request) {
         result,
       },
     })
-
-    // ───────────────────────────────
-    // 6. SANITIZE & RETURN
-    // ───────────────────────────────
     const filtered = sanitizeAnalysisForTier(result, userTier)
 
     return Response.json({

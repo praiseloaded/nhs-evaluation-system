@@ -156,7 +156,7 @@ export function CvOptimiser({ applicationId, existingCvText, existingCvScore, on
 
       {/* Analyse / Regenerate button */}
       <button onClick={analyse} disabled={!cvText.trim() || analysing}
-        className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold flex items-center justify-center gap-2">
+        className="w-full py-2.5 rounded-xl bg-gradient-to-br from-red-500 to-amber-500 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold flex items-center justify-center gap-2">
         {analysing
           ? <><Loader2 className="w-4 h-4 animate-spin" /> Analysing CV…</>
           : score

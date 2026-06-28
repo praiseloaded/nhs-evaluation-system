@@ -14,6 +14,9 @@ import {
 import { RoleTemplatePicker } from '@/components/role-template-picker'
 import { CompetencyScorePanel } from '@/components/competency-score-panel'
 import { getEvidencePrompt, type RoleTemplate } from '@/lib/nhs-role-templates'
+import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 
 // ─── Nation detection ─────────────────────────────────────────────────────────
 type NHSNation = 'scotland' | 'england' | 'wales' | 'northern_ireland' | 'unknown'
@@ -184,7 +187,7 @@ function FileSlotInput({ slot, label, icon: Icon, optional, hint, onFile, onRemo
             onDragOver={e => { e.preventDefault(); setDrag(true) }} onDragLeave={() => setDrag(false)}
             onClick={() => ref.current?.click()}
             className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-all ${drag ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40 hover:bg-accent/20'}`}>
-            <input ref={ref} type="file" accept=".pdf,.docx,.doc,.txt" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f) }} />
+            <Input ref={ref} type="file" accept=".pdf,.docx,.doc,.txt" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f) }} />
             <Upload className="w-5 h-5 mx-auto mb-1 text-muted-foreground" />
             <p className="text-xs text-muted-foreground">{hint}</p>
           </div>
@@ -197,7 +200,7 @@ function FileSlotInput({ slot, label, icon: Icon, optional, hint, onFile, onRemo
               <p className="text-xs font-medium text-foreground truncate">{slot.file.name}</p>
               <p className="text-[10px] text-muted-foreground">{slot.extracting ? 'Extracting...' : slot.extracted ? `${slot.wordCount} words` : `${(slot.file.size/1024).toFixed(0)} KB`}</p>
             </div>
-            {!slot.extracting && <button onClick={onRemove} className="p-1 hover:bg-accent rounded text-muted-foreground"><X className="w-3 h-3" /></button>}
+            {!slot.extracting && <Button onClick={onRemove} className="p-1 hover:bg-accent rounded text-muted-foreground"><X className="w-3 h-3" /></Button>}
           </div>
         )}
         {slot.error && <p className="text-[10px] text-red-500 mt-1">{slot.error}</p>}
@@ -270,6 +273,9 @@ function StatementBuilderWizardInner() {
     hasLongNoticePeriod: false, noticePeriodDetails: '',
     additionalFreeText: '',
   })
+
+  // Role template
+  const [selectedRole, setSelectedRole] = useState<RoleTemplate | null>(null)
 
   // Past applications
   const [pastApps, setPastApps]     = useState<PastApp[]>([])
@@ -474,7 +480,7 @@ function StatementBuilderWizardInner() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-4xl mx-auto px-4 py-10">
+      <div className="max-w-3xl mx-auto px-4 py-10">
 
         {/* Header */}
         <div className="mb-8">
@@ -614,7 +620,7 @@ function StatementBuilderWizardInner() {
         {isScotland ? ' — 3 separate Jobtrain boxes (Q1 500w · Q2 500w · Q3 open)' : ` — Single supporting statement · `}
         {!isScotland && (
           <span className="inline-flex items-center gap-1">word limit:
-            <input type="number" value={wordLimit} onChange={e => setWordLimit(Number(e.target.value))} min={300} max={5000} step={50}
+            <Input type="number" value={wordLimit} onChange={e => setWordLimit(Number(e.target.value))} min={300} max={5000} step={50}
               className="w-16 bg-white/50 dark:bg-black/20 border border-current/30 rounded px-1.5 py-0.5 text-xs font-semibold focus:outline-none" /> words
           </span>
         )}
@@ -980,7 +986,7 @@ function StatementBuilderWizardInner() {
             {copied === 'q1' ? <><CheckCircle2 className="w-3 h-3 text-emerald-500" /> Copied</> : 'Copy'}
           </button>
         </div>
-        <textarea value={statementQ1} onChange={e => setStatementQ1(e.target.value)} rows={12}
+        <Textarea value={statementQ1} onChange={e => setStatementQ1(e.target.value)} rows={12}
           className="w-full bg-muted border border-border rounded-xl p-4 text-sm text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 leading-relaxed" />
         <button onClick={generateQ1} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
           <Sparkles className="w-3 h-3" /> Regenerate
@@ -1021,8 +1027,8 @@ function StatementBuilderWizardInner() {
         </button>
       ) : (
         <div className="space-y-2">
-          <textarea value={statementQ2} onChange={e => setStatementQ2(e.target.value)} rows={8}
-            className="w-full bg-muted border border-border rounded-xl p-4 text-sm text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 leading-relaxed"></textarea>
+          <Textarea value={statementQ2} onChange={e => setStatementQ2(e.target.value)} rows={8}
+            className="w-full bg-muted border border-border rounded-xl p-4 text-sm text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 leading-relaxed"></Textarea>
           <div className="flex gap-2">
             <button onClick={generateQ2} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"><Sparkles className="w-3 h-3" /> Regenerate</button>
 
@@ -1065,8 +1071,8 @@ function StatementBuilderWizardInner() {
         </button>
       ) : (
         <div className="space-y-2">
-          <textarea value={statementQ3} onChange={e => setStatementQ3(e.target.value)} rows={4}
-            className="w-full bg-muted border border-border rounded-xl p-4 text-sm text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"></textarea>
+          <Textarea value={statementQ3} onChange={e => setStatementQ3(e.target.value)} rows={4}
+            className="w-full bg-muted border border-border rounded-xl p-4 text-sm text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"></Textarea>
           <div className="flex gap-2">
             <button onClick={generateQ3} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"><Sparkles className="w-3 h-3" /> Regenerate</button>
             <button onClick={() => copyText(statementQ3, 'q3')} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 ml-auto">

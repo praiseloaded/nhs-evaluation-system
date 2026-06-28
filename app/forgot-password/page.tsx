@@ -44,7 +44,7 @@ export default function ForgotPasswordPage() {
         {/* Logo */}
         <div className="text-center mb-6">
           <div className="inline-flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-blue-500 flex items-center justify-center shadow-md shadow-blue-500/20">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-amber-500 flex items-center justify-center shadow-md shadow-blue-500/20">
               <ShieldCheck className="w-4 h-4 text-white" />
             </div>
             <span className="font-black text-[15px] tracking-tight text-gray-900 dark:text-white">

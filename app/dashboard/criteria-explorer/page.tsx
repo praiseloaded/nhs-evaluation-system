@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { Navbar }   from '@/components/navbar'
 import Link         from 'next/link'
 import {
   ChevronRight, Loader2, Flame, AlertTriangle,
@@ -256,7 +255,6 @@ export default function CriteriaExplorerPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
 
       <main className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-10 space-y-8">
 

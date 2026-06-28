@@ -4,10 +4,11 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
+import { CvPreviewRouter, CV_TEMPLATES, type CvData as CvDataBase } from '@/components/cv-preview-templates'
 import {
   ArrowLeft, Plus, Trash2, Download, Loader2, FileText,
   Briefcase, GraduationCap, Award, User, ListChecks, Users,
-  ChevronDown, Check, Layout, Save,
+  ChevronDown, Check, Layout, Save, Sparkles, X,
 } from 'lucide-react'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -26,7 +27,7 @@ interface SkillGroup { id: string; category: string; items: string }
 interface CvData {
   id: string
   title: string
-  template: 'clinical' | 'nonClinical' | 'newToNhs'
+  template: string
   fullName: string
   email: string
   phone: string
@@ -41,16 +42,26 @@ interface CvData {
   references: ReferenceItem[]
 }
 
-const TEMPLATES = [
-  { id: 'clinical', label: 'Clinical', desc: 'For nursing, AHP, and direct patient care roles — leads with registration number and clinical skills.' },
-  { id: 'nonClinical', label: 'Non-Clinical', desc: 'For admin, management, and corporate NHS roles — leads with personal statement and core competencies.' },
-  { id: 'newToNhs', label: 'New to NHS', desc: 'For first-time applicants or career changers — emphasises transferable skills and any care-related experience.' },
-] as const
+// ── NHS Role Templates (from taxonomy) ────────────────────────────────────
+const NHS_ROLE_TEMPLATES = [
+  { id: 'healthcare-support-worker-b2', title: 'Healthcare Support Worker', band: 'Band 2', keywords: ['patient care', 'personal hygiene', 'moving and handling', 'vital signs', 'safeguarding', 'infection control'], statement: 'Dedicated healthcare support worker with experience delivering compassionate, person-centred care across [setting]. Proven ability to assist with personal care, record clinical observations accurately, and support patients with complex needs while upholding dignity and respect at all times. Committed to working collaboratively within multidisciplinary teams and maintaining high standards of infection prevention and control.', skills: [{ category: 'Clinical Skills', items: 'Vital signs monitoring, personal care, moving and handling, pressure area care' }, { category: 'Core Competencies', items: 'Patient safety, safeguarding, infection control, documentation, communication' }] },
+  { id: 'healthcare-assistant-b2',      title: 'Healthcare Assistant',       band: 'Band 2', keywords: ['clinical observations', 'patient care', 'HCA', 'basic life support', 'catheter care', 'handover'], statement: 'Experienced healthcare assistant with a strong track record of delivering safe, compassionate care in [ward/department]. Skilled in performing clinical observations, supporting patient mobility, and contributing to effective team handovers. Committed to patient dignity, infection prevention, and escalating concerns promptly to registered practitioners.', skills: [{ category: 'Clinical Skills', items: 'Clinical observations, wound care support, catheter care, specimen collection, ECG support' }, { category: 'Core Competencies', items: 'Patient safety, MDT working, handover, documentation, basic life support' }] },
+  { id: 'phlebotomist-b3',              title: 'Phlebotomist',               band: 'Band 3', keywords: ['venepuncture', 'cannulation', 'specimen integrity', 'TRAK', 'COSHH', 'sample handling', 'SOP'], statement: 'Competent and patient-focused phlebotomist with experience performing venepuncture across all patient groups including paediatric and elderly patients. Skilled in maintaining specimen integrity, TRAK data entry, and strict SOP compliance. Proven ability to manage a busy clinic calmly while prioritising patient dignity and safety.', skills: [{ category: 'Clinical Competencies', items: 'Venepuncture, cannulation, specimen handling, labelling, centrifugation' }, { category: 'Systems & Compliance', items: 'TRAK, COSHH, infection control, SOP compliance, sharps safety' }] },
+  { id: 'medical-laboratory-assistant-b3', title: 'Medical Laboratory Assistant', band: 'Band 3', keywords: ['specimen reception', 'LIMS', 'COSHH', 'SOP', 'quality control', 'centrifuge'], statement: 'Methodical medical laboratory assistant with experience in specimen reception, processing, and quality control in [pathology/haematology/biochemistry]. Skilled in LIMS data entry, centrifugation, and maintaining strict COSHH compliance. Committed to turnaround time targets and zero-tolerance for sample errors.', skills: [{ category: 'Laboratory Skills', items: 'Specimen reception, centrifugation, aliquoting, LIMS entry, quality control checks' }, { category: 'Compliance', items: 'COSHH, SOP compliance, IPC, stock management, audit trails' }] },
+  { id: 'clinical-support-worker-b3',   title: 'Clinical Support Worker',    band: 'Band 3', keywords: ['ECG', 'phlebotomy', 'clinical skills', 'mentoring', 'clinical governance', 'patient safety'], statement: 'Experienced clinical support worker with a broad range of competencies including phlebotomy, ECG recording, and wound care support. Track record of supervising junior staff and contributing to service improvement initiatives. Committed to clinical governance, patient safety, and continuing professional development.', skills: [{ category: 'Clinical Competencies', items: 'Venepuncture, ECG recording, wound care, catheter care, clinical observations' }, { category: 'Leadership & Quality', items: 'Junior staff supervision, SOP compliance, clinical audit, patient safety reporting' }] },
+  { id: 'pathology-coordinator-b4',     title: 'Pathology Coordinator',      band: 'Band 4', keywords: ['LIMS', 'laboratory workflow', 'quality assurance', 'ISO 15189', 'turnaround time', 'staff coordination'], statement: 'Experienced pathology coordinator with a strong background in laboratory workflow management, quality assurance, and staff coordination. Proven ability to maintain turnaround time targets, lead audits, and liaise effectively with clinical teams. Skilled in LIMS management and ISO 15189 compliance documentation.', skills: [{ category: 'Operational Skills', items: 'Workflow management, LIMS, stock control, staff rostering, quality audits' }, { category: 'Quality & Governance', items: 'ISO 15189, UKAS compliance, SOP review, incident reporting, EQA' }] },
+  { id: 'admin-officer-b4',             title: 'Administrative Officer',     band: 'Band 4', keywords: ['administration', 'EMIS', 'SystmOne', 'GDPR', 'minute taking', 'diary management', 'patient administration'], statement: 'Organised and detail-oriented administrative officer with extensive NHS experience providing senior administrative support across [department/directorate]. Skilled in diary management, minute-taking, patient administration systems, and GDPR-compliant record management. Proven ability to manage competing priorities and support governance processes effectively.', skills: [{ category: 'Administrative Skills', items: 'Diary management, minute taking, correspondence, patient administration, finance processing' }, { category: 'Systems & Compliance', items: 'EMIS, SystmOne, NHS PAS, GDPR, FOI, Microsoft Office' }] },
+  { id: 'biomedical-scientist-b5',      title: 'Biomedical Scientist',       band: 'Band 5', keywords: ['HCPC', 'IBMS', 'analytical testing', 'quality control', 'ISO 15189', 'EQA', 'audit', 'clinical governance'], statement: 'HCPC-registered Biomedical Scientist with post-registration experience in [haematology/biochemistry/microbiology/blood transfusion]. Skilled in complex analytical testing, QC monitoring, EQA participation, and SOP development. Committed to delivering accurate, timely results that directly support patient diagnosis and treatment.', skills: [{ category: 'Scientific Competencies', items: 'Analytical testing, quality control, EQA participation, result authorisation, troubleshooting' }, { category: 'Governance & Quality', items: 'ISO 15189, UKAS, SOP writing, audit, incident reporting, IBMS CPD' }] },
+  { id: 'clinical-research-assistant-b5', title: 'Clinical Research Assistant', band: 'Band 5', keywords: ['GCP', 'clinical trials', 'MHRA', 'informed consent', 'data collection', 'CTMS', 'adverse events', 'CTIMP'], statement: 'GCP-trained clinical research assistant with experience supporting Phase II–IV clinical trials in [therapeutic area]. Skilled in participant recruitment, informed consent, data collection, and adverse event reporting. Rigorous approach to regulatory compliance and protocol adherence, with experience using CTMS and working to MHRA standards.', skills: [{ category: 'Research Skills', items: 'Patient recruitment, informed consent, CRF completion, adverse event reporting, data quality checks' }, { category: 'Regulatory & Systems', items: 'GCP, MHRA compliance, CTMS, protocol adherence, regulatory documentation' }] },
+  { id: 'research-coordinator-b5',      title: 'Research Coordinator',       band: 'Band 5', keywords: ['GCP', 'NIHR', 'HRA', 'IRAS', 'monitoring visits', 'CRF', 'trial management', 'regulatory submissions'], statement: 'Experienced research coordinator managing multiple portfolio studies across [specialty] in line with NIHR, HRA, and ICH GCP standards. Skilled in regulatory submissions, site initiation, monitoring visit preparation, and multi-disciplinary team coordination. Proven ability to maintain data integrity and study timelines across concurrent trials.', skills: [{ category: 'Research Coordination', items: 'Study management, regulatory submissions, site initiation, monitoring visit preparation, CRF oversight' }, { category: 'Regulatory & Governance', items: 'GCP, IRAS, HRA approval, R&D reporting, sponsor liaison, CDISC standards' }] },
+]
+
+const TEMPLATES = CV_TEMPLATES
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 
 const emptyCv = (): CvData => ({
-  id: '', title: 'My CV', template: 'clinical',
+  id: '', title: 'My CV', template: 'classic',
   fullName: '', email: '', phone: '', location: '', professionalRegistration: '',
   personalStatement: '',
   workExperience: [], education: [], skills: [], certifications: [], references: [],
@@ -89,112 +100,6 @@ function RemovableRow({ onRemove, children }: { onRemove: () => void; children: 
   )
 }
 
-// ── Live preview renderer ────────────────────────────────────────────────
-function CvPreview({ cv }: { cv: CvData }) {
-  const skillGroups = cv.skills.filter(s => s.category || s.items)
-
-  return (
-    <div className="bg-white text-[#1a1a1a] rounded-lg shadow-sm border border-border p-8 sm:p-10 text-[12.5px] leading-relaxed min-h-[800px] font-serif">
-      {/* Header */}
-      <div className="text-center mb-4 pb-3 border-b-2 border-[#1B3A5C]">
-        <h1 className="text-[22px] font-bold tracking-tight">{cv.fullName || 'Your Name'}</h1>
-        <p className="text-[11px] text-gray-600 mt-1">
-          {[cv.email, cv.phone, cv.location, cv.professionalRegistration].filter(Boolean).join('   |   ')}
-        </p>
-      </div>
-
-      {cv.template === 'clinical' && cv.professionalRegistration && (
-        <p className="text-[11px] text-center text-[#1B3A5C] font-semibold mb-4">{cv.professionalRegistration}</p>
-      )}
-
-      {cv.personalStatement && (
-        <section className="mb-4">
-          <h2 className="text-[13px] font-bold text-[#1B3A5C] border-b border-[#1B3A5C]/30 mb-1.5 pb-0.5">Personal Statement</h2>
-          <p className="text-[12px]">{cv.personalStatement}</p>
-        </section>
-      )}
-
-      {cv.workExperience.length > 0 && (
-        <section className="mb-4">
-          <h2 className="text-[13px] font-bold text-[#1B3A5C] border-b border-[#1B3A5C]/30 mb-1.5 pb-0.5">Work Experience</h2>
-          {cv.workExperience.map(job => (
-            <div key={job.id} className="mb-3">
-              <div className="flex justify-between items-baseline">
-                <span className="font-bold text-[12.5px]">{job.jobTitle || 'Job Title'}</span>
-                <span className="text-[11px] text-gray-600">{job.startDate}{job.startDate && ' – '}{job.current ? 'Present' : job.endDate}</span>
-              </div>
-              <p className="italic text-[11.5px] text-gray-700">{[job.employer, job.location].filter(Boolean).join(', ')}</p>
-              {job.bullets.filter(Boolean).length > 0 && (
-                <ul className="list-disc ml-4 mt-1 space-y-0.5">
-                  {job.bullets.filter(Boolean).map((b, i) => <li key={i} className="text-[11.5px]">{b}</li>)}
-                </ul>
-              )}
-            </div>
-          ))}
-        </section>
-      )}
-
-      {cv.education.length > 0 && (
-        <section className="mb-4">
-          <h2 className="text-[13px] font-bold text-[#1B3A5C] border-b border-[#1B3A5C]/30 mb-1.5 pb-0.5">Education & Qualifications</h2>
-          {cv.education.map(ed => (
-            <div key={ed.id} className="mb-2">
-              <div className="flex justify-between items-baseline">
-                <span className="font-bold text-[12px]">{ed.qualification || 'Qualification'}</span>
-                <span className="text-[11px] text-gray-600">{ed.startDate}{ed.startDate && ' – '}{ed.endDate}</span>
-              </div>
-              <p className="italic text-[11px] text-gray-700">{[ed.institution, ed.location, ed.grade].filter(Boolean).join(', ')}</p>
-            </div>
-          ))}
-        </section>
-      )}
-
-      {skillGroups.length > 0 && (
-        <section className="mb-4">
-          <h2 className="text-[13px] font-bold text-[#1B3A5C] border-b border-[#1B3A5C]/30 mb-1.5 pb-0.5">Skills & Competencies</h2>
-          {skillGroups.map(s => (
-            <p key={s.id} className="text-[11.5px] mb-1"><span className="font-semibold">{s.category}:</span> {s.items}</p>
-          ))}
-        </section>
-      )}
-
-      {cv.certifications.length > 0 && (
-        <section className="mb-4">
-          <h2 className="text-[13px] font-bold text-[#1B3A5C] border-b border-[#1B3A5C]/30 mb-1.5 pb-0.5">Certifications & Training</h2>
-          <ul className="list-disc ml-4 space-y-0.5">
-            {cv.certifications.map(c => (
-              <li key={c.id} className="text-[11.5px]">
-                {c.name}{(c.issuer || c.date) && ` — ${[c.issuer, c.date && `(${c.date}${c.expiryDate ? ` – expires ${c.expiryDate}` : ''})`].filter(Boolean).join(' ')}`}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {cv.additionalInfo && (
-        <section className="mb-4">
-          <h2 className="text-[13px] font-bold text-[#1B3A5C] border-b border-[#1B3A5C]/30 mb-1.5 pb-0.5">Additional Information</h2>
-          <p className="text-[11.5px]">{cv.additionalInfo}</p>
-        </section>
-      )}
-
-      <section>
-        <h2 className="text-[13px] font-bold text-[#1B3A5C] border-b border-[#1B3A5C]/30 mb-1.5 pb-0.5">References</h2>
-        {cv.references.length > 0 ? (
-          cv.references.map(r => (
-            <div key={r.id} className="mb-2">
-              <p className="font-bold text-[12px]">{r.name || 'Reference name'}</p>
-              <p className="text-[11px] text-gray-700">{[r.role, r.organisation].filter(Boolean).join(', ')}</p>
-              <p className="text-[10.5px] text-gray-500">{[r.relationship, r.email, r.phone].filter(Boolean).join('   |   ')}</p>
-            </div>
-          ))
-        ) : (
-          <p className="text-[11.5px] italic text-gray-600">Available on request.</p>
-        )}
-      </section>
-    </div>
-  )
-}
 
 // ── Main page ─────────────────────────────────────────────────────────────
 export default function CvBuilderPage() {
@@ -205,6 +110,8 @@ export default function CvBuilderPage() {
   const [saving, setSaving] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false)
+  const [roleTemplateOpen, setRoleTemplateOpen] = useState(false)
+  const [roleFilter, setRoleFilter] = useState('')
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ── Load profile list ──
@@ -242,6 +149,12 @@ export default function CvBuilderPage() {
       setActiveId(p.id)
     }
     setLoading(false)
+  }
+
+  const applyRoleTemplate = (t: typeof NHS_ROLE_TEMPLATES[0]) => {
+    const newSkills = t.skills.map(s => ({ id: uid(), category: s.category, items: s.items }))
+    update({ personalStatement: t.statement, skills: newSkills })
+    setRoleTemplateOpen(false)
   }
 
  const createNew = async () => {
@@ -305,17 +218,38 @@ export default function CvBuilderPage() {
   const exportDocx = async () => {
     if (!cv.id) return
     setExporting(true)
+    // Flush save first so template is persisted
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current)
+      await fetch(`/api/cv/${cv.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: cv.title, template: cv.template,
+          fullName: cv.fullName, email: cv.email, phone: cv.phone,
+          location: cv.location, professionalRegistration: cv.professionalRegistration,
+          personalStatement: cv.personalStatement,
+          workExperience: cv.workExperience.map(({ id, ...w }) => w),
+          education: cv.education.map(({ id, ...e }) => e),
+          skills: cv.skills.map(s => ({ category: s.category, items: s.items.split(',').map(x => x.trim()).filter(Boolean) })),
+          certifications: cv.certifications.map(({ id, ...c }) => c),
+          additionalInfo: cv.additionalInfo,
+          references: cv.references.map(({ id, ...r }) => r),
+        }),
+      }).catch(() => {})
+    }
     try {
       const res = await fetch(`/api/cv/${cv.id}/export`)
       if (!res.ok) throw new Error('Export failed')
       const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${(cv.fullName || 'CV').replace(/[^a-z0-9]/gi, '_')}_CV.docx`
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      const tLabel = cv.template.charAt(0).toUpperCase() + cv.template.slice(1)
+      a.download = `${(cv.fullName||'CV').replace(/[^a-z0-9]/gi,'_')}_${tLabel}_CV.docx`
       a.click()
       URL.revokeObjectURL(url)
-    } catch {}
+    } catch(e:any){ console.error('Export failed:', e) }
     finally { setExporting(false) }
   }
 
@@ -374,6 +308,10 @@ export default function CvBuilderPage() {
 
       {/* Template picker */}
       <div className="relative mb-6">
+        <button onClick={() => setRoleTemplateOpen(true)}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-primary/40 bg-primary/5 text-primary text-sm font-semibold hover:bg-primary/10 transition-colors w-full justify-center mb-3">
+          <Sparkles className="w-4 h-4" /> Apply NHS Role Template
+        </button>
         <button onClick={() => setTemplatePickerOpen(o => !o)} className="w-full flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 hover:border-primary/40 transition-colors">
           <div className="flex items-center gap-3">
             <Layout className="w-4 h-4 text-muted-foreground" />
@@ -388,9 +326,13 @@ export default function CvBuilderPage() {
           <div className="absolute z-10 mt-1 w-full rounded-xl border border-border bg-card shadow-lg overflow-hidden">
             {TEMPLATES.map(t => (
               <button key={t.id} onClick={() => { update({ template: t.id }); setTemplatePickerOpen(false) }}
-                className={`w-full text-left px-4 py-3 hover:bg-accent transition-colors ${t.id === cv.template ? 'bg-primary/5' : ''}`}>
+                className={`w-full text-left px-4 py-3 hover:bg-accent transition-colors ${t.id === cv.template ? 'bg-primary/5' : ''} flex items-start gap-3`}>
+                <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: (t as any).color ?? '#1B3A5C', marginTop: 4, flexShrink: 0 }} />
+                <div className="flex-1">
                 <p className="text-sm font-semibold text-foreground">{t.label}</p>
                 <p className="text-[11px] text-muted-foreground mt-0.5">{t.desc}</p>
+                {(t as any).best && <p className="text-[10px] font-semibold mt-0.5" style={{ color: (t as any).color ?? '#1B3A5C' }}>Best for: {(t as any).best}</p>}
+                </div>
               </button>
             ))}
           </div>
@@ -507,14 +449,67 @@ export default function CvBuilderPage() {
         {/* ── Live preview ── */}
         <div className="order-1 lg:order-2">
           <div className="sticky top-6">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Live preview</p>
-            <div className="max-h-[calc(100vh-140px)] overflow-y-auto rounded-xl">
-              <CvPreview cv={cv} />
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Live preview · A4</p>
+              <span className="text-[10px] text-muted-foreground">210 × 297 mm</span>
+            </div>
+            {/* A4 = 210mm wide. Scroll vertically, fixed width */}
+            <div className="overflow-y-auto rounded-xl shadow-lg border border-border" style={{ maxHeight: 'calc(100vh - 160px)' }}>
+              <div style={{ width: '210mm', minHeight: '297mm', background: '#fff' }}>
+                <CvPreviewRouter cv={cv} />
+              </div>
             </div>
           </div>
         </div>
 
       </div>
+
+
+      {/* NHS Role Template Modal */}
+      {roleTemplateOpen && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <div>
+                <h2 className="text-base font-black text-foreground">NHS Role Templates</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Select a template to pre-fill your personal statement, skills, and keywords.</p>
+              </div>
+              <button onClick={() => setRoleTemplateOpen(false)} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
+            <div className="px-6 py-3 border-b border-border">
+              <input value={roleFilter} onChange={e => setRoleFilter(e.target.value)}
+                placeholder="Search roles e.g. phlebotomist, biomedical..."
+                className="w-full bg-muted border border-border rounded-xl px-3 py-2 text-sm text-foreground placeholder-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
+            <div className="overflow-y-auto flex-1 p-4 space-y-2">
+              {NHS_ROLE_TEMPLATES.filter(t => !roleFilter || t.title.toLowerCase().includes(roleFilter.toLowerCase()) || t.band.toLowerCase().includes(roleFilter.toLowerCase())).map(t => (
+                <button key={t.id} onClick={() => applyRoleTemplate(t)}
+                  className="w-full text-left rounded-xl border border-border bg-card hover:border-primary/50 hover:bg-primary/5 p-4 transition-all group">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">{t.band}</span>
+                      </div>
+                      <p className="text-sm font-bold text-foreground">{t.title}</p>
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {t.keywords.slice(0, 5).map(kw => (
+                          <span key={kw} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{kw}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <span className="text-xs text-primary font-semibold opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-1">Apply →</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+            <div className="px-6 py-3 border-t border-border bg-muted/30">
+              <p className="text-[11px] text-muted-foreground">⚠ Applying a template replaces your current personal statement and skills. Your work experience and education are kept.</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

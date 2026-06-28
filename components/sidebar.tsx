@@ -8,8 +8,8 @@ import {
   PenLine, ListChecks, Video, Settings,
   FolderOpen, Target, MapPin, Sparkles,
   ChevronLeft, ChevronRight, BarChart3,
-  FileText, MessageCircle, Lock, FlaskConical, Flame,
-  Globe,
+  FileText, MessageCircle, Lock, FlaskConical, Flame, Globe, History,
+  Mail,
 } from "lucide-react"
 import { useState, useEffect } from "react"
 import { ThemeSwitcher } from "./theme-switcher"
@@ -22,6 +22,7 @@ const NAV_GROUPS = [
       { href: "/dashboard",               label: "Dashboard",            icon: LayoutDashboard },
       { href: "/dashboard/new-analysis",  label: "New Analysis",         icon: Plus            },
       { href: "/dashboard/saved-analyses",label: "My Analyses",          icon: Files           },
+      { href: "/dashboard/intelligence", label: "Intelligence History",  icon: History         },
     ],
   },
   {
@@ -40,7 +41,10 @@ const NAV_GROUPS = [
       { href: "/dashboard/evidence-vault/match",  label: "Auto-Match Evidence",   icon: Sparkles,      badge: "NEW" },
       { href: "/dashboard/interview-probability", label: "Interview Probability™",icon: Target,        featureKey: "interview_probability"          },
       { href: "/dashboard/cv-builder",            label: "CV Builder",            icon: FileText,      },
+     { href: "/dashboard/cv/templates", label: "NHS CV Templates", icon: FileText,      badge: "NEW" },
+      { href: "/dashboard/cover-letter", label: "Cover Letter AI",  icon: Mail,          badge: "NEW" },
       { href: "/dashboard/mentorship",            label: "Mentorship",            icon: MessageCircle, featureKey: "mentorship"                     },
+    
     ],
   },
   {
@@ -104,7 +108,7 @@ export function Sidebar() {
       {/* Mobile toggle */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed md:hidden bottom-5 right-5 z-50 p-3.5 rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-500/30 active:scale-95 transition-transform"
+        className="fixed md:hidden bottom-5 right-5 z-50 p-3.5 rounded-2xl bg-gradient-to-br from-red-500 to-amber-500 text-white shadow-lg shadow-blue-500/30 active:scale-95 transition-transform"
         aria-label="Toggle navigation"
       >
         {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -122,18 +126,18 @@ export function Sidebar() {
       <aside className={`fixed left-0 top-0 h-screen flex flex-col z-40 transition-all duration-300 md:translate-x-0
         bg-card border-r border-border
         ${isOpen ? "translate-x-0" : "-translate-x-full"}
-        ${collapsed ? "w-[68px]" : "w-[228px]"}`}
+        ${collapsed ? "w-[72px]" : "w-[260px]"}`}
       >
 
         {/* ── Brand ───────────────────────────────────────────────────── */}
-        <div className={`h-[56px] flex items-center gap-3 border-b border-border shrink-0 ${collapsed ? "justify-center px-3" : "px-4"}`}>
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-blue-500 flex items-center justify-center shrink-0 shadow-sm shadow-blue-500/25">
+        <div className={`h-[64px] flex items-center gap-3 border-b border-border shrink-0 ${collapsed ? "justify-center px-3" : "px-5"}`}>
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500 to-amber-500 flex items-center justify-center shrink-0 shadow-md shadow-blue-500/25">
             <span className="text-white text-[9px] font-black tracking-tight">OJR</span>
           </div>
           {!collapsed && (
             <div className="flex-1 min-w-0">
-              <p className="text-[12px] font-black text-foreground tracking-tight leading-none">OmniJobReady</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1 leading-none">
+              <p className="text-[14px] font-black text-foreground tracking-tight leading-none">OmniJobReady</p>
+              <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1 leading-none">
                 <Sparkles className="w-2.5 h-2.5 text-blue-500 shrink-0" />
                 <span>AI™ Platform</span>
               </p>
@@ -147,7 +151,7 @@ export function Sidebar() {
           {NAV_GROUPS.map((group) => (
             <div key={group.label} className={collapsed ? "px-2" : "px-3"}>
               {!collapsed && (
-                <p className="text-[9px] font-bold tracking-[0.18em] text-muted-foreground/40 uppercase px-2 mb-1.5">
+                <p className="text-[10px] font-bold tracking-[0.15em] text-muted-foreground/50 uppercase px-2 mb-2">
                   {group.label}
                 </p>
               )}
@@ -165,8 +169,8 @@ export function Sidebar() {
                       href={item.href}
                       onClick={() => setIsOpen(false)}
                       title={collapsed ? item.label : undefined}
-                      className={`group relative flex items-center gap-2.5 rounded-lg text-[12.5px] font-medium transition-all duration-150
-                        ${collapsed ? "justify-center py-2.5 px-1" : "px-2.5 py-2"}
+                      className={`group relative flex items-center gap-2.5 rounded-lg text-[14px] font-medium transition-all duration-150
+                        ${collapsed ? "justify-center py-3 px-1" : "px-3 py-2.5"}
                         ${active
                           ? "bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400"
                           : locked
@@ -176,10 +180,10 @@ export function Sidebar() {
                     >
                       {/* Active bar */}
                       {active && !collapsed && (
-                        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-[18px] w-[3px] rounded-r-full bg-blue-600 dark:bg-blue-400" />
+                        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-[18px] w-[3px] rounded-r-full bg-gradient-to-br from-red-500 to-amber-500 dark:bg-blue-400" />
                       )}
 
-                      <Icon className={`h-[15px] w-[15px] shrink-0 transition-all
+                      <Icon className={`h-5 w-5 shrink-0 transition-all
                         ${active ? "text-blue-600 dark:text-blue-400" : ""}
                         ${!active && !locked ? "group-hover:scale-110" : ""}
                       `} />
@@ -259,7 +263,7 @@ export function Sidebar() {
       </aside>
 
       {/* Desktop spacer */}
-      <div className={`hidden md:block shrink-0 transition-all duration-300 ${collapsed ? "w-[68px]" : "w-[228px]"}`} />
+      <div className={`hidden md:block shrink-0 transition-all duration-300 ${collapsed ? "w-[72px]" : "w-[260px]"}`} />
     </>
   )
 }

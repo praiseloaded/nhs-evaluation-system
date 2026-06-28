@@ -126,7 +126,7 @@ export function InterviewClient() {
               <button
                 onClick={() => startInterview(a.id)}
                 disabled={generating === a.id}
-                className="mt-auto w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium flex items-center justify-center gap-2 transition-colors"
+                className="mt-auto w-full py-2 rounded-lg bg-gradient-to-br from-red-500 to-amber-500 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium flex items-center justify-center gap-2 transition-colors"
               >
                 {generating === a.id ? (
                   <><Loader2 className="w-4 h-4 animate-spin" /> Generating panel...</>

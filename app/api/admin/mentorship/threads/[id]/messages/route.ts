@@ -1,40 +1,46 @@
 // app/api/admin/mentorship/threads/[id]/messages/route.ts
-// Admin reply — same as before, now also creates a notification for the user.
 
-import { prisma } from "@/lib/prisma"
-import { withAdminAuth } from "@/lib/admin-auth"
-import { createNotification } from "@/lib/notifications"
+import { prisma }             from '@/lib/prisma'
+import { prisma2, getDb }     from '@/lib/db-router'
+import { withAdminAuth }      from '@/lib/admin-auth'
+import { createNotification } from '@/lib/notifications'
 
 export const runtime = 'nodejs'
 
-export const POST = withAdminAuth(async (req: Request, admin, ctx: any) => {
-  const { id } = await ctx.params
+export const POST = withAdminAuth(async (req: Request, admin: any, ctx: any) => {
+  const { id }   = await ctx.params
   const { body } = await req.json()
-  if (!body?.trim()) return Response.json({ error: "Message body required" }, { status: 400 })
+  if (!body?.trim()) return Response.json({ error: 'Message body required' }, { status: 400 })
 
-  const thread = await prisma.mentorshipThread.findUnique({ where: { id } })
-  if (!thread) return Response.json({ error: "Not found" }, { status: 404 })
+  // Find thread — no userId yet, must check both DBs
+  const thread =
+    await prisma.mentorshipThread.findUnique({ where: { id } }).catch(() => null) ??
+    await prisma2.mentorshipThread.findUnique({ where: { id } }).catch(() => null)
 
-  const message = await prisma.mentorshipMessage.create({
+  if (!thread) return Response.json({ error: 'Not found' }, { status: 404 })
+
+  // Now we have thread.userId — use getDb for all subsequent writes
+  const db = await getDb(thread.userId)
+
+  const message = await db.mentorshipMessage.create({
     data: {
-      threadId: id,
+      threadId:   id,
       senderType: 'admin',
-      senderId: admin.id,
-      senderName: admin.email,
-      body: body.trim(),
+      body:       body.trim(),
     },
   })
 
-  await prisma.mentorshipThread.update({
+  await db.mentorshipThread.update({
     where: { id },
-    data: { lastMessageAt: new Date(), unreadByUser: true },
+    data:  { lastMessageAt: new Date(), unreadByUser: true },
   })
 
+  // Notification table is on primary — createNotification handles this
   await createNotification({
-    userId: thread.userId,
-    type: 'mentorship_reply',
-    title: `New reply: ${thread.subject}`,
-    body: body.trim().slice(0, 120),
+    userId:  thread.userId,
+    type:    'mentorship_reply',
+    title:   `New reply: ${thread.subject}`,
+    body:    body.trim().slice(0, 120),
     linkUrl: '/dashboard/mentorship',
   })
 

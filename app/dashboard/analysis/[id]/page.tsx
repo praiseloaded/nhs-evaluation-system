@@ -216,7 +216,7 @@ export default async function AnalysisPage({ params }: Params) {
           {await hasFeatureAccess(userTier, 'full_report') ? (
             <Link
               href={`/dashboard/analysis/${analysis.id}/report`}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-br from-red-500 to-amber-500 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
             >
               <FileText className="w-4 h-4" />
               Generate Full Report
@@ -228,7 +228,7 @@ export default async function AnalysisPage({ params }: Params) {
             >
               <FileText className="w-4 h-4" />
               Generate Full Report
-              <span className="text-xs bg-blue-600 text-white px-1.5 py-0.5 rounded-full">Upgrade</span>
+              <span className="text-xs bg-gradient-to-br from-red-500 to-amber-500 text-white px-1.5 py-0.5 rounded-full">Upgrade</span>
             </Link>
           )}
         </div>

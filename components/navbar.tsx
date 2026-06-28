@@ -30,7 +30,7 @@ export function Navbar() {
         <div className="flex h-14 items-center justify-between">
 
           <Link href="/" className="flex items-center gap-2.5 shrink-0" onClick={closeMobile}>
-            <div className="h-8 w-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-semibold text-[11px] tracking-wide select-none">
+            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-red-500 to-amber-500 text-white flex items-center justify-center font-semibold text-[11px] tracking-wide select-none">
               NHS
             </div>
             <span className="font-semibold text-[15px] text-foreground leading-none">
@@ -73,7 +73,7 @@ export function Navbar() {
                 </div>
                 <Link
                   href="/dashboard"
-                  className="flex items-center gap-1.5 ml-1.5 px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-[13px] font-semibold transition-colors"
+                  className="flex items-center gap-1.5 ml-1.5 px-4 py-1.5 rounded-lg bg-gradient-to-br from-red-500 to-amber-500 hover:bg-blue-700 active:bg-blue-800 text-white text-[13px] font-semibold transition-colors"
                 >
                   Dashboard
                   <ArrowRight className="h-3.5 w-3.5" />
@@ -93,7 +93,7 @@ export function Navbar() {
                 </Link>
                 <Link
                   href="/register"
-                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-[13px] font-semibold transition-colors"
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-gradient-to-br from-red-500 to-amber-500 hover:bg-blue-700 active:bg-blue-800 text-white text-[13px] font-semibold transition-colors"
                 >
                   Get started free
                   <ArrowRight className="h-3.5 w-3.5" />
@@ -156,7 +156,7 @@ export function Navbar() {
                 <Link
                   href="/dashboard"
                   onClick={closeMobile}
-                  className="flex items-center justify-between px-3 py-2.5 rounded-lg text-[14px] font-semibold bg-blue-600 hover:bg-blue-700 text-white transition-colors mt-2"
+                  className="flex items-center justify-between px-3 py-2.5 rounded-lg text-[14px] font-semibold bg-gradient-to-br from-red-500 to-amber-500 hover:bg-blue-700 text-white transition-colors mt-2"
                 >
                   Dashboard
                   <ArrowRight className="h-4 w-4" />
@@ -182,7 +182,7 @@ export function Navbar() {
                 <Link
                   href="/register"
                   onClick={closeMobile}
-                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[14px] font-semibold transition-colors mt-1"
+                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-gradient-to-br from-red-500 to-amber-500 hover:bg-blue-700 text-white text-[14px] font-semibold transition-colors mt-1"
                 >
                   Get started free
                   <ArrowRight className="h-3.5 w-3.5" />

@@ -4,11 +4,13 @@ export const runtime = 'nodejs'
 
 import bcrypt              from 'bcryptjs'
 import { getDbForNewUser } from '@/lib/db-router'
+import { prisma }          from '@/lib/prisma'
+import { prisma2 }         from '@/lib/db-router'
 import { sendEmail }       from '@/lib/email'
 import { welcomeEmail }    from '@/lib/email-templates'
 import { headers }         from 'next/headers'
 
-// ── Rate limiter — max 5 registrations per IP per hour ────────────────────────
+// ── Rate limiter ───────────────────────────────────────────────────────────────
 const ipAttempts = new Map<string, { count: number; resetAt: number }>()
 
 function checkRateLimit(ip: string): boolean {
@@ -23,23 +25,13 @@ function checkRateLimit(ip: string): boolean {
   return true
 }
 
-// ── Validation helpers ────────────────────────────────────────────────────────
-
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-}
-
-function isValidPassword(password: string): { ok: boolean; reason?: string } {
-  if (password.length < 8)   return { ok: false, reason: 'Password must be at least 8 characters' }
-  if (password.length > 128) return { ok: false, reason: 'Password is too long' }
-  return { ok: true }
 }
 
 function sanitiseName(name: string): string {
   return name.replace(/[<>{}[\]\\\/]/g, '').trim().slice(0, 100)
 }
-
-// ── Handler ───────────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
   try {
@@ -48,7 +40,6 @@ export async function POST(req: Request) {
               ?? headersList.get('x-real-ip')
               ?? 'unknown'
 
-    // Rate limit
     if (!checkRateLimit(ip)) {
       return Response.json(
         { error: 'Too many registration attempts. Please try again later.' },
@@ -56,13 +47,11 @@ export async function POST(req: Request) {
       )
     }
 
-    const body = await req.json().catch(() => ({}))
-
+    const body     = await req.json().catch(() => ({}))
     const rawName  = String(body.name     ?? '').trim()
     const rawEmail = String(body.email    ?? '').trim().toLowerCase()
     const password = String(body.password ?? '')
 
-    // ── Validation ────────────────────────────────────────────────────────────
     if (!rawName || !rawEmail || !password) {
       return Response.json({ error: 'All fields are required' }, { status: 400 })
     }
@@ -71,25 +60,32 @@ export async function POST(req: Request) {
     if (name.length < 2) {
       return Response.json({ error: 'Please enter your full name' }, { status: 400 })
     }
-
     if (!isValidEmail(rawEmail)) {
       return Response.json({ error: 'Please enter a valid email address' }, { status: 400 })
     }
-
-    const pwCheck = isValidPassword(password)
-    if (!pwCheck.ok) {
-      return Response.json({ error: pwCheck.reason }, { status: 400 })
+    if (password.length < 8) {
+      return Response.json({ error: 'Password must be at least 8 characters' }, { status: 400 })
+    }
+    if (password.length > 128) {
+      return Response.json({ error: 'Password is too long' }, { status: 400 })
     }
 
-    // ── Database ──────────────────────────────────────────────────────────────
-    const { client, shard } = await getDbForNewUser()
+    // ── Check BOTH databases for existing email ────────────────────────────
+    const [existingPrimary, existingSecondary] = await Promise.all([
+      prisma.user.findUnique({ where: { email: rawEmail }, select: { id: true } }).catch(() => null),
+      prisma2.user.findUnique({ where: { email: rawEmail }, select: { id: true } }).catch(() => null),
+    ])
 
-    const existingUser = await client.user.findUnique({ where: { email: rawEmail } })
-    if (existingUser) {
-      return Response.json({ error: 'An account with this email already exists' }, { status: 400 })
+    if (existingPrimary || existingSecondary) {
+      return Response.json(
+        { error: 'An account with this email already exists' },
+        { status: 400 }
+      )
     }
 
+    // ── Create user in the less-loaded shard ──────────────────────────────
     const hashedPassword = await bcrypt.hash(password, 12)
+    const { client, shard } = await getDbForNewUser()
 
     const user = await client.user.create({
       data: {
@@ -102,7 +98,7 @@ export async function POST(req: Request) {
 
     console.log(`[register] User ${user.id} created in ${shard} database`)
 
-    // ── Welcome email — fire and forget ───────────────────────────────────────
+    // Welcome email — fire and forget
     sendEmail({
       to:      user.email!,
       subject: 'Welcome to OmniJobReady AI™',
@@ -113,6 +109,9 @@ export async function POST(req: Request) {
 
   } catch (error: any) {
     console.error('[register]', error)
-    return Response.json({ error: 'Registration failed. Please try again.' }, { status: 500 })
+    return Response.json(
+      { error: 'Registration failed. Please try again.' },
+      { status: 500 }
+    )
   }
 }

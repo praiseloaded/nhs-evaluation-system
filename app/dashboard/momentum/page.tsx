@@ -9,6 +9,7 @@ import {
   Sparkles, Target, CheckCircle2, XCircle, Award,
   BarChart3, Calendar, ChevronDown, RefreshCw,
 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 const OUTCOMES = [
   { value: 'pending',     label: 'Pending',      color: 'bg-muted text-muted-foreground' },
@@ -73,9 +74,9 @@ function BarChart({ data }: { data: { month: string; count: number }[] }) {
       {data.map((d, i) => (
         <div key={i} className="flex flex-col items-center gap-1 flex-1">
           <span className="text-[10px] text-muted-foreground tabular-nums">{d.count || ''}</span>
-          <div className="w-full rounded-t-md transition-all duration-700"
-            style={{ height: `${(d.count / max) * 72}px`, minHeight: d.count > 0 ? 4 : 0, background: d.count > 0 ? '#3b82f6' : undefined }}
-            className={d.count > 0 ? '' : 'bg-muted/30 rounded-t-md'} />
+          <div
+            className={`w-full rounded-t-md transition-all duration-700 ${d.count > 0 ? '' : 'bg-muted/30'}`}
+            style={{ height: `${(d.count / max) * 72}px`, minHeight: d.count > 0 ? 4 : 0, background: d.count > 0 ? '#3b82f6' : undefined }} />
           <span className="text-[10px] text-muted-foreground">{d.month}</span>
         </div>
       ))}
@@ -157,9 +158,9 @@ export default function MomentumPage() {
               Track your application velocity, interview rate, and success trend over time.
             </p>
           </div>
-          <button onClick={load} disabled={loading} className="p-2 rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">
+          <Button onClick={load} disabled={loading} className="p-2 rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -257,9 +258,9 @@ export default function MomentumPage() {
                   <div key={o.label} className="flex items-center gap-3">
                     <o.icon className={`w-4 h-4 shrink-0 ${o.color}`} />
                     <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                      <div className="h-full rounded-full transition-all duration-700"
-                        style={{ width: `${data.stats.totalSubmitted > 0 ? (o.count / data.stats.totalSubmitted) * 100 : 0}%`, background: 'currentColor' }}
-                        className={o.color} />
+                      <div
+                        className={`h-full rounded-full transition-all duration-700 ${o.color}`}
+                        style={{ width: `${data.stats.totalSubmitted > 0 ? (o.count / data.stats.totalSubmitted) * 100 : 0}%` }} />
                     </div>
                     <span className="text-xs font-bold text-foreground w-6 text-right">{o.count}</span>
                     <span className="text-xs text-muted-foreground w-12">{o.label}</span>

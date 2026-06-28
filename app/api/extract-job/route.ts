@@ -1,8 +1,8 @@
-import * as cheerio from "cheerio";
+﻿import * as cheerio from "cheerio";
 import { NextResponse } from "next/server";
 import { grokChatCompletion } from "@/lib/xai";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface UploadedFile {
   name: string;
@@ -30,7 +30,7 @@ const EMPTY_JOB: ExtractedJob = {
   desirableCriteria: "",
 };
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const SCRAPE_CHAR_LIMIT = 12_000;
 const FETCH_TIMEOUT_MS = 10_000;
@@ -39,7 +39,7 @@ const ALLOWED_PROTOCOLS = ["https:", "http:"];
 const SYSTEM_PROMPT = `
 You are an NHS job extraction engine. Analyse the provided content and extract structured job listing data.
 
-Return ONLY a valid JSON object with these exact keys — no markdown, no explanation, no preamble:
+Return ONLY a valid JSON object with these exact keys â€” no markdown, no explanation, no preamble:
 {
   "jobTitle": "string",
   "band": "string (e.g. Band 5, Band 7)",
@@ -53,7 +53,7 @@ Return ONLY a valid JSON object with these exact keys — no markdown, no explan
 If a field cannot be found, return an empty string for that field.
 `.trim();
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function isValidUrl(raw: string): boolean {
   try {
@@ -116,7 +116,7 @@ function sanitiseJob(raw: unknown): ExtractedJob {
       key,
       typeof obj[key] === "string" ? obj[key].trim() : "",
     ])
-  ) as ExtractedJob;
+  ) as unknown as ExtractedJob;
 }
 
 function parseJsonFromLLM(raw: string): ExtractedJob {
@@ -127,9 +127,9 @@ function parseJsonFromLLM(raw: string): ExtractedJob {
   return sanitiseJob(JSON.parse(cleaned));
 }
 
-// ─── File-based extraction via Gemini ─────────────────────────────────────────
+// â”€â”€â”€ File-based extraction via Gemini â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-// ─── File-based extraction via Gemini REST ────────────────────────────────────
+// â”€â”€â”€ File-based extraction via Gemini REST â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function extractFromFiles(
   jobDescFile?: UploadedFile,
@@ -185,7 +185,7 @@ async function extractFromFiles(
   return parseJsonFromLLM(text);
 }
 
-// ─── Route Handler ────────────────────────────────────────────────────────────
+// â”€â”€â”€ Route Handler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function POST(req: Request) {
   // 1. Parse request body
@@ -217,7 +217,7 @@ export async function POST(req: Request) {
     );
   }
 
-  // 3a. File-based path — if files provided, use Gemini directly
+  // 3a. File-based path â€” if files provided, use Gemini directly
   if (hasFiles) {
     let job: ExtractedJob;
     try {
@@ -247,7 +247,7 @@ export async function POST(req: Request) {
         }
         return NextResponse.json(merged);
       } catch {
-        // URL scrape failed — just return what we got from files
+        // URL scrape failed â€” just return what we got from files
         return NextResponse.json(job);
       }
     }

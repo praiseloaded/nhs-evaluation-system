@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { Navbar }   from '@/components/navbar'
 import Link         from 'next/link'
 import {
   ChevronRight, Loader2, Globe, AlertTriangle,
@@ -98,7 +97,7 @@ export default function CosNavigatorPage() {
 
         {/* Header */}
         <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center shrink-0 shadow-md shadow-blue-500/20">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-red-500 to-amber-500 flex items-center justify-center shrink-0 shadow-md shadow-blue-500/20">
             <Globe className="w-6 h-6 text-white" />
           </div>
           <div>

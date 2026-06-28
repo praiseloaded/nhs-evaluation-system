@@ -1,4 +1,4 @@
-// app/api/interview/generate/route.ts
+﻿// app/api/interview/generate/route.ts
 
 import { prisma } from "@/lib/prisma"
 import { getDb }  from "@/lib/db-router"
@@ -18,9 +18,9 @@ JOB SPEC:
 ${jobDescription.slice(0, 3000)}
 
 PANEL MEMBERS:
-1. Clinical Lead (Dr. Sarah Okonkwo) — tests clinical competence, patient safety, evidence-based practice
-2. HR Panel Member (James Mitchell) — tests NHS values, equality & diversity, conflict handling, professionalism
-3. Service Manager (Amara Osei) — tests operational delivery, caseload management, change leadership, governance
+1. Clinical Lead (Dr. Sarah Okonkwo) â€” tests clinical competence, patient safety, evidence-based practice
+2. HR Panel Member (James Mitchell) â€” tests NHS values, equality & diversity, conflict handling, professionalism
+3. Service Manager (Amara Osei) â€” tests operational delivery, caseload management, change leadership, governance
 
 RULES:
 - Generate exactly 9 questions: 3 per panellist
@@ -78,7 +78,7 @@ async function generateQuestions(jobTitle: string, jobDescription: string, band:
 
   if (!response.ok) {
     const err = await response.text()
-    throw new Error(`Gemini error: ${response.status} — ${err}`)
+    throw new Error(`Gemini error: ${response.status} â€” ${err}`)
   }
 
   const data = await response.json()
@@ -141,7 +141,7 @@ export async function POST(req: Request) {
         analysisId,
         jobTitle: analysis.jobTitle,
         band: (analysis as any).band ?? null,
-        panellists: NHS_PANEL,
+        panellists: NHS_PANEL as any,
         questions,
         status: "pending",
       },
@@ -151,7 +151,7 @@ export async function POST(req: Request) {
       success: true,
       interviewId: interview.id,
       questions,
-      panellists: NHS_PANEL,
+      panellists: NHS_PANEL as any,
     })
 
   } catch (error: any) {

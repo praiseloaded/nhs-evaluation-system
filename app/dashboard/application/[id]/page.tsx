@@ -480,7 +480,7 @@ function UnifiedStatementView({ app, onRefresh }: { app: AppData; onRefresh: () 
             {q1Error   && <p className="text-xs text-red-500">{q1Error}</p>}
             {q1Warning && <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> {q1Warning}</p>}
             <button onClick={generateQ1} disabled={genQ1}
-              className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-semibold flex items-center justify-center gap-2">
+              className="w-full py-3 rounded-xl bg-gradient-to-br from-red-500 to-amber-500 hover:bg-blue-500 disabled:opacity-40 text-white font-semibold flex items-center justify-center gap-2">
               {genQ1 ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating Q1…</> : q1Done ? <><RefreshCw className="w-4 h-4" /> Regenerate Q1</> : <><Sparkles className="w-4 h-4" /> Generate Q1 — Why You're Suitable</>}
             </button>
           </div>

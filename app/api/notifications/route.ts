@@ -1,7 +1,8 @@
 // app/api/notifications/route.ts
 
-import { getDb }  from '@/lib/db-router'
-import { auth }   from '@/auth'
+import { getDb }              from '@/lib/db-router'
+import { auth }              from '@/auth'
+import { getEffectiveUserId } from '@/lib/effective-user'
 
 export async function GET() {
   try {
@@ -10,7 +11,7 @@ export async function GET() {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const userId = session.user.id
+    const userId = await getEffectiveUserId() ?? session.user.id
     const db     = await getDb(userId)
 
     const [notifications, unreadCount] = await Promise.all([
@@ -43,7 +44,7 @@ export async function PATCH(req: Request) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const userId = session.user.id
+    const userId = await getEffectiveUserId() ?? session.user.id
     const db     = await getDb(userId)
     const body   = await req.json().catch(() => ({}))
     const { id } = body

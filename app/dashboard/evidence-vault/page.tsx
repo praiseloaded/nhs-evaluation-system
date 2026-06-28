@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import {
   ArrowLeft, Plus, Trash2, Edit2, X, Save, Loader2, Search,
@@ -93,11 +93,11 @@ function ExperienceTab() {
     skillTags: '', nhsValueTags: [] as string[], employer: '', dateOccurred: '',
   })
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true)
     fetch('/api/evidence-vault/entries').then(r => r.json()).then(d => setEntries(d.entries ?? [])).finally(() => setLoading(false))
-  }
-  useEffect(() => { load() }, [])
+  }, [])
+  useEffect(() => { load() }, [load])
 
   const resetForm = () => {
     setForm({ title: '', category: 'clinical', situation: '', task: '', action: '', result: '', skillTags: '', nhsValueTags: [], employer: '', dateOccurred: '' })

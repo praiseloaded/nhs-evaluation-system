@@ -214,16 +214,15 @@ function criterionRow(cur: Cursor, c: any) {
 function pill(cur: Cursor, text: string, bg: string, fg: string) {
   const w = cur.doc.getStringUnitWidth(text) * 7.5 / cur.doc.internal.scaleFactor + 6
   cur.doc.setFillColor(...hex(bg))
-  cur.doc.roundedRect(cur._pillX, cur.y - 3.5, w, 5, 1.5, 1.5, 'F')
+  cur.doc.roundedRect((cur as any)._pillX, cur.y - 3.5, w, 5, 1.5, 1.5, 'F')
   cur.doc.setFont('helvetica', 'normal')
   cur.doc.setFontSize(7.5)
   cur.doc.setTextColor(...hex(fg))
-  cur.doc.text(text, cur._pillX + 3, cur.y)
+  cur.doc.text(text, (cur as any)._pillX + 3, cur.y)
   return w + 3
 }
 
 // Extend Cursor with pill tracking
-declare module './ReportDownloadClient' {}
 ;(Cursor.prototype as any)._pillX = ML
 
 function pillRow(cur: Cursor, items: Array<{ label: string; bg: string; fg: string }>) {
