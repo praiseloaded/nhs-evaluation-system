@@ -1,8 +1,9 @@
 // app/dashboard/layout.tsx
-import { AppLayout }              from '@/components/app-layout'
-import { FeatureAccessProvider }  from '@/components/providers/feature-access-provider'
-import { ImpersonationBanner }    from '@/components/impersonation-banner'
-import { ReactNode }              from 'react'
+import { AppLayout }             from '@/components/app-layout'
+import { FeatureAccessProvider } from '@/components/providers/feature-access-provider'
+import { ImpersonationBanner }   from '@/components/impersonation-banner'
+import { DashboardAssistant }    from '@/components/dashboard-assistant'
+import { ReactNode }             from 'react'
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
@@ -10,6 +11,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       <FeatureAccessProvider>
         <ImpersonationBanner />
         {children}
+        <DashboardAssistant />
       </FeatureAccessProvider>
     </AppLayout>
   )
