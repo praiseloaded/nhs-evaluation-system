@@ -1,11 +1,11 @@
-// app/api/analysis/[id]/reanalyse/route.ts
-
-import { NextResponse }          from 'next/server'
-import { auth }                  from '@/auth'
-import { getDb }                 from '@/lib/db-router'
-import { getValidatedAIResult }  from '@/modules/ai/retry'
+import { getDb }               from '@/lib/db-router'
+import { getEffectiveUserId }  from '@/lib/effective-user'
+import { NextResponse } from 'next/server'
+import { auth } from '@/auth'
+import { prisma } from '@/lib/prisma'
+import { getValidatedAIResult } from '@/modules/ai/retry'
 import { calculateNhsBandScore } from '@/lib/scoring/calculate-overall-score'
-import { detectEvidenceVault }   from '@/lib/billing/detect-evidence-vault'
+import { detectEvidenceVault } from '@/lib/billing/detect-evidence-vault'
 
 export async function POST(
   req: Request,
@@ -15,15 +15,19 @@ export async function POST(
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
   }
+  const userId = (await getEffectiveUserId()) ?? (session.user.id as string)
+  const db     = await getDb(userId)
 
-  const db   = await getDb(session.user.id)
   const { id } = await params
 
+  // 1. Load existing record — ownership check
   const record = await db.analysis.findUnique({ where: { id } })
-  if (!record || record.userId !== session.user.id) {
+
+  if (!record || record.userId !== userId) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
+  // 2. Rebuild combined job spec exactly as the original route does
   const sections: string[] = []
   if (record.jobDescription)    sections.push(record.jobDescription)
   if (record.personSpec)        sections.push(`PERSON SPECIFICATION:\n${record.personSpec}`)
@@ -33,27 +37,24 @@ export async function POST(
   if (record.values)            sections.push(`VALUES REQUIRED:\n${record.values}`)
   const combinedJobSpec = sections.join('\n\n')
 
-  const rawTier = await import('@/lib/billing/tier').then(m => m.getUserTier(record.userId))
-  // Map our tiers to what getValidatedAIResult expects
-  const tier: "free" | "paid" = rawTier === 'free' ? 'free' : 'paid'
-
   const input = {
     jobTitle:  record.jobTitle  ?? '',
     jobSpec:   combinedJobSpec,
-    cv:        record.cv        ?? '',
-    statement: record.statement ?? '',
-    tier,
+    cv:        record.cv        ?? '',   // ← top-level column
+    statement: record.statement ?? '',   // ← top-level column
+    tier:      await import('@/lib/billing/tier').then(m => m.getUserTier(record.userId)),
   }
 
   const evidenceVault = await detectEvidenceVault({
-    cv:                record.cv                ?? '',
-    statement:         record.statement         ?? '',
-    jobDescription:    record.jobDescription    ?? '',
-    essentialCriteria: record.essentialCriteria ?? '',
-    desirableCriteria: record.desirableCriteria ?? '',
-    personSpec:        record.personSpec        ?? '',
-  })
+  cv:                record.cv                ?? "",
+  statement:         record.statement         ?? "",
+  jobDescription:    record.jobDescription    ?? "",
+  essentialCriteria: record.essentialCriteria ?? "",
+  desirableCriteria: record.desirableCriteria ?? "",
+  personSpec:        record.personSpec        ?? "",
+})
 
+  // 3. Re-run AI
   let aiResult: any
   try {
     aiResult = await getValidatedAIResult(input)
@@ -61,10 +62,15 @@ export async function POST(
     return NextResponse.json({ error: err.message }, { status: 502 })
   }
 
+  // 4. Recompute scored breakdown
   const scoredBreakdown = calculateNhsBandScore(aiResult)
   const result = { ...aiResult, scoredBreakdown, evidenceVault }
 
-  await db.analysis.update({ where: { id }, data: { result } })
+  // 5. Update the existing record — preserve all original fields, only update result
+  await db.analysis.update({
+    where: { id },
+    data:  { result },
+  })
 
   return NextResponse.json({ success: true })
 }

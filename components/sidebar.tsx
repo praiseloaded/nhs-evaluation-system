@@ -9,7 +9,7 @@ import {
   FolderOpen, Target, MapPin, Sparkles,
   ChevronLeft, ChevronRight, BarChart3,
   FileText, MessageCircle, Lock, FlaskConical, Flame, Globe, History,
-  Mail,
+  Mail, Zap, Bot, PoundSterling, Award, Shield,
 } from "lucide-react"
 import { useState, useEffect } from "react"
 import { ThemeSwitcher } from "./theme-switcher"
@@ -19,38 +19,56 @@ const NAV_GROUPS = [
   {
     label: "Overview",
     items: [
-      { href: "/dashboard",               label: "Dashboard",            icon: LayoutDashboard },
-      { href: "/dashboard/new-analysis",  label: "New Analysis",         icon: Plus            },
-      { href: "/dashboard/saved-analyses",label: "My Analyses",          icon: Files           },
-      { href: "/dashboard/intelligence", label: "Intelligence History",  icon: History         },
+      { href: "/dashboard",                label: "Dashboard",               icon: LayoutDashboard },
+      { href: "/dashboard/new-analysis",   label: "New Analysis",            icon: Plus            },
+      { href: "/dashboard/saved-analyses", label: "My Analyses",             icon: Files           },
+      { href: "/dashboard/intelligence",   label: "Intelligence History",    icon: History         },
     ],
   },
   {
-    label: "Tools",
+    label: "Apply",
     items: [
-      { href: "/dashboard/application",           label: "Statement Builder",     icon: PenLine,       },
-      { href: "/dashboard/ab-test",               label: "A/B Statement Test",    icon: FlaskConical,  badge: "NEW" },
-      { href: "/dashboard/criteria-explorer",      label: "Shortlist Intelligence™", icon: Flame,         badge: "NEW" },
-      { href: "/dashboard/cos-navigator",           label: "COS Navigator™",          icon: Globe,         badge: "NEW" },
-      { href: "/dashboard/applications",          label: "Track Applications",    icon: ListChecks,    },
-      { href: "/dashboard/shortlist-probability", label: "Shortlist Probability™",icon: Target,        },
-      { href: "/dashboard/momentum",              label: "Momentum Score™",       icon: BarChart3,     },
-      { href: "/dashboard/interview",             label: "Interview Simulator",   icon: Video,         badge: "AI", featureKey: "interview_simulator"   },
-      { href: "/dashboard/career-gps",            label: "Career GPS™",           icon: MapPin,        featureKey: "career_gps"                     },
-      { href: "/dashboard/evidence-vault",        label: "EvidenceVault™",        icon: FolderOpen,    },
-      { href: "/dashboard/evidence-vault/match",  label: "Auto-Match Evidence",   icon: Sparkles,      badge: "NEW" },
-      { href: "/dashboard/interview-probability", label: "Interview Probability™",icon: Target,        featureKey: "interview_probability"          },
-      { href: "/dashboard/cv-builder",            label: "CV Builder",            icon: FileText,      },
-     { href: "/dashboard/cv/templates", label: "NHS CV Templates", icon: FileText,      badge: "NEW" },
-      { href: "/dashboard/cover-letter", label: "Cover Letter AI",  icon: Mail,          badge: "NEW" },
-      { href: "/dashboard/mentorship",            label: "Mentorship",            icon: MessageCircle, featureKey: "mentorship"                     },
-    
+      { href: "/dashboard/job-ready",      label: "Job Ready™",              icon: Zap,           badge: "NEW" },
+      { href: "/dashboard/jobs",           label: "NHS Jobs",                icon: Globe,         badge: "NEW" },
+      { href: "/dashboard/application",    label: "Personal Statement Builder", icon: PenLine                 },
+      { href: "/dashboard/ab-test",        label: "A/B Statement Test",      icon: FlaskConical,  badge: "NEW" },
+      { href: "/dashboard/cover-letter",   label: "Cover Letter AI",         icon: Mail,          badge: "NEW" },
+      { href: "/dashboard/applications",   label: "Track Applications",      icon: ListChecks                  },
+    ],
+  },
+  {
+    label: "CV",
+    items: [
+      { href: "/dashboard/cv-builder",     label: "CV Builder",              icon: FileText                    },
+      { href: "/dashboard/cv/templates",   label: "NHS CV Templates",        icon: Award,         badge: "NEW" },
+    ],
+  },
+  {
+    label: "Intelligence",
+    items: [
+      { href: "/dashboard/criteria-explorer",     label: "Criteria Explorer™",      icon: Flame,    badge: "NEW" },
+      { href: "/dashboard/shortlist-probability",  label: "Shortlist Probability™",  icon: Target                 },
+      { href: "/dashboard/momentum",               label: "Momentum Score™",         icon: BarChart3              },
+      { href: "/dashboard/interview",              label: "Interview Simulator",     icon: Video,    badge: "AI", featureKey: "interview_simulator" },
+      { href: "/dashboard/interview-probability",  label: "Interview Probability™",  icon: Target,   featureKey: "interview_probability"          },
+      { href: "/dashboard/cos-navigator",          label: "COS Navigator™",          icon: Globe,    badge: "NEW" },
+    ],
+  },
+  {
+    label: "Career",
+    items: [
+      { href: "/dashboard/coach",          label: "AI Career Coach",         icon: Bot,           badge: "AI"  },
+      { href: "/dashboard/salary",         label: "Salary Predictor",        icon: PoundSterling, badge: "NEW" },
+      { href: "/dashboard/career-gps",     label: "Career GPS™",             icon: MapPin,        featureKey: "career_gps" },
+      { href: "/dashboard/evidence-vault", label: "EvidenceVault™",          icon: FolderOpen                  },
+      { href: "/dashboard/evidence-vault/match", label: "Auto-Match Evidence", icon: Sparkles,    badge: "NEW" },
+      { href: "/dashboard/mentorship",     label: "Mentorship",              icon: MessageCircle, featureKey: "mentorship" },
     ],
   },
   {
     label: "Account",
     items: [
-      { href: "/dashboard/settings", label: "Settings", icon: Settings },
+      { href: "/dashboard/settings",       label: "Settings",                icon: Settings },
     ],
   },
 ]
@@ -61,7 +79,9 @@ type FlagMap = Record<string, { minTier: string; enabled: boolean }>
 export function Sidebar() {
   const pathname  = usePathname()
   const { data: session } = useSession()
-  const userTier  = (session?.user as any)?.tier ?? "free"
+  const userTier  = (session?.user as any)?.tier  ?? "free"
+  const userRole  = (session?.user as any)?.role  ?? ""
+  const isAdmin   = userRole === "admin" || (session?.user as any)?.isAdmin === true
   const userRank  = TIER_RANK[userTier] ?? 0
 
   const [isOpen,    setIsOpen]    = useState(false)
@@ -128,8 +148,7 @@ export function Sidebar() {
         ${isOpen ? "translate-x-0" : "-translate-x-full"}
         ${collapsed ? "w-[72px]" : "w-[260px]"}`}
       >
-
-        {/* ── Brand ───────────────────────────────────────────────────── */}
+        {/* ── Brand ─────────────────────────────────────────────────── */}
         <div className={`h-[64px] flex items-center gap-3 border-b border-border shrink-0 ${collapsed ? "justify-center px-3" : "px-5"}`}>
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500 to-amber-500 flex items-center justify-center shrink-0 shadow-md shadow-blue-500/25">
             <span className="text-white text-[9px] font-black tracking-tight">OJR</span>
@@ -146,7 +165,22 @@ export function Sidebar() {
           {!collapsed && <div className="shrink-0"><NotificationBell /></div>}
         </div>
 
-        {/* ── Nav ─────────────────────────────────────────────────────── */}
+        {/* ── Admin banner — only visible to admins ─────────────────── */}
+        {isAdmin && (
+          <Link
+            href="/admin"
+            onClick={() => setIsOpen(false)}
+            className={`flex items-center gap-2 bg-amber-500 hover:bg-amber-400 transition-colors shrink-0
+              ${collapsed ? "justify-center px-2 py-2.5" : "px-4 py-2.5"}`}
+          >
+            <Shield className="w-3.5 h-3.5 text-white shrink-0" />
+            {!collapsed && (
+              <span className="text-[11px] font-black text-white tracking-wide uppercase">Admin Panel</span>
+            )}
+          </Link>
+        )}
+
+        {/* ── Nav ───────────────────────────────────────────────────── */}
         <nav className="flex-1 overflow-y-auto py-3 space-y-5 scrollbar-thin">
           {NAV_GROUPS.map((group) => (
             <div key={group.label} className={collapsed ? "px-2" : "px-3"}>
@@ -169,8 +203,8 @@ export function Sidebar() {
                       href={item.href}
                       onClick={() => setIsOpen(false)}
                       title={collapsed ? item.label : undefined}
-                      className={`group relative flex items-center gap-2.5 rounded-lg text-[14px] font-medium transition-all duration-150
-                        ${collapsed ? "justify-center py-3 px-1" : "px-3 py-2.5"}
+                      className={`group relative flex items-center gap-2.5 rounded-lg text-[13px] font-medium transition-all duration-150
+                        ${collapsed ? "justify-center py-3 px-1" : "px-3 py-2"}
                         ${active
                           ? "bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400"
                           : locked
@@ -180,10 +214,10 @@ export function Sidebar() {
                     >
                       {/* Active bar */}
                       {active && !collapsed && (
-                        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-[18px] w-[3px] rounded-r-full bg-gradient-to-br from-red-500 to-amber-500 dark:bg-blue-400" />
+                        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-[18px] w-[3px] rounded-r-full bg-gradient-to-br from-red-500 to-amber-500" />
                       )}
 
-                      <Icon className={`h-5 w-5 shrink-0 transition-all
+                      <Icon className={`h-4 w-4 shrink-0 transition-all
                         ${active ? "text-blue-600 dark:text-blue-400" : ""}
                         ${!active && !locked ? "group-hover:scale-110" : ""}
                       `} />
@@ -195,9 +229,9 @@ export function Sidebar() {
                             <Lock className="w-3 h-3 shrink-0 opacity-30" />
                           ) : (item as any).badge ? (
                             <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full shrink-0 tracking-wide ${
-                              (item as any).badge === "NEW"
-                                ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300"
-                                : "bg-violet-100 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300"
+                              (item as any).badge === "AI"
+                                ? "bg-violet-100 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300"
+                                : "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300"
                             }`}>
                               {(item as any).badge}
                             </span>
@@ -208,7 +242,7 @@ export function Sidebar() {
                       {/* Collapsed badge dot */}
                       {collapsed && !locked && (item as any).badge && (
                         <span className={`absolute top-1 right-1 w-1.5 h-1.5 rounded-full ${
-                          (item as any).badge === 'NEW' ? 'bg-emerald-400' : 'bg-violet-400'
+                          (item as any).badge === "AI" ? "bg-violet-400" : "bg-emerald-400"
                         }`} />
                       )}
                     </Link>
@@ -219,21 +253,19 @@ export function Sidebar() {
           ))}
         </nav>
 
-        {/* ── Footer ──────────────────────────────────────────────────── */}
+        {/* ── Footer ────────────────────────────────────────────────── */}
         <div className={`border-t border-border shrink-0 py-3 ${collapsed ? "px-2 flex flex-col items-center gap-2" : "px-3 space-y-2"}`}>
-
-          {/* Tier + theme */}
           {!collapsed ? (
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2">
                 <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full ${
-                  userTier === 'elite' ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800' :
-                  userTier === 'pro'   ? 'bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800' :
-                                         'bg-muted text-muted-foreground border border-border'
+                  userTier === "elite" ? "bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800" :
+                  userTier === "pro"   ? "bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800" :
+                                         "bg-muted text-muted-foreground border border-border"
                 }`}>
                   {userTier}
                 </span>
-                {userTier === 'free' && (
+                {userTier === "free" && (
                   <Link href="/upgrade" className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline font-semibold">
                     Upgrade
                   </Link>
@@ -248,7 +280,6 @@ export function Sidebar() {
             </>
           )}
 
-          {/* Collapse toggle — desktop only */}
           <button
             onClick={toggleCollapsed}
             className={`hidden md:flex items-center w-full rounded-lg text-[11px] text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors px-2 py-1.5 ${collapsed ? "justify-center" : "gap-2"}`}

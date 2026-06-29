@@ -1,5 +1,4 @@
 // app/dashboard/cv-builder/page.tsx
-// NHS CV Builder — manual entry, 3 templates, live preview, docx export
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
@@ -318,8 +317,8 @@ export default function CvBuilderPage() {
   if (profiles.length === 0 && !cv.id) return (
     <div className="max-w-xl mx-auto px-4 py-16 text-center space-y-4">
       <FileText className="w-10 h-10 text-muted-foreground mx-auto" />
-      <h1 className="text-xl font-bold text-foreground">NHS CV Builder</h1>
-      <p className="text-sm text-muted-foreground">Build a CV in an NHS-acceptable format — reverse chronological, clear headings, no photo needed.</p>
+      <h1 className="text-xl font-bold text-foreground">Omni CV Builder</h1>
+      <p className="text-sm text-muted-foreground">Build a CV in an  — reverse chronological, clear headings, no photo needed.</p>
       <button onClick={createNew} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors">
         <Plus className="w-4 h-4" /> Start your CV
       </button>
@@ -335,9 +334,9 @@ export default function CvBuilderPage() {
       <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight flex items-center gap-2">
-            <FileText className="w-6 h-6 text-primary" /> NHS CV Builder
+            <FileText className="w-6 h-6 text-primary" /> Omni CV Builder
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">NHS-acceptable format — reverse chronological, no photo, clear headings.</p>
+          <p className="text-sm text-muted-foreground mt-1">Acceptable format — reverse chronological, no photo, clear headings.</p>
         </div>
         <div className="flex items-center gap-2">
           {profiles.length > 1 && (

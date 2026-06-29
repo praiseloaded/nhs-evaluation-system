@@ -5,8 +5,8 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import {
   ArrowLeft, Sparkles, CheckCircle2, Loader2, Copy,
-  FileText, Download, ChevronRight, Search, X,
-  Zap, Award, BarChart3, RefreshCw,
+  FileText, ChevronRight, Search, X,
+  Zap, Award, RefreshCw,
 } from 'lucide-react'
 import type { NHSTemplate } from '@/lib/cv/nhs-templates'
 import { CV_TEMPLATES, TEMPLATE_CATEGORIES, CvPreviewRouter } from '@/components/cv-preview-templates'
@@ -20,7 +20,7 @@ const SAMPLE: CvData = {
   phone: '07700 900123',
   location: 'Edinburgh, Scotland',
   professionalRegistration: 'NMC PIN: 12A3456E',
-  personalStatement: 'Dedicated registered nurse with 6 years of experience delivering compassionate, evidence-based care across acute medical and surgical wards. Demonstrated ability to lead handovers, mentor Band 2–3 staff, and contribute to clinical audit and quality improvement initiatives. Committed to upholding NHS values and delivering person-centred care.',
+  personalStatement: 'Dedicated registered nurse with 6 years of experience delivering compassionate, evidence-based care across acute medical and surgical wards. Demonstrated ability to lead handovers, mentor Band 2–3 staff, and contribute to clinical audit and quality improvement initiatives.',
   workExperience: [
     { id: '1', jobTitle: 'Staff Nurse', employer: 'NHS Lothian', location: 'Edinburgh', startDate: 'Jan 2020', endDate: '', current: true, bullets: ['Delivered safe, compassionate care to a caseload of 8–10 patients per shift on a 28-bed acute medical ward', 'Mentored 3 Band 2 healthcare assistants and supported their NVQ progression', 'Led weekly clinical governance meetings and contributed to a falls reduction audit (23% reduction)'] },
     { id: '2', jobTitle: 'Junior Staff Nurse', employer: 'NHS Greater Glasgow & Clyde', location: 'Glasgow', startDate: 'Sep 2018', endDate: 'Dec 2019', current: false, bullets: ['Completed preceptorship programme with distinction', 'Managed drug rounds and IV medication administration for 12-bed surgical bay'] },
@@ -51,20 +51,14 @@ interface Generated {
   coverLetterOpener:  string
 }
 
-// Mini template thumbnail — renders a scaled-down version of the actual template
 function TemplateThumbnail({ templateId, isSelected }: { templateId: string; isSelected: boolean }) {
   const sampleWithTemplate = { ...SAMPLE, template: templateId }
   return (
     <div style={{
-      width: '100%',
-      aspectRatio: '210/297',
-      overflow: 'hidden',
-      borderRadius: 6,
-      position: 'relative',
-      border: isSelected ? '2px solid #3b82f6' : '1px solid #e2e8f0',
+      width: '100%', aspectRatio: '210/297', overflow: 'hidden', borderRadius: 6,
+      position: 'relative', border: isSelected ? '2px solid #3b82f6' : '1px solid #e2e8f0',
       boxShadow: isSelected ? '0 0 0 3px rgba(59,130,246,0.2)' : '0 1px 3px rgba(0,0,0,0.06)',
-      transition: 'all 0.15s',
-      background: '#fff',
+      transition: 'all 0.15s', background: '#fff',
     }}>
       <div style={{ transform: 'scale(0.28)', transformOrigin: 'top left', width: '357%', height: '357%', pointerEvents: 'none' }}>
         <CvPreviewRouter cv={sampleWithTemplate} />
@@ -81,17 +75,20 @@ function TemplateThumbnail({ templateId, isSelected }: { templateId: string; isS
 export default function CVTemplatesPage() {
   const [nhsTemplates,  setNhsTemplates]  = useState<NHSTemplate[]>([])
   const [loading,       setLoading]       = useState(true)
-  const [selectedCvT,  setSelectedCvT]   = useState(CV_TEMPLATES[0])
-  const [selectedRole, setSelectedRole]  = useState<NHSTemplate | null>(null)
-  const [catFilter,    setCatFilter]     = useState('All')
-  const [search,       setSearch]        = useState('')
-  const [step,         setStep]          = useState<1|2|3>(1)
-  const [context,      setContext]       = useState('')
-  const [generating,   setGenerating]    = useState(false)
-  const [generated,    setGenerated]     = useState<Generated | null>(null)
-  const [error,        setError]         = useState<string|null>(null)
-  const [copied,       setCopied]        = useState<string|null>(null)
-  const [preview,      setPreview]       = useState<CvData>({ ...SAMPLE, template: CV_TEMPLATES[0].id })
+  const [selectedCvT,   setSelectedCvT]   = useState(CV_TEMPLATES[0])
+  const [selectedRole,  setSelectedRole]  = useState<NHSTemplate | null>(null)
+  const [catFilter,     setCatFilter]     = useState('All')
+  const [search,        setSearch]        = useState('')
+  const [step,          setStep]          = useState<1|2|3>(1)
+  const [context,       setContext]       = useState('')
+  const [generating,    setGenerating]    = useState(false)
+  const [generated,     setGenerated]     = useState<Generated | null>(null)
+  const [error,         setError]         = useState<string|null>(null)
+  const [copied,        setCopied]        = useState<string|null>(null)
+  const [preview,       setPreview]       = useState<CvData>({ ...SAMPLE, template: CV_TEMPLATES[0].id })
+  // ── Populate state ─────────────────────────────────────────────────────────
+  const [pushing,       setPushing]       = useState(false)
+  const [pushed,        setPushed]        = useState(false)
 
   useEffect(() => {
     fetch('/api/cv/templates')
@@ -106,14 +103,41 @@ export default function CVTemplatesPage() {
   }, [selectedCvT])
 
   const filteredCvTemplates = CV_TEMPLATES.filter(t => {
-    const matchCat  = catFilter === 'All' || (t as any).category === catFilter
+    const matchCat    = catFilter === 'All' || (t as any).category === catFilter
     const matchSearch = !search || t.label.toLowerCase().includes(search.toLowerCase())
     return matchCat && matchSearch
   })
 
   const filteredRoles = nhsTemplates.filter(t =>
-    !search || t.title.toLowerCase().includes(search.toLowerCase()) || t.band.toLowerCase().includes(search.toLowerCase())
+    !search || t.title.toLowerCase().includes(search.toLowerCase()) ||
+    t.band.toLowerCase().includes(search.toLowerCase())
   )
+
+  // ── Push generated content into CV Profile + navigate to builder ───────────
+  const pushToBuilder = async () => {
+    if (!generated) return
+    setPushing(true)
+    try {
+      const res  = await fetch('/api/cv/populate', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          personalStatement:  generated.personalStatement,
+          keySkills:          generated.keySkills,
+          achievementBullets: generated.achievementBullets,
+          title: selectedRole ? `${selectedRole.title} CV` : 'My CV',
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Failed to save')
+      setPushed(true)
+      // Hard navigation — forces CV Builder to remount and reload from DB
+      window.location.href = '/dashboard/cv-builder'
+    } catch (e: any) {
+      setError('Could not save to CV Builder: ' + e.message)
+      setPushing(false)
+    }
+  }
 
   const generate = async () => {
     if (!selectedRole) return
@@ -150,7 +174,7 @@ export default function CVTemplatesPage() {
             </Link>
             <div>
               <h1 className="text-sm font-bold text-white">NHS CV Templates</h1>
-              <p className="text-[11px] text-slate-500">12 designs · AI-generated content · ATS optimised</p>
+              <p className="text-[11px] text-slate-500">35 designs · AI-generated content · ATS optimised</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -167,20 +191,22 @@ export default function CVTemplatesPage() {
       {/* Step indicator */}
       <div className="border-b border-slate-800 bg-slate-900/50">
         <div className="max-w-7xl mx-auto px-6 py-3 flex items-center gap-2">
-          {[
+          {([
             { n: 1, label: 'Choose visual design' },
             { n: 2, label: 'Choose role template' },
-            { n: 3, label: 'Review AI content' },
-          ].map((s, i) => (
+            { n: 3, label: 'Review & save to CV Builder' },
+          ] as const).map((s, i) => (
             <div key={s.n} className="flex items-center gap-2">
               <button
-                onClick={() => { if (s.n <= step) setStep(s.n as 1|2|3) }}
+                onClick={() => { if (s.n <= step) setStep(s.n) }}
                 className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold transition-all ${
                   step === s.n ? 'bg-blue-600 text-white' :
                   step > s.n  ? 'bg-emerald-900/50 text-emerald-400 cursor-pointer hover:bg-emerald-900' :
                   'text-slate-600 cursor-default'
                 }`}>
-                {step > s.n ? <CheckCircle2 className="w-3 h-3" /> : <span className="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[10px]">{s.n}</span>}
+                {step > s.n
+                  ? <CheckCircle2 className="w-3 h-3" />
+                  : <span className="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[10px]">{s.n}</span>}
                 {s.label}
               </button>
               {i < 2 && <ChevronRight className="w-3 h-3 text-slate-700" />}
@@ -191,18 +217,14 @@ export default function CVTemplatesPage() {
 
       <div className="max-w-7xl mx-auto px-6 py-8">
 
-        {/* ── STEP 1: Choose visual design ───────────────────────────────── */}
+        {/* ── STEP 1: Choose visual design ─────────────────────────────── */}
         {step === 1 && (
           <div className="grid lg:grid-cols-[320px_1fr] gap-8">
-
-            {/* Left: template gallery */}
             <div className="space-y-4">
               <div>
                 <h2 className="text-lg font-black text-white mb-1">Choose your design</h2>
                 <p className="text-sm text-slate-400">Pick the visual style that fits your role and seniority.</p>
               </div>
-
-              {/* Search + filter */}
               <div className="space-y-2">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
@@ -219,17 +241,15 @@ export default function CVTemplatesPage() {
                   ))}
                 </div>
               </div>
-
-              {/* Template grid */}
               <div className="grid grid-cols-2 gap-3 max-h-[calc(100vh-320px)] overflow-y-auto pr-1">
                 {filteredCvTemplates.map(t => (
-                  <button key={t.id} onClick={() => setSelectedCvT(t)}
-                    className="text-left group">
+                  <button key={t.id} onClick={() => setSelectedCvT(t)} className="text-left group">
                     <TemplateThumbnail templateId={t.id} isSelected={selectedCvT.id === t.id} />
                     <div className="mt-2 px-0.5">
                       <div className="flex items-center gap-1.5">
                         <span style={{ background: (t as any).color ?? '#1B3A5C' }} className="w-2 h-2 rounded-full shrink-0" />
                         <p className="text-[11px] font-bold text-white truncate">{t.label}</p>
+                        {(t as any).hasPhoto && <span className="text-[9px]">📷</span>}
                       </div>
                       <p className="text-[10px] text-slate-500 mt-0.5 truncate">{(t as any).best}</p>
                     </div>
@@ -238,7 +258,6 @@ export default function CVTemplatesPage() {
               </div>
             </div>
 
-            {/* Right: live preview */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -253,23 +272,18 @@ export default function CVTemplatesPage() {
                   Use this design <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
-
-              {/* Full preview */}
               <div className="rounded-2xl overflow-hidden border border-slate-700 shadow-2xl"
                 style={{ maxHeight: 'calc(100vh - 240px)', overflowY: 'auto' }}>
                 <CvPreviewRouter cv={preview} />
               </div>
-
               <p className="text-[11px] text-slate-600 text-center">Preview uses sample data — your real content appears after generation</p>
             </div>
           </div>
         )}
 
-        {/* ── STEP 2: Choose role template ───────────────────────────────── */}
+        {/* ── STEP 2: Choose role template ─────────────────────────────── */}
         {step === 2 && (
           <div className="grid lg:grid-cols-[380px_1fr] gap-8">
-
-            {/* Left: role picker */}
             <div className="space-y-4">
               <div>
                 <div className="flex items-center gap-2 mb-1">
@@ -277,16 +291,14 @@ export default function CVTemplatesPage() {
                   <span className="text-xs text-slate-400 font-semibold">{selectedCvT.label}</span>
                 </div>
                 <h2 className="text-lg font-black text-white mb-1">Choose your role</h2>
-                <p className="text-sm text-slate-400">Select the NHS role closest to yours. AI will generate keywords and content specific to that role.</p>
+                <p className="text-sm text-slate-400">Select the NHS role closest to yours.</p>
               </div>
-
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
                 <input value={search} onChange={e => setSearch(e.target.value)}
                   placeholder="Search roles e.g. phlebotomist, BMS…"
                   className="w-full pl-9 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500" />
               </div>
-
               <div className="space-y-2 max-h-[calc(100vh-380px)] overflow-y-auto pr-1">
                 {loading ? (
                   <div className="flex items-center justify-center py-12"><Loader2 className="w-5 h-5 animate-spin text-slate-500" /></div>
@@ -324,7 +336,6 @@ export default function CVTemplatesPage() {
               </div>
             </div>
 
-            {/* Right: selected role details + context input */}
             <div className="space-y-5">
               {!selectedRole ? (
                 <div className="rounded-2xl border border-dashed border-slate-700 p-16 text-center space-y-3">
@@ -336,7 +347,6 @@ export default function CVTemplatesPage() {
                 </div>
               ) : (
                 <>
-                  {/* Role detail card */}
                   <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6 space-y-5">
                     <div>
                       <div className="flex items-center gap-2 mb-2">
@@ -346,7 +356,6 @@ export default function CVTemplatesPage() {
                       <h3 className="text-lg font-black text-white">{selectedRole.title}</h3>
                       <p className="text-sm text-slate-400 mt-1">{selectedRole.description}</p>
                     </div>
-
                     <div>
                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">ATS Keywords ({selectedRole.atsKeywords.length})</p>
                       <div className="flex flex-wrap gap-1.5">
@@ -355,34 +364,22 @@ export default function CVTemplatesPage() {
                         ))}
                       </div>
                     </div>
-
-                    <div>
-                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">CV Sections</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {selectedRole.sections.map(s => (
-                          <span key={s} className="text-[10px] px-2 py-0.5 rounded-full bg-slate-700/60 text-slate-400">{s}</span>
-                        ))}
-                      </div>
-                    </div>
-
                     <div>
                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Achievement Prompts</p>
                       <div className="space-y-2">
                         {selectedRole.starPrompts.map((p, i) => (
                           <p key={i} className="text-xs text-slate-400 flex gap-2">
-                            <span className="text-blue-400 font-bold shrink-0">{i + 1}.</span>
-                            {p}
+                            <span className="text-blue-400 font-bold shrink-0">{i + 1}.</span>{p}
                           </p>
                         ))}
                       </div>
                     </div>
                   </div>
 
-                  {/* Context input */}
                   <div className="rounded-2xl border border-slate-700 bg-slate-800/30 p-5 space-y-3">
                     <div>
                       <p className="text-sm font-bold text-white">Add your context <span className="text-slate-500 font-normal">(optional but recommended)</span></p>
-                      <p className="text-xs text-slate-500 mt-0.5">The more you add, the more personalised the output. Years of experience, your employer, key achievements.</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Years of experience, employer, key achievements, registration details.</p>
                     </div>
                     <textarea value={context} onChange={e => setContext(e.target.value)} rows={4}
                       placeholder={`e.g. 4 years phlebotomy experience at NHS Lothian, competent in paediatric venepuncture, IBMS member, looking to progress to Band 4…`}
@@ -402,33 +399,41 @@ export default function CVTemplatesPage() {
                       ? <><Loader2 className="w-5 h-5 animate-spin" /> Generating NHS CV content…</>
                       : <><Zap className="w-5 h-5" /> Generate AI CV Content</>}
                   </button>
-
-                  <p className="text-[11px] text-slate-600 text-center">Generates: personal statement · key skills · achievement bullets · section guidance · ATS score</p>
+                  <p className="text-[11px] text-slate-600 text-center">Generates personal statement · key skills · achievement bullets · ATS keywords</p>
                 </>
               )}
             </div>
           </div>
         )}
 
-        {/* ── STEP 3: Review generated content ──────────────────────────── */}
+        {/* ── STEP 3: Review + Save to CV Builder ──────────────────────── */}
         {step === 3 && generated && (
           <div className="max-w-4xl mx-auto space-y-6">
             <div className="flex items-center justify-between gap-4 flex-wrap">
               <div>
                 <h2 className="text-xl font-black text-white">Your AI-generated CV content</h2>
                 <p className="text-sm text-slate-400 mt-1">
-                  For <span className="text-white font-semibold">{selectedRole?.title}</span> using the <span className="font-semibold" style={{ color: (selectedCvT as any).color ?? '#60a5fa' }}>{selectedCvT.label}</span> design.
+                  For <span className="text-white font-semibold">{selectedRole?.title}</span> using the{' '}
+                  <span className="font-semibold" style={{ color: (selectedCvT as any).color ?? '#60a5fa' }}>{selectedCvT.label}</span> design.
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => { setStep(2); setGenerated(null) }}
+                <button onClick={() => { setStep(2); setGenerated(null); setPushed(false) }}
                   className="flex items-center gap-1.5 text-xs border border-slate-700 text-slate-400 hover:text-white rounded-lg px-3 py-2 transition-colors">
                   <RefreshCw className="w-3.5 h-3.5" /> Regenerate
                 </button>
-                <Link href="/dashboard/cv-builder"
-                  className="flex items-center gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-3 py-2 font-bold transition-colors">
-                  <FileText className="w-3.5 h-3.5" /> Open in CV Builder
-                </Link>
+                {pushed ? (
+                  <div className="flex items-center gap-1.5 text-xs bg-emerald-600 text-white rounded-lg px-3 py-2 font-bold">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Saved! Opening CV Builder…
+                  </div>
+                ) : (
+                  <button onClick={pushToBuilder} disabled={pushing}
+                    className="flex items-center gap-1.5 text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white rounded-lg px-3 py-2 font-bold transition-colors">
+                    {pushing
+                      ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving…</>
+                      : <><FileText className="w-3.5 h-3.5" /> Save &amp; Open CV Builder</>}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -450,7 +455,6 @@ export default function CVTemplatesPage() {
               </div>
             </div>
 
-            {/* Content sections */}
             <div className="grid md:grid-cols-2 gap-4">
 
               {/* Personal Statement */}
@@ -505,30 +509,31 @@ export default function CVTemplatesPage() {
                 <div className="px-5 py-4 space-y-2.5">
                   {generated.achievementBullets.map((b, i) => (
                     <p key={i} className="text-sm text-slate-200 flex gap-2.5">
-                      <span className="text-purple-400 shrink-0 font-bold">▸</span>
-                      {b}
+                      <span className="text-purple-400 shrink-0 font-bold">▸</span>{b}
                     </p>
                   ))}
                 </div>
               </div>
 
               {/* Section Guidance */}
-              <div className="md:col-span-2 rounded-2xl border border-slate-700 bg-slate-800/30 overflow-hidden">
-                <div className="px-5 py-3.5 border-b border-slate-700/50 bg-slate-800/50">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-amber-400" />
-                    <p className="text-sm font-bold text-white">Section Guidance</p>
+              {Object.keys(generated.sectionGuidance).length > 0 && (
+                <div className="md:col-span-2 rounded-2xl border border-slate-700 bg-slate-800/30 overflow-hidden">
+                  <div className="px-5 py-3.5 border-b border-slate-700/50 bg-slate-800/50">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-amber-400" />
+                      <p className="text-sm font-bold text-white">Section Guidance</p>
+                    </div>
+                  </div>
+                  <div className="px-5 py-4 grid sm:grid-cols-3 gap-4">
+                    {Object.entries(generated.sectionGuidance).map(([section, guidance]) => (
+                      <div key={section}>
+                        <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-1 capitalize">{section}</p>
+                        <p className="text-xs text-slate-400 leading-relaxed">{guidance as string}</p>
+                      </div>
+                    ))}
                   </div>
                 </div>
-                <div className="px-5 py-4 grid sm:grid-cols-3 gap-4">
-                  {Object.entries(generated.sectionGuidance).map(([section, guidance]) => (
-                    <div key={section}>
-                      <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-1 capitalize">{section}</p>
-                      <p className="text-xs text-slate-400 leading-relaxed">{guidance as string}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              )}
 
               {/* Cover letter opener */}
               {generated.coverLetterOpener && (
@@ -556,13 +561,24 @@ export default function CVTemplatesPage() {
             <div className="rounded-2xl border border-emerald-800/30 bg-emerald-950/20 p-5 flex items-center justify-between gap-4 flex-wrap">
               <div>
                 <p className="text-sm font-bold text-white">Ready to build your full CV?</p>
-                <p className="text-xs text-slate-400 mt-0.5">Copy the content above into the CV Builder, then export as a professional Word document.</p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Click "Save & Open CV Builder" — your personal statement and skills are written in automatically, then pick your template and export.
+                </p>
               </div>
               <div className="flex gap-3">
-                <Link href="/dashboard/cv-builder"
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold transition-colors">
-                  <FileText className="w-4 h-4" /> Open CV Builder
-                </Link>
+                {pushed ? (
+                  <Link href="/dashboard/cv-builder"
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold transition-colors">
+                    <CheckCircle2 className="w-4 h-4" /> Open CV Builder →
+                  </Link>
+                ) : (
+                  <button onClick={pushToBuilder} disabled={pushing}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-sm font-bold transition-colors">
+                    {pushing
+                      ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</>
+                      : <><FileText className="w-4 h-4" /> Save &amp; Open CV Builder</>}
+                  </button>
+                )}
                 <Link href="/dashboard/cover-letter"
                   className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-600 hover:border-slate-500 text-slate-300 hover:text-white text-sm font-semibold transition-colors">
                   <Sparkles className="w-4 h-4" /> Cover Letter

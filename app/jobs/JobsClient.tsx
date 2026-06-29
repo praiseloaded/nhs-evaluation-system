@@ -358,7 +358,7 @@ function JobsPageContent({ isLoggedIn, cosMode = false }: { isLoggedIn: boolean;
             }
           </button>
           <div className="flex flex-wrap gap-2">
-            {['Phlebotomist', 'Staff Nurse', 'Healthcare Assistant', 'Radiographer'].map(s => (
+            {['Healthcare Support Worker', 'Clinical Support Worker', 'Clinical Reaserh Assistance', 'Phlebotomist'].map(s => (
               <button
                 key={s}
                 type="button"

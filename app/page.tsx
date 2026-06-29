@@ -239,9 +239,9 @@ export default function HomePage() {
           {/* Headline */}
           <div className={`text-center max-w-4xl mx-auto mb-8 transition-all duration-700 delay-75 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}>
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black text-foreground leading-[1.04] tracking-tight mb-6">
-              Get shortlisted.<br />
+              Get Shortlisted.<br />
               <span className="bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">
-                Not overlooked.
+                Not Overlooked.
               </span>
             </h1>
             <p className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">

@@ -1,14 +1,13 @@
 // app/api/analysis/[id]/route.ts
 
+import { getDb }               from '@/lib/db-router'
+import { getEffectiveUserId }  from '@/lib/effective-user'
 import { prisma }                  from '@/lib/prisma'
 import { auth }                    from '@/auth'
 import { getUserTier }             from '@/lib/billing/tier'
 import { sanitizeAnalysisForTier } from '@/lib/billing/sanitize-analysis'
 import { calculateNhsBandScore }   from '@/lib/scoring/calculate-overall-score'
 import { NextRequest }             from 'next/server'
-import { getDb }  from '@/lib/db-router'
-
-export const runtime = 'nodejs'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -18,12 +17,11 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
     // ── Auth ─────────────────────────────────────────────────────────────────
     const session = await auth()
-    if (!session?.user?.id) {
+    if (!userId) {
       return Response.json({ success: false, error: 'Unauthorized' }, { status: 401 })
     }
-
-    const userId = session.user.id as string
-    const db      = await getDb(userId)
+    const userId = (await getEffectiveUserId()) ?? (session.user.id as string)
+    const db     = await getDb(userId)
 
     // ── Fetch ─────────────────────────────────────────────────────────────────
     const record = await db.analysis.findUnique({ where: { id } })

@@ -230,7 +230,7 @@ function CosPageContent({ isLoggedIn }: { isLoggedIn: boolean }) {
             {loading ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Searching…</> : <><Search className="w-3.5 h-3.5" /> Search</>}
           </button>
           <div className="flex flex-wrap gap-2">
-            {['Staff Nurse', 'Radiographer', 'Physiotherapist', 'Healthcare Assistant'].map(s => (
+            {['Healthcare Support Worker', 'Clinical Support Worker', 'Clinical Reaserh Assistance', 'Phlebotomist'].map(s => (
               <button key={s} type="button" onClick={() => { setKeyword(s); runSearch(s, location, 1) }}
                 className="text-[12px] px-3 py-1.5 rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-border/80 transition-colors">
                 {s}
