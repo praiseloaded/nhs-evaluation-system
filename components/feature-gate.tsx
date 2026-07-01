@@ -22,8 +22,8 @@ import { getUserTier } from "@/lib/billing/tier"
 import Link from "next/link"
 import { Lock, Sparkles, ArrowRight } from "lucide-react"
 
-const TIER_RANK: Record<string, number> = { free: 0, pro: 1, elite: 2 }
-const TIER_LABEL: Record<string, string> = { pro: "Pro", elite: "Elite" }
+const TIER_RANK: Record<string, number> = { free: 0, pro: 1, elite: 2, premium: 3 }
+const TIER_LABEL: Record<string, string> = { pro: "Pro", elite: "Elite", premium: "Premium" }
 
 const FEATURE_COPY: Record<string, { title: string; description: string }> = {
   interview_simulator:    { title: "Interview Simulator AI", description: "Practice with real NHS panel personas, get scored answers, and build confidence before your actual interview." },

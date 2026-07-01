@@ -7,31 +7,33 @@ import { useEffect, useState, useRef } from 'react'
 import {
   LayoutDashboard, Users, ScrollText, Activity, ShieldAlert,
   AlertTriangle, Search, X, Loader2, MessageCircle,
-  Settings, DollarSign, ChevronLeft, ChevronRight,
-  Menu, Command, Sparkles,
+  Settings, ChevronLeft, ChevronRight,
+  Menu, Sparkles, ShoppingBag,
 } from 'lucide-react'
 import { ThemeSwitcher } from '@/components/theme-switcher'
+import { Button } from '@/components/ui/button'
 
 const NAV_GROUPS = [
   {
     label: 'Platform',
     items: [
-      { href: '/admin',                label: 'Overview',        icon: LayoutDashboard },
-      { href: '/admin/users',          label: 'Users',           icon: Users           },
-      { href: '/admin/mentorship',     label: 'Mentorship',      icon: MessageCircle   },
+      { href: '/admin',              label: 'Overview',           icon: LayoutDashboard },
+      { href: '/admin/users',        label: 'Users',              icon: Users           },
+      { href: '/admin/mentorship',   label: 'Mentorship',         icon: MessageCircle   },
+      { href: '/admin/marketplace',  label: 'Marketplace',        icon: ShoppingBag, badge: 'NEW' },
     ],
   },
   {
     label: 'Finance',
     items: [
-      { href: '/admin/settings',       label: 'Settings & Pricing', icon: Settings,  badge: 'Stripe' },
+      { href: '/admin/settings',     label: 'Settings & Pricing', icon: Settings, badge: 'Stripe' },
     ],
   },
   {
     label: 'System',
     items: [
-      { href: '/admin/system-health',  label: 'AI Health',       icon: Activity        },
-      { href: '/admin/audit-log',      label: 'Audit Log',       icon: ScrollText      },
+      { href: '/admin/system-health',label: 'AI Health',          icon: Activity  },
+      { href: '/admin/audit-log',    label: 'Audit Log',          icon: ScrollText},
     ],
   },
 ]
@@ -84,14 +86,14 @@ function CommandSearch() {
             placeholder="Search users by email or name…"
             className="flex-1 text-[14px] bg-transparent text-foreground placeholder:text-muted-foreground outline-none" />
           {loading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground shrink-0" />}
-          <button onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground shrink-0">
+          <Button onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground shrink-0">
             <X className="w-4 h-4" />
-          </button>
+          </Button>
         </div>
         {results.length > 0 && (
           <div className="divide-y divide-border max-h-72 overflow-y-auto">
             {results.map(u => (
-              <button key={u.id} onClick={() => goTo(u.id)}
+              <Button key={u.id} onClick={() => goTo(u.id)}
                 className="w-full flex items-center justify-between px-4 py-3.5 text-left hover:bg-muted/50 transition-colors">
                 <div>
                   <p className="text-[14px] font-medium text-foreground">{u.name ?? 'Unnamed'}</p>
@@ -102,7 +104,7 @@ function CommandSearch() {
                   u.tier === 'pro'   ? 'bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300' :
                   'bg-muted text-muted-foreground'
                 }`}>{u.tier}</span>
-              </button>
+              </Button>
             ))}
           </div>
         )}
@@ -225,7 +227,6 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                           : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                         }`}>
 
-                      {/* Active bar */}
                       {active && !collapsed && (
                         <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-amber-500" />
                       )}
@@ -267,8 +268,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <div className={`border-t border-border shrink-0 py-3 ${collapsed ? 'px-2 flex flex-col items-center gap-2' : 'px-3 space-y-2'}`}>
           {!collapsed ? (
             <div className="flex items-center justify-between px-1">
-              <Link href="/dashboard"
-                className="text-[12px] text-muted-foreground hover:text-foreground transition-colors">
+              <Link href="/dashboard" className="text-[12px] text-muted-foreground hover:text-foreground transition-colors">
                 ← Back to app
               </Link>
               <ThemeSwitcher />
@@ -296,10 +296,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
         {/* Mobile header */}
         <div className="md:hidden flex items-center gap-3 h-14 px-4 border-b border-border bg-card shrink-0">
-          <button onClick={() => setIsOpen(true)}
+          <Button onClick={() => setIsOpen(true)}
             className="w-9 h-9 rounded-lg border border-border flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
             <Menu className="w-5 h-5" />
-          </button>
+          </Button>
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-amber-500 flex items-center justify-center">
               <ShieldAlert className="w-4 h-4 text-amber-950" />

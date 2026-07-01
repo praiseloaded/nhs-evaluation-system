@@ -4,7 +4,7 @@
 import { prisma }  from '@/lib/prisma'
 import { prisma2 } from '@/lib/db-router'
 
-export type Tier = 'free' | 'pro' | 'elite'
+export type Tier = 'free' | 'pro' | 'elite' | 'premium'
 
 export async function getUserTier(userId: string): Promise<Tier> {
   try {
@@ -25,9 +25,10 @@ export async function getUserTier(userId: string): Promise<Tier> {
     if (!user) return 'free'
 
     // Admins always get elite — no limits, no gates
-    if (user.role === 'admin') return 'elite'
-
-    return (user.tier as Tier) ?? 'free'
+// Admins always get premium — no limits, no gates
+    if (user.role === 'admin') return 'premium'
+    const validTiers: Tier[] = ['free', 'pro', 'elite', 'premium']
+    return validTiers.includes(user.tier as Tier) ? (user.tier as Tier) : 'free'
   } catch {
     return 'free'
   }
@@ -49,7 +50,9 @@ export async function getUserTierAndRole(userId: string): Promise<{ tier: Tier; 
     if (!user) return { tier: 'free', role: 'user' }
 
     // Admin always gets elite
-    const tier: Tier = user.role === 'admin' ? 'elite' : (user.tier as Tier) ?? 'free'
+    const validTiers: Tier[] = ['free', 'pro', 'elite', 'premium']
+
+    const tier: Tier = user.role === 'admin' ? 'premium' : (validTiers.includes(user.tier as Tier) ? (user.tier as Tier) : 'free')
     return { tier, role: user.role ?? 'user' }
   } catch {
     return { tier: 'free', role: 'user' }

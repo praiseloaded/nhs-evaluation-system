@@ -5,6 +5,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Sparkles, X, Send, Loader2, ArrowRight, RotateCcw } from 'lucide-react'
 import { useSession } from 'next-auth/react'
+import { Button } from './ui/button'
 
 interface NavItem      { path: string; label: string }
 interface FeatureItem  { label: string; desc: string; path: string }
@@ -136,10 +137,10 @@ export function DashboardAssistant() {
                 <RotateCcw className="w-3.5 h-3.5 text-white" />
               </button>
             )}
-            <button onClick={() => setOpen(false)}
+            <Button onClick={() => setOpen(false)}
               className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors">
               <X className="w-3.5 h-3.5 text-white" />
-            </button>
+            </Button>
           </div>
 
           {/* Messages */}

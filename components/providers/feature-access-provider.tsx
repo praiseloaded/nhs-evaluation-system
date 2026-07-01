@@ -9,8 +9,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { useSession } from 'next-auth/react'
 
-const TIER_RANK: Record<string, number> = { free: 0, pro: 1, elite: 2 }
-
+const TIER_RANK: Record<string, number> = { free: 0, pro: 1, elite: 2, premium: 3 }
 interface FlagData {
   key: string
   minTier: string

@@ -7,16 +7,19 @@ import {
   CreditCard, Zap, AlertTriangle, ExternalLink,
   RefreshCw, DollarSign, Package, ArrowUpRight,
 } from 'lucide-react'
+import { Button } from '@/components/ui/button';
 
 interface FlagRow   { id: string; key: string; label: string; description: string | null; minTier: string; enabled: boolean }
 interface LimitRow  { id: string; tier: string; key: string; value: number }
 
-const TIERS = ['free', 'pro', 'elite'] as const
-const TIER_LABEL: Record<string, string> = { free: 'Free', pro: 'Pro', elite: 'Elite' }
+// ── Added 'premium' to all tier constants ─────────────────────────────────────
+const TIERS = ['free', 'pro', 'elite', 'premium'] as const
+const TIER_LABEL: Record<string, string> = { free: 'Free', pro: 'Pro', elite: 'Elite', premium: 'Premium' }
 const TIER_COLOR: Record<string, string> = {
-  free:  'bg-muted text-muted-foreground',
-  pro:   'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300',
-  elite: 'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300',
+  free:    'bg-muted text-muted-foreground',
+  pro:     'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300',
+  elite:   'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300',
+  premium: 'bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300',
 }
 
 const LIMIT_LABELS: Record<string, string> = {
@@ -58,19 +61,26 @@ function PricingCard({
     setSaving(false)
   }
 
+  const borderClass =
+    tier === 'premium' ? 'border-violet-300 dark:border-violet-700' :
+    tier === 'elite'   ? 'border-amber-300 dark:border-amber-700'   :
+    tier === 'pro'     ? 'border-blue-300 dark:border-blue-700'     :
+                         'border-border'
+
+  const btnClass =
+    tier === 'premium' ? 'bg-gradient-to-br from-violet-600 to-indigo-600 hover:opacity-90' :
+    tier === 'elite'   ? 'bg-amber-500 hover:bg-amber-600'                                   :
+                         'bg-gradient-to-br from-red-500 to-amber-500 hover:opacity-90'
+
   return (
-    <div className={`rounded-2xl border-2 p-5 space-y-4 ${
-      tier === 'pro'   ? 'border-blue-300 dark:border-blue-700' :
-      tier === 'elite' ? 'border-amber-300 dark:border-amber-700' :
-      'border-border'
-    }`}>
+    <div className={`rounded-2xl border-2 p-5 space-y-4 ${borderClass}`}>
       <div className="flex items-center justify-between">
         <div>
           <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full ${TIER_COLOR[tier]}`}>
             {TIER_LABEL[tier]}
           </span>
           <p className="text-[11px] text-muted-foreground mt-1.5">
-            {tier === 'free' ? 'Always £0 — marketing tier' : `Billed monthly via Stripe`}
+            {tier === 'free' ? 'Always £0 — marketing tier' : 'Billed monthly via Stripe'}
           </p>
         </div>
         <div className="text-right">
@@ -87,15 +97,19 @@ function PricingCard({
           <div className="flex gap-2">
             <div className="relative flex-1">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">£</span>
-              <input type="number" value={price} onChange={e => setPrice(e.target.value)}
-                min="0" step="0.01" placeholder="19.00"
+              <input
+                type="number"
+                value={price}
+                onChange={e => setPrice(e.target.value)}
+                min="0"
+                step="0.01"
+                placeholder="49.00"
+                aria-label={`Monthly price for ${TIER_LABEL[tier]} tier in GBP`}
                 className="w-full pl-7 pr-3 py-2 rounded-xl border border-border bg-background text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
               />
             </div>
             <button onClick={save} disabled={saving}
-              className={`px-4 py-2 rounded-xl text-[13px] font-bold text-white transition-all disabled:opacity-50 ${
-                tier === 'pro' ? 'bg-gradient-to-br from-red-500 to-amber-500 hover:bg-blue-700' : 'bg-amber-500 hover:bg-amber-600'
-              }`}>
+              className={`px-4 py-2 rounded-xl text-[13px] font-bold text-white transition-all disabled:opacity-50 ${btnClass}`}>
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save & sync'}
             </button>
           </div>
@@ -149,7 +163,6 @@ function StripePanel() {
 
   return (
     <div className="space-y-5">
-      {/* Stripe health banner */}
       <div className="flex items-center gap-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 rounded-2xl px-5 py-3.5">
         <div className="relative flex h-2.5 w-2.5">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
@@ -165,13 +178,12 @@ function StripePanel() {
         </a>
       </div>
 
-      {/* Revenue stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'MRR',                  value: `£${data.mrr?.toFixed(2) ?? '0.00'}`,    icon: DollarSign, color: 'text-emerald-500' },
-          { label: 'Active subscriptions', value: data.activeSubscriptions ?? 0,            icon: Package,    color: 'text-blue-500'    },
-          { label: 'Cancelled (30d)',       value: data.cancelledThisPeriod ?? 0,           icon: AlertTriangle, color: 'text-amber-500' },
-          { label: 'Revenue (30d)',         value: `£${data.periodRevenue?.toFixed(2) ?? '0.00'}`, icon: Zap, color: 'text-violet-500' },
+          { label: 'MRR',                  value: `£${data.mrr?.toFixed(2) ?? '0.00'}`,            icon: DollarSign,  color: 'text-emerald-500' },
+          { label: 'Active subscriptions', value: data.activeSubscriptions ?? 0,                    icon: Package,     color: 'text-blue-500'    },
+          { label: 'Cancelled (30d)',       value: data.cancelledThisPeriod ?? 0,                   icon: AlertTriangle, color: 'text-amber-500' },
+          { label: 'Revenue (30d)',         value: `£${data.periodRevenue?.toFixed(2) ?? '0.00'}`,  icon: Zap,         color: 'text-violet-500'  },
         ].map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="rounded-2xl border border-border bg-card p-4">
             <Icon className={`w-4 h-4 ${color} mb-2`} />
@@ -181,7 +193,6 @@ function StripePanel() {
         ))}
       </div>
 
-      {/* Recent payments */}
       {data.recentPayments?.length > 0 && (
         <div className="rounded-2xl border border-border bg-card overflow-hidden">
           <div className="px-5 py-3.5 border-b border-border bg-muted/30 flex items-center justify-between">
@@ -272,7 +283,9 @@ export default function AdminSettingsPage() {
   const getGroup = (key: string): string => {
     if (['mentorship','interview_simulator','career_gps','recruiter_simulator',
          'interview_probability','evidence_vault','cv_builder','shortlist_probability',
-         'momentum_score','ab_test','criteria_explorer','cos_navigator'].includes(key)) return 'page'
+         'momentum_score','ab_test','criteria_explorer','cos_navigator',
+         'job_ready','career_twin','skills_passport','employer_intelligence',
+         'radar','marketplace','heatmap','evolution'].includes(key)) return 'page'
     if (key.startsWith('score_')) return 'score'
     if (key.startsWith('dashboard_')) return 'dashboard'
     return 'analysis'
@@ -288,15 +301,14 @@ export default function AdminSettingsPage() {
   const limitKeys = [...new Set(limits.map(l => l.key))]
 
   const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
-    { id: 'features', label: 'Feature Flags', icon: Zap         },
-    { id: 'limits',   label: 'Tier Limits',   icon: Package     },
-    { id: 'pricing',  label: 'Pricing',        icon: DollarSign  },
-    { id: 'stripe',   label: 'Stripe & Revenue', icon: CreditCard },
+    { id: 'features', label: 'Feature Flags',    icon: Zap         },
+    { id: 'limits',   label: 'Tier Limits',      icon: Package     },
+    { id: 'pricing',  label: 'Pricing',          icon: DollarSign  },
+    { id: 'stripe',   label: 'Stripe & Revenue', icon: CreditCard  },
   ]
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
           <SettingsIcon className="w-5 h-5 text-amber-600 dark:text-amber-500" /> Platform Settings
@@ -306,7 +318,6 @@ export default function AdminSettingsPage() {
         </p>
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-1 bg-muted/40 rounded-xl p-1">
         {TABS.map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => setTab(id)}
@@ -318,7 +329,7 @@ export default function AdminSettingsPage() {
         ))}
       </div>
 
-      {/* Feature flags tab */}
+      {/* ── Feature flags ── */}
       {tab === 'features' && (
         <div className="space-y-5">
           {(['page','score','analysis','dashboard'] as const).map(group => {
@@ -329,9 +340,9 @@ export default function AdminSettingsPage() {
                 <div className="px-5 py-3.5 border-b border-border bg-muted/30">
                   <p className="text-[13px] font-bold text-foreground">{GROUP_LABELS[group]}</p>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                    {group === 'page' && 'Gate entire dashboard pages and moat features'}
-                    {group === 'score' && 'Individual sub-score pills on analysis rows'}
-                    {group === 'analysis' && 'Elements within the analysis report views'}
+                    {group === 'page'      && 'Gate entire dashboard pages and moat features'}
+                    {group === 'score'     && 'Individual sub-score pills on analysis rows'}
+                    {group === 'analysis'  && 'Elements within the analysis report views'}
                     {group === 'dashboard' && 'KPI cards and charts on the dashboard'}
                   </p>
                 </div>
@@ -349,18 +360,22 @@ export default function AdminSettingsPage() {
                         <p className="text-[10px] font-mono text-muted-foreground/50 mt-0.5">{f.key}</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
+                        {/* Tier selector — now includes Premium */}
                         <div className="flex rounded-full border border-border overflow-hidden">
-                          {TIERS.map(t => (
-                            <button key={t} onClick={() => setFlagTier(f.key, t)}
-                              className={`px-3 py-1.5 text-[11px] font-bold transition-colors ${f.minTier === t ? TIER_COLOR[t] : 'text-muted-foreground hover:bg-muted'}`}>
-                              {TIER_LABEL[t]}+
-                            </button>
-                          ))}
+                         {TIERS.map(t => (
+  <button key={t} onClick={() => setFlagTier(f.key, t)}
+    className={`px-2.5 py-1.5 text-[10px] font-bold transition-colors ${f.minTier === t ? TIER_COLOR[t] : 'text-muted-foreground hover:bg-muted'}`}>
+    {TIER_LABEL[t]}
+  </button>
+))}
                         </div>
-                        <button onClick={() => toggleEnabled(f.key, !f.enabled)}
+                        <div className={`text-[10px] font-bold px-2 py-1 rounded-full ${TIER_COLOR[f.minTier] ?? ''}`}>
+                          {TIER_LABEL[f.minTier]}+
+                        </div>
+                        <Button onClick={() => toggleEnabled(f.key, !f.enabled)}
                           className={`p-1.5 rounded-lg transition-colors ${f.enabled ? 'text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30' : 'text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30'}`}>
                           <Power className="w-4 h-4" />
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -371,7 +386,7 @@ export default function AdminSettingsPage() {
         </div>
       )}
 
-      {/* Limits tab */}
+      {/* ── Limits ── */}
       {tab === 'limits' && (
         <div className="rounded-2xl bg-card border border-border overflow-hidden">
           <div className="px-5 py-3.5 border-b border-border bg-muted/30">
@@ -382,18 +397,23 @@ export default function AdminSettingsPage() {
             {limitKeys.filter(k => !['monthlyPrice','stripePriceId','stripeProductId'].includes(k)).map(key => (
               <div key={key} className="px-5 py-4">
                 <p className="text-[13px] font-medium text-foreground mb-3">{LIMIT_LABELS[key] ?? key}</p>
-                <div className="grid grid-cols-3 gap-3">
+                {/* 4 columns now — free / pro / elite / premium */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {TIERS.map(tier => {
-                    const row          = limits.find(l => l.tier === tier && l.key === key)
-                    const compositeId  = `${tier}:${key}`
+                    const row         = limits.find(l => l.tier === tier && l.key === key)
+                    const compositeId = `${tier}:${key}`
                     return (
                       <div key={tier}>
-                        <label className={`block text-[10px] font-black uppercase tracking-wider mb-1.5 ${
-                          tier === 'free' ? 'text-muted-foreground' : tier === 'pro' ? 'text-blue-600 dark:text-blue-400' : 'text-amber-600 dark:text-amber-400'
-                        }`}>{TIER_LABEL[tier]}</label>
+                        <label className={`block text-[10px] font-black uppercase tracking-wider mb-1.5 ${TIER_COLOR[tier]}`}>
+                          {TIER_LABEL[tier]}
+                        </label>
                         <div className="relative">
-                          <input type="number" defaultValue={row?.value ?? 0}
+                          <input
+                            type="number"
+                            defaultValue={row?.value ?? 0}
                             onBlur={e => setLimit(tier, key, Number(e.target.value))}
+                            aria-label={`${TIER_LABEL[tier]} ${LIMIT_LABELS[key] ?? key}`}
+                            placeholder="0"
                             className="w-full rounded-xl px-3 py-2 text-[13px] font-mono bg-background border border-border text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
                           />
                           {savedKey === compositeId && <Check className="w-3.5 h-3.5 text-emerald-500 absolute right-2.5 top-1/2 -translate-y-1/2" />}
@@ -409,20 +429,21 @@ export default function AdminSettingsPage() {
         </div>
       )}
 
-      {/* Pricing tab */}
+      {/* ── Pricing ── */}
       {tab === 'pricing' && (
         <div className="space-y-5">
           <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-2xl px-5 py-4">
             <p className="text-[13px] font-semibold text-foreground mb-1">How pricing works</p>
             <p className="text-[12px] text-muted-foreground leading-relaxed">
-              Set the monthly price for Pro and Elite tiers. Clicking "Save & sync" creates a new Stripe Price object for the corresponding Product and logs the price ID. Update your checkout session to use the new price ID after saving.
+              Set the monthly price for Pro, Elite and Premium tiers. Clicking "Save & sync" creates a new Stripe Price object and logs the price ID. Update your env vars with the new price IDs after saving.
             </p>
           </div>
 
-          <div className="grid sm:grid-cols-3 gap-4">
+          {/* 4 pricing cards */}
+          <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
             {TIERS.map(tier => {
-              const priceRow = limits.find(l => l.tier === tier && l.key === 'monthlyPrice')
-              const currentPrice = priceRow ? priceRow.value / 100 : tier === 'pro' ? 19 : tier === 'elite' ? 39 : 0
+              const priceRow     = limits.find(l => l.tier === tier && l.key === 'monthlyPrice')
+              const currentPrice = priceRow ? priceRow.value / 100 : tier === 'premium' ? 49 : tier === 'elite' ? 29 : tier === 'pro' ? 9 : 0
               return (
                 <PricingCard key={tier} tier={tier} currentPrice={currentPrice} onSave={savePrice} />
               )
@@ -432,14 +453,17 @@ export default function AdminSettingsPage() {
           <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 px-5 py-4">
             <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300 mb-1">After updating prices</p>
             <p className="text-[12px] text-muted-foreground leading-relaxed">
-              Update the <code className="font-mono text-[11px] bg-muted px-1 rounded">STRIPE_PRO_PRICE_ID</code> and{' '}
-              <code className="font-mono text-[11px] bg-muted px-1 rounded">STRIPE_ELITE_PRICE_ID</code> environment variables in Vercel with the new price IDs shown after saving.
+              Update{' '}
+              <code className="font-mono text-[11px] bg-muted px-1 rounded">STRIPE_PRO_PRICE_ID</code>,{' '}
+              <code className="font-mono text-[11px] bg-muted px-1 rounded">STRIPE_ELITE_PRICE_ID</code>, and{' '}
+              <code className="font-mono text-[11px] bg-muted px-1 rounded">STRIPE_PREMIUM_PRICE_ID</code>{' '}
+              in Vercel with the new price IDs shown after saving.
             </p>
           </div>
         </div>
       )}
 
-      {/* Stripe & Revenue tab */}
+      {/* ── Stripe & Revenue ── */}
       {tab === 'stripe' && <StripePanel />}
     </div>
   )

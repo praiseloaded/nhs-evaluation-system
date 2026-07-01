@@ -9,7 +9,7 @@ import {
   FolderOpen, Target, MapPin, Sparkles,
   ChevronLeft, ChevronRight, BarChart3,
   FileText, MessageCircle, Lock, FlaskConical, Flame, Globe, History,
-  Mail, Zap, Bot, PoundSterling, Award, Shield,
+  Mail, Zap, Bot, PoundSterling, Award, Shield, TrendingUp, Layers, Building, Radar, Map, Dna, ShoppingBag,
 } from "lucide-react"
 import { useState, useEffect } from "react"
 import { ThemeSwitcher } from "./theme-switcher"
@@ -52,6 +52,7 @@ const NAV_GROUPS = [
       { href: "/dashboard/interview",              label: "Interview Simulator",     icon: Video,    badge: "AI", featureKey: "interview_simulator" },
       { href: "/dashboard/interview-probability",  label: "Interview Probability™",  icon: Target,   featureKey: "interview_probability"          },
       { href: "/dashboard/cos-navigator",          label: "COS Navigator™",          icon: Globe,    badge: "NEW" },
+      { href: "/dashboard/heatmap",                 label: "Application Heat Map™",   icon: Map,      badge: "NEW" },
     ],
   },
   {
@@ -63,6 +64,12 @@ const NAV_GROUPS = [
       { href: "/dashboard/evidence-vault", label: "EvidenceVault™",          icon: FolderOpen                  },
       { href: "/dashboard/evidence-vault/match", label: "Auto-Match Evidence", icon: Sparkles,    badge: "NEW" },
       { href: "/dashboard/mentorship",     label: "Mentorship",              icon: MessageCircle, featureKey: "mentorship" },
+      { href: "/dashboard/career-twin",    label: "Omni Career Twin™",       icon: Dna,           badge: "NEW" },
+      { href: "/dashboard/evolution",      label: "Statement Evolution™",    icon: TrendingUp,    badge: "NEW" },
+      { href: "/dashboard/skills-passport",label: "Skills Passport™",        icon: Layers,        badge: "NEW" },
+      { href: "/dashboard/employer-intelligence", label: "Employer Intelligence™", icon: Building, badge: "NEW" },
+      { href: "/dashboard/radar",          label: "Opportunity Radar™",      icon: Radar,         badge: "NEW" },
+      { href: "/dashboard/marketplace",    label: "Career Marketplace™",     icon: ShoppingBag,   badge: "NEW" },
     ],
   },
   {
@@ -73,7 +80,7 @@ const NAV_GROUPS = [
   },
 ]
 
-const TIER_RANK: Record<string, number> = { free: 0, pro: 1, elite: 2 }
+const TIER_RANK: Record<string, number> = { free: 0, pro: 1, elite: 2, premium: 3 }
 type FlagMap = Record<string, { minTier: string; enabled: boolean }>
 
 export function Sidebar() {
@@ -259,13 +266,14 @@ export function Sidebar() {
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2">
                 <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full ${
+                  userTier === "premium" ? "bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800" :
                   userTier === "elite" ? "bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800" :
                   userTier === "pro"   ? "bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800" :
                                          "bg-muted text-muted-foreground border border-border"
                 }`}>
                   {userTier}
                 </span>
-                {userTier === "free" && (
+                {(userTier === "free" || userTier === "pro" || userTier === "elite") && (
                   <Link href="/upgrade" className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline font-semibold">
                     Upgrade
                   </Link>

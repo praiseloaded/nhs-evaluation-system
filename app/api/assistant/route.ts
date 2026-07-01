@@ -40,6 +40,7 @@ Each feature below includes its URL path (relative to the domain).
 • Interview Simulator: /dashboard/interview — Practice NHS panel interview questions with AI feedback. Simulates real Band-specific questions.
 • Interview Probability™: /dashboard/interview-probability — Predicts your likelihood of being called for interview based on your statement quality.
 • COS Navigator™: /dashboard/cos-navigator — For international applicants: browse NHS roles with Certificate of Sponsorship (Skilled Worker visa). Cross-checks UKVI sponsor register.
+• Application Heat Map™: /dashboard/heatmap — Ranks live vacancies by 5 factors: interview probability, salary, competition level, sponsorship likelihood, career progression potential.
 
 ── CAREER ──
 • AI Career Coach: /dashboard/coach — Chat with an AI that knows your CV, applications, evidence vault, and career goals. Ask anything: next band, CPD, sponsorship, interview prep.
@@ -48,6 +49,12 @@ Each feature below includes its URL path (relative to the domain).
 • EvidenceVault™: /dashboard/evidence-vault — Store your professional achievements, competencies, CPD, and references. Structured by NHS competency frameworks.
 • Auto-Match Evidence: /dashboard/evidence-vault/match — AI automatically matches your stored evidence to job criteria in your analyses.
 • Mentorship: /dashboard/mentorship — Connect with NHS career mentors. Find mentors by band, specialty, and region.
+• Omni Career Twin™: /dashboard/career-twin — THE differentiator. Knows your entire vault (CV, evidence, skills, history). Paste a job and say 'apply me for this' — it assembles a full application using your REAL evidence, flags gaps where evidence is missing.
+• Personal Statement Evolution™: /dashboard/evolution — Visual timeline of every analysis score over time. Compare any two statements side-by-side to see improvement.
+• NHS Skills Passport™: /dashboard/skills-passport — Visual radial progress tracker for 8 core competencies: Venepuncture, ECG, Vital Signs, Specimen Handling, Communication, Documentation, Infection Control, Safeguarding.
+• Employer Intelligence™: /dashboard/employer-intelligence — Research any NHS Trust or Health Board: values, common interview themes, typical criteria, working environment.
+• NHS Opportunity Radar™: /dashboard/radar — Daily personalised feed: high-match jobs, jobs closing soon, new postings today, top 5 recommended applications.
+• Healthcare Career Marketplace™: /dashboard/marketplace — Browse categories (phlebotomy courses, ECG training, interview coaching, mentors, mock interviews, employer partners). Most categories are 'coming soon' — users can join a waitlist and get notified at launch. Mentorship is the one category live today.
 
 ── ACCOUNT ──
 • Settings: /dashboard/settings — Update name, theme, export your data, password reset.
@@ -192,6 +199,7 @@ export async function POST(req: Request) {
               { label: 'Interview Simulator',     desc: 'Practice NHS panel questions with AI feedback',              path: '/dashboard/interview'               },
               { label: 'Interview Probability™',  desc: 'Predicts interview likelihood from statement quality',       path: '/dashboard/interview-probability'   },
               { label: 'COS Navigator™',          desc: 'Browse NHS roles with Skilled Worker visa sponsorship',      path: '/dashboard/cos-navigator'           },
+              { label: 'Application Heat Map™',   desc: 'Ranks jobs by interview odds, salary, competition & more',   path: '/dashboard/heatmap'                 },
             ],
           },
           {
@@ -203,6 +211,12 @@ export async function POST(req: Request) {
               { label: 'EvidenceVault™',     desc: 'Store achievements, CPD & references by competency',       path: '/dashboard/evidence-vault'    },
               { label: 'Auto-Match Evidence',desc: 'AI matches your stored evidence to job criteria instantly', path: '/dashboard/evidence-vault/match'},
               { label: 'Mentorship',         desc: 'Connect with NHS career mentors by band & specialty',      path: '/dashboard/mentorship'        },
+              { label: 'Omni Career Twin™',  desc: 'AI assembles applications using your real evidence vault', path: '/dashboard/career-twin'       },
+              { label: 'Statement Evolution™', desc: 'Track how your statements improve over time',           path: '/dashboard/evolution'         },
+              { label: 'Skills Passport™',   desc: 'Visual tracker for venepuncture, ECG, IPC & more',         path: '/dashboard/skills-passport'   },
+              { label: 'Employer Intelligence™', desc: 'Research any NHS Trust before applying',               path: '/dashboard/employer-intelligence' },
+              { label: 'Opportunity Radar™', desc: 'Daily personalised job matches & closing-soon alerts',     path: '/dashboard/radar'             },
+              { label: 'Career Marketplace™', desc: 'Courses, coaching & mentors — join the waitlist for what you need', path: '/dashboard/marketplace'  },
             ],
           },
         ],
