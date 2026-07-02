@@ -228,7 +228,7 @@ model Application {
   band           String?
   employer       String?
   sourceUrl      String?
-  jobDescription String
+  jobDescription String?
   personSpec     String?
 
   parsedSpec Json?

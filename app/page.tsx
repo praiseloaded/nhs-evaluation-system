@@ -5,6 +5,7 @@ import { Check, ArrowRight, ChevronDown, Search, FlaskConical, Flame, Globe, Zap
 import { useState, useEffect, useRef } from 'react'
 import { Navbar } from '@/components/navbar'
 import { HomepageChatWidget } from '@/components/homepage-chat-widget'
+import { HomepagePricing }     from '@/components/homepage-pricing'
 
 // ── Scoring demo ───────────────────────────────────────────────────────────────
 
@@ -152,33 +153,6 @@ const MOATS = [
   },
 ]
 
-// ── Pricing ────────────────────────────────────────────────────────────────────
-
-const PLANS = [
-  {
-    name:     'Free',
-    price:    '£0',
-    period:   'forever',
-    desc:     'One full analysis, no card required',
-    features: ['1 job analysis', 'Criteria & values scoring', 'Basic shortlist probability', 'NHS jobs search'],
-  },
-  {
-    name:     'Pro',
-    price:    '£19',
-    period:   '/month',
-    desc:     'For active NHS applicants',
-    featured: true,
-    features: ['Unlimited analyses', 'A/B Statement Testing', 'EvidenceVault™ Auto-Pull', 'Interview Simulator', 'Career GPS™', 'Mentorship access'],
-  },
-  {
-    name:     'Elite',
-    price:    '£39',
-    period:   '/month',
-    desc:     'Full platform, no limits',
-    features: ['Everything in Pro', 'Shortlist Intelligence™', 'COS Navigator', 'Priority mentorship', 'PDF reports', 'Dedicated support'],
-  },
-]
-
 // ── FAQ ────────────────────────────────────────────────────────────────────────
 
 const FAQS = [
@@ -222,13 +196,11 @@ export default function HomePage() {
 
       {/* ── Hero ── */}
       <section className="relative overflow-hidden pt-20 pb-24 sm:pt-28 sm:pb-32">
-        {/* Background */}
         <div className="absolute inset-0 bg-gradient-to-b from-blue-50/80 via-background to-background dark:from-blue-950/20 dark:via-background" />
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-blue-400/10 dark:bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
 
-          {/* Badge */}
           <div className={`flex justify-center mb-8 transition-all duration-700 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}>
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/50">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
@@ -236,7 +208,6 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Headline */}
           <div className={`text-center max-w-4xl mx-auto mb-8 transition-all duration-700 delay-75 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}>
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black text-foreground leading-[1.04] tracking-tight mb-6">
               Get Shortlisted.<br />
@@ -249,7 +220,6 @@ export default function HomePage() {
             </p>
           </div>
 
-          {/* CTAs */}
           <div className={`flex flex-col sm:flex-row gap-3 justify-center mb-16 transition-all duration-700 delay-150 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}>
             <Link href="/register"
               className="px-7 py-3.5 rounded-xl bg-gradient-to-br from-red-500 to-amber-500 hover:bg-blue-700 text-white font-bold text-[15px] transition-colors flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25">
@@ -261,16 +231,14 @@ export default function HomePage() {
             </Link>
           </div>
 
-          {/* Hero demo + stats */}
           <div className={`grid lg:grid-cols-[1fr_340px] gap-8 items-start max-w-5xl mx-auto transition-all duration-700 delay-200 ${loaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}>
             <ScoringDemo />
-
             <div className="space-y-4">
               {[
-                { n: '5',      label: 'scoring dimensions on every statement'              },
-                { n: '4',      label: 'UK nations including NHS Scotland Jobtrain format'  },
-                { n: 'Band\n2–8', label: 'Agenda for Change bands, mapped end to end'     },
-                { n: '5',      label: 'exclusive moat features competitors can\'t copy'   },
+                { n: '5',         label: 'scoring dimensions on every statement'             },
+                { n: '4',         label: 'UK nations including NHS Scotland Jobtrain format' },
+                { n: 'Band\n2–8', label: 'Agenda for Change bands, mapped end to end'        },
+                { n: '5',         label: 'exclusive moat features competitors can\'t copy'   },
               ].map(({ n, label }) => (
                 <div key={label} className="rounded-2xl border border-border bg-card px-5 py-4 flex items-center gap-4">
                   <p className="text-2xl font-black text-blue-600 dark:text-blue-400 shrink-0 whitespace-pre-line leading-tight">{n}</p>
@@ -309,12 +277,9 @@ export default function HomePage() {
       {/* ── Five moat features ── */}
       <section id="features" className="py-24 sm:py-32">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-
           <div className="text-center max-w-3xl mx-auto mb-16">
             <p className="text-[12px] font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-3">Five exclusive features</p>
-            <h2 className="text-4xl sm:text-5xl font-black text-foreground tracking-tight mb-4">
-              What no other NHS tool has
-            </h2>
+            <h2 className="text-4xl sm:text-5xl font-black text-foreground tracking-tight mb-4">What no other NHS tool has</h2>
             <p className="text-lg text-muted-foreground leading-relaxed">
               Most competitors have a statement generator and an interview question list. OmniJobReady AI™ has five features built from the ground up that cannot be recreated by prompting ChatGPT.
             </p>
@@ -369,9 +334,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl mb-14">
             <p className="text-[12px] font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-3">The method</p>
-            <h2 className="text-4xl sm:text-5xl font-black text-foreground tracking-tight mb-4">
-              Five dimensions. No guessing.
-            </h2>
+            <h2 className="text-4xl sm:text-5xl font-black text-foreground tracking-tight mb-4">Five dimensions. No guessing.</h2>
             <p className="text-lg text-muted-foreground leading-relaxed">
               Every statement is assessed against the same criteria used by NHS shortlisting panels — a meaningful score and actionable feedback on where to improve.
             </p>
@@ -393,7 +356,6 @@ export default function HomePage() {
             ))}
           </div>
 
-          {/* Shortlist Probability callout */}
           <div className="mt-8 rounded-2xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 p-7 flex items-center justify-between gap-6 flex-wrap">
             <div className="max-w-xl">
               <p className="text-[11px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-1.5">Shortlist Probability™</p>
@@ -441,7 +403,6 @@ export default function HomePage() {
               </ul>
             </div>
 
-            {/* Evidence check card */}
             <div className="rounded-2xl border border-border bg-card p-6 shadow-lg">
               <div className="flex items-center justify-between mb-5 pb-4 border-b border-border">
                 <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Evidence check</span>
@@ -449,9 +410,9 @@ export default function HomePage() {
               </div>
               <div className="space-y-5">
                 {[
-                  { dot: 'bg-emerald-500', claim: '"Led the MDT safeguarding response"', note: 'Backed by 2 STAR examples in your vault', ok: true },
-                  { dot: 'bg-red-500',     claim: '"Significantly improved patient outcomes"', note: 'No supporting evidence found — name a specific result', ok: false },
-                  { dot: 'bg-emerald-500', claim: '"Mentored two newly qualified nurses"', note: 'Matches vault entry, March 2025', ok: true },
+                  { dot: 'bg-emerald-500', claim: '"Led the MDT safeguarding response"',         note: 'Backed by 2 STAR examples in your vault',                    ok: true  },
+                  { dot: 'bg-red-500',     claim: '"Significantly improved patient outcomes"',    note: 'No supporting evidence found — name a specific result',      ok: false },
+                  { dot: 'bg-emerald-500', claim: '"Mentored two newly qualified nurses"',        note: 'Matches vault entry, March 2025',                            ok: true  },
                 ].map((r, i) => (
                   <div key={i} className="flex items-start gap-3">
                     <span className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${r.dot}`} />
@@ -471,143 +432,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── Pricing ── */}
-      <section id="pricing" className="py-24 sm:py-32 bg-muted/30">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-14">
-            <p className="text-[12px] font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-3">Pricing</p>
-            <h2 className="text-4xl sm:text-5xl font-black text-foreground tracking-tight mb-4">
-              Start free. Upgrade when it counts.
-            </h2>
-            <p className="text-lg text-muted-foreground">No hidden fees. Cancel any time.</p>
-          </div>
-
-              {/* Pricing cards */}
-          <div className="grid lg:grid-cols-3 gap-5 max-w-5xl mx-auto">
-
-            {/* Free */}
-            <div className="rounded-2xl border-2 border-border bg-card p-7 flex flex-col">
-              <div className="mb-6">
-                <p className="text-[11px] font-black uppercase tracking-widest text-muted-foreground mb-2">Free</p>
-                <div className="flex items-baseline gap-1 mb-1">
-                  <span className="text-4xl font-black text-foreground">£0</span>
-                  <span className="text-[12px] text-muted-foreground">forever</span>
-                </div>
-                <p className="text-[12px] text-muted-foreground">One full analysis, no card needed</p>
-              </div>
-              <Link href="/register"
-                className="block w-full py-2.5 rounded-xl font-bold text-[13px] text-center border border-border hover:bg-muted transition-colors mb-6">
-                Get started free
-              </Link>
-              <div className="space-y-3 flex-1">
-                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Includes</p>
-                {[
-                  ["1 job analysis", true],
-                  ["5-dimension scoring", true],
-                  ["Criteria & values check", true],
-                  ["Shortlist probability", true],
-                  ["NHS jobs search", true],
-                  ["Statement A/B Testing", false],
-                  ["EvidenceVault™ Auto-Pull", false],
-                  ["Interview Simulator", false],
-                  ["Career GPS™", false],
-                  ["Mentorship", false],
-                ].map(([f, ok], j) => (
-                  <div key={j} className={`flex items-center gap-2.5 text-[12.5px] ${ok ? "text-foreground" : "text-muted-foreground/40 line-through"}`}>
-                    <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${ok ? "bg-emerald-100 dark:bg-emerald-950/50" : "bg-muted"}`}>
-                      {ok
-                        ? <Check className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
-                        : <span className="w-1.5 h-px bg-muted-foreground/30 block" />
-                      }
-                    </div>
-                    {f}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Pro */}
-            <div className="rounded-2xl border-2 border-blue-600 dark:border-blue-500 bg-blue-50/40 dark:bg-blue-950/20 p-7 flex flex-col relative shadow-xl shadow-blue-500/10">
-              <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                <span className="bg-gradient-to-br from-red-500 to-amber-500 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-md">
-                  Most popular
-                </span>
-              </div>
-              <div className="mb-6">
-                <p className="text-[11px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-2">Pro</p>
-                <div className="flex items-baseline gap-1 mb-1">
-                  <span className="text-4xl font-black text-foreground">£19</span>
-                  <span className="text-[12px] text-muted-foreground">/month</span>
-                </div>
-                <p className="text-[12px] text-muted-foreground">For active NHS applicants</p>
-              </div>
-              <Link href="/register"
-                className="block w-full py-2.5 rounded-xl font-bold text-[13px] text-center bg-gradient-to-br from-red-500 to-amber-500 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 transition-colors mb-6">
-                Start Pro
-              </Link>
-              <div className="space-y-3 flex-1">
-                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Everything in Free, plus</p>
-                {[
-                  ["Unlimited analyses", "bg-blue-100 dark:bg-blue-950/50", "text-blue-600 dark:text-blue-400"],
-                  ["Statement A/B Testing", "bg-blue-100 dark:bg-blue-950/50", "text-blue-600 dark:text-blue-400"],
-                  ["EvidenceVault™ Auto-Pull", "bg-blue-100 dark:bg-blue-950/50", "text-blue-600 dark:text-blue-400"],
-                  ["Interview Simulator", "bg-blue-100 dark:bg-blue-950/50", "text-blue-600 dark:text-blue-400"],
-                  ["Career GPS™ band mapping", "bg-blue-100 dark:bg-blue-950/50", "text-blue-600 dark:text-blue-400"],
-                  ["Mentorship inbox", "bg-blue-100 dark:bg-blue-950/50", "text-blue-600 dark:text-blue-400"],
-                  ["PDF analysis reports", "bg-blue-100 dark:bg-blue-950/50", "text-blue-600 dark:text-blue-400"],
-                ].map(([f, bg, color], j) => (
-                  <div key={j} className="flex items-center gap-2.5 text-[12.5px] text-foreground">
-                    <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${bg}`}>
-                      <Check className={`w-2.5 h-2.5 ${color}`} />
-                    </div>
-                    {f}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Elite */}
-            <div className="rounded-2xl border-2 border-amber-300 dark:border-amber-700 bg-amber-50/40 dark:bg-amber-950/10 p-7 flex flex-col">
-              <div className="mb-6">
-                <p className="text-[11px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 mb-2">Elite</p>
-                <div className="flex items-baseline gap-1 mb-1">
-                  <span className="text-4xl font-black text-foreground">£39</span>
-                  <span className="text-[12px] text-muted-foreground">/month</span>
-                </div>
-                <p className="text-[12px] text-muted-foreground">Full platform, nothing locked</p>
-              </div>
-              <Link href="/register"
-                className="block w-full py-2.5 rounded-xl font-bold text-[13px] text-center bg-amber-500 hover:bg-amber-600 text-white transition-colors mb-6">
-                Start Elite
-              </Link>
-              <div className="space-y-3 flex-1">
-                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Everything in Pro, plus</p>
-                {[
-                  ["Shortlist Intelligence™", "bg-red-100 dark:bg-red-950/40", "text-red-600 dark:text-red-400"],
-                  ["Hidden criteria detection", "bg-red-100 dark:bg-red-950/40", "text-red-600 dark:text-red-400"],
-                  ["COS & Sponsorship Navigator", "bg-cyan-100 dark:bg-cyan-950/40", "text-cyan-600 dark:text-cyan-400"],
-                  ["Visa route intelligence", "bg-cyan-100 dark:bg-cyan-950/40", "text-cyan-600 dark:text-cyan-400"],
-                  ["Priority mentorship", "bg-amber-100 dark:bg-amber-950/40", "text-amber-600 dark:text-amber-400"],
-                  ["Dedicated support", "bg-amber-100 dark:bg-amber-950/40", "text-amber-600 dark:text-amber-400"],
-                ].map(([f, bg, color], j) => (
-                  <div key={j} className="flex items-center gap-2.5 text-[12.5px] text-foreground">
-                    <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${bg}`}>
-                      <Check className={`w-2.5 h-2.5 ${color}`} />
-                    </div>
-                    {f}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Feature comparison note */}
-          <p className="text-center text-[12px] text-muted-foreground mt-6">
-            All plans include NHS jobs search, CV builder, and application tracker.
-            <Link href="/register" className="text-blue-600 dark:text-blue-400 hover:underline ml-1">Compare all features →</Link>
-          </p>
-        </div>
-      </section>
+      {/* ── Pricing — live from admin settings ── */}
+      <HomepagePricing />
 
       {/* ── FAQ ── */}
       <section className="py-24 sm:py-32">
@@ -698,7 +524,6 @@ export default function HomePage() {
         </div>
       </footer>
 
-      {/* AI Chat Widget */}
       <HomepageChatWidget />
     </div>
   )

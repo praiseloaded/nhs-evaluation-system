@@ -10,6 +10,7 @@ import {
   ChevronLeft, ChevronRight, BarChart3,
   FileText, MessageCircle, Lock, FlaskConical, Flame, Globe, History,
   Mail, Zap, Bot, PoundSterling, Award, Shield, TrendingUp, Layers, Building, Radar, Map, Dna, ShoppingBag,
+  Star,
 } from "lucide-react"
 import { useState, useEffect } from "react"
 import { ThemeSwitcher } from "./theme-switcher"
@@ -59,6 +60,9 @@ const NAV_GROUPS = [
     label: "Career",
     items: [
       { href: "/dashboard/coach",          label: "AI Career Coach",         icon: Bot,           badge: "AI"  },
+      { href: "/dashboard/ats-simulator",  label: "ATS Simulator",           icon: Radar,  badge: "NEW" },
+      { href: "/dashboard/star-builder",   label: "Auto Star Builder",       icon: Star, badge: "NEW" },
+      { href: "/dashboard/cpd",    label: "CPD tracker",             icon: Building, badge: "NEW" },
       { href: "/dashboard/salary",         label: "Salary Predictor",        icon: PoundSterling, badge: "NEW" },
       { href: "/dashboard/career-gps",     label: "Career GPS™",             icon: MapPin,        featureKey: "career_gps" },
       { href: "/dashboard/evidence-vault", label: "EvidenceVault™",          icon: FolderOpen                  },
