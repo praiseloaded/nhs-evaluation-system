@@ -201,7 +201,7 @@ export default function ShortlistProbabilityPage() {
           <Target className="w-6 h-6 text-primary" /> Shortlist Probability™
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Predict your Likelihood of being Shortlisted for an NHS or Healthcare role. The AI identify your strongest and Weakest Areas and provide recommendations to improve your chances before you submit your Application.
+          Predicts your likelihood of being shortlisted for an NHS or Healthcare role. The AI identify your strongest and weakest areas and provide recommendations to improve your chances before you submit your application.
         </p>
       </div>
 
