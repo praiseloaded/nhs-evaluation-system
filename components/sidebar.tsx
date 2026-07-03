@@ -51,7 +51,7 @@ const NAV_GROUPS = [
   {
     label: "Intelligence",
     items: [
-      { href: "/dashboard/criteria-explorer",     label: "Shortlist Intelligence™",  icon: Flame,    badge: "NEW" },
+      { href: "/dashboard/criteria-explorer",     label: "Criteria Explorer™",  icon: Flame,    badge: "NEW" },
       { href: "/dashboard/shortlist-probability", label: "Shortlist Probability™",   icon: Target },
       { href: "/dashboard/momentum",              label: "Momentum Score™",           icon: BarChart3 },
       { href: "/dashboard/interview",             label: "Interview Simulator",       icon: Video,    badge: "AI",  featureKey: "interview_simulator" },
