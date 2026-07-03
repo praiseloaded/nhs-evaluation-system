@@ -141,7 +141,7 @@ export default function AdminAnalysisDetailPage() {
     </div>
   )
   if (error || !analysis) return (
-    <div className="max-w-2xl mx-auto px-6 py-12 text-center">
+    <div className="max-w-4xl mx-auto px-6 py-12 text-center">
       <XCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
       <p className="text-sm text-red-500">{error ?? 'Analysis not found'}</p>
       <Link href={`/admin/users/${id}`} className="text-xs text-muted-foreground hover:text-foreground mt-4 inline-block">

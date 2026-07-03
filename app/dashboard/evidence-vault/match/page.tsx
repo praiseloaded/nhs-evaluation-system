@@ -140,7 +140,7 @@ function MatchContent() {
   const matchedCount  = data?.criteria.filter(c => (c.matches?.length ?? 0) > 0).length ?? 0
 
   if (!applicationId) return (
-    <div className="max-w-2xl mx-auto px-6 py-12 text-center">
+    <div className="max-w-4xl mx-auto px-6 py-12 text-center">
       <AlertTriangle className="w-10 h-10 text-amber-400 mx-auto mb-3" />
       <p className="text-sm text-muted-foreground">No application ID provided. Open this page from an application.</p>
       <Link href="/dashboard/applications" className="text-blue-600 dark:text-blue-400 text-sm hover:underline mt-4 inline-block">

@@ -7,9 +7,7 @@ import { prisma } from "@/lib/prisma"
 import { withAdminAuth, logAdminAction } from "@/lib/admin-auth"
 import { LIMIT_CATALOG } from "@/lib/feature-access"
 
-export const runtime = 'nodejs'
-
-const TIERS = ['free', 'pro', 'elite']
+const TIERS = ['free', 'pro', 'elite', 'premium']
 
 export const GET = withAdminAuth(async () => {
   const existing = await prisma.tierLimit.findMany()

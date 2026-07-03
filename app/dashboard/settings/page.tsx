@@ -10,8 +10,6 @@ import {
   ExternalLink, Shield, Sparkles,
 } from 'lucide-react'
 import { ThemeSwitcher } from '@/components/theme-switcher'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
 
 interface UserData { id: string; name: string; email: string; tier: string }
 
@@ -67,7 +65,7 @@ export default function SettingsPage() {
       const url  = URL.createObjectURL(blob)
       const a    = document.createElement('a')
       a.href     = url
-      a.download = `omnijobready-export-${new Date().toISOString().split('T')[0]}.json`
+      a.download = `omnijobready-export-${new Date().toISOString().split('T')[0]}.docx`
       a.click()
       URL.revokeObjectURL(url)
     } catch (e: any) { setError(e.message) }
@@ -81,7 +79,7 @@ export default function SettingsPage() {
                              'bg-muted text-muted-foreground border-border'
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-10 space-y-8">
+    <div className="max-w-4xl mx-auto px-4 py-10 space-y-8">
       <div>
         <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground mb-3 transition-colors">
           <ArrowLeft className="w-3.5 h-3.5" /> Dashboard
@@ -126,21 +124,21 @@ export default function SettingsPage() {
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Display name</label>
                 {editName ? (
                   <div className="flex items-center gap-2">
-                    <Input
+                    <input
                       value={nameValue}
                       onChange={e => setNameValue(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') setEditName(false) }}
                       className="flex-1 bg-background border border-border rounded-xl px-4 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                       autoFocus
                     />
-                    <Button onClick={saveName} disabled={saving}
+                    <button onClick={saveName} disabled={saving}
                       className="p-2 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors">
                       {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                    </Button>
-                    <Button onClick={() => { setEditName(false); setNameValue(user?.name || '') }}
+                    </button>
+                    <button onClick={() => { setEditName(false); setNameValue(user?.name || '') }}
                       className="p-2 rounded-xl border border-border text-muted-foreground hover:text-foreground transition-colors">
                       <X className="w-4 h-4" />
-                    </Button>
+                    </button>
                   </div>
                 ) : (
                   <div className="flex items-center justify-between rounded-xl border border-border bg-muted/20 px-4 py-2.5">
@@ -280,7 +278,7 @@ export default function SettingsPage() {
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-sm font-semibold transition-colors">
             {exporting
               ? <><Loader2 className="w-4 h-4 animate-spin" /> Preparing export…</>
-              : <><Download className="w-4 h-4" /> Download my data</>}
+              : <><Download className="w-4 h-4" /> Download as Word (.docx)</>}
           </button>
         </div>
       </div>

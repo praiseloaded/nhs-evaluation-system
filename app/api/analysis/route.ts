@@ -1,11 +1,10 @@
 // app/api/analysis/route.ts
 
-import { getDb }               from '@/lib/db-router'
-import { getEffectiveUserId }  from '@/lib/effective-user'
 import { prisma }                from "@/lib/prisma"
 import { getValidatedAIResult }  from "@/modules/ai/retry"
 import { getUserTier }           from "@/lib/billing/tier"
 import { sanitizeAnalysisForTier } from "@/lib/billing/sanitize-analysis"
+import { createNotification } from '@/lib/notifications'
 import { auth }                  from "@/auth"
 import { calculateNhsBandScore } from "@/lib/scoring/calculate-overall-score"
 import { detectEvidenceVault } from "@/lib/billing/detect-evidence-vault"
@@ -41,14 +40,14 @@ export async function POST(req: Request) {
     // ───────────────────────────────
     const session = await auth()
 
-    if (!userId) {
+    if (!session?.user?.id) {
       return Response.json(
         { success: false, error: "Unauthorized" },
         { status: 401 },
       )
     }
-    const userId = (await getEffectiveUserId()) ?? (session.user.id as string)
-    const db     = await getDb(userId)
+
+    const userId = session.user.id as string
     const body   = await req.json()
 
     // ───────────────────────────────
@@ -59,7 +58,7 @@ export async function POST(req: Request) {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
-    const usageToday = await db.analysis.count({
+    const usageToday = await prisma.analysis.count({
       where: {
         userId,
         createdAt: { gte: today },
@@ -130,7 +129,7 @@ export async function POST(req: Request) {
     // ───────────────────────────────
     // 5. SAVE
     // ───────────────────────────────
-    const saved = await db.analysis.create({
+    const saved = await prisma.analysis.create({
       data: {
         userId,
         jobTitle,
@@ -151,6 +150,15 @@ export async function POST(req: Request) {
     // 6. SANITIZE & RETURN
     // ───────────────────────────────
     const filtered = sanitizeAnalysisForTier(result, userTier)
+
+    // Fire-and-forget notification
+    createNotification({
+      userId,
+      type:    'analysis_complete',
+      title:   'Analysis complete',
+      body:    `Your analysis is ready to view.`,
+      linkUrl: `/dashboard/analysis/${saved.id}`,
+    }).catch(() => {})
 
     return Response.json({
       success: true,

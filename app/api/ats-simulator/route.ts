@@ -2,6 +2,7 @@
 import { auth }               from '@/auth'
 import { getEffectiveUserId } from '@/lib/effective-user'
 import { getDb }              from '@/lib/db-router'
+import { createNotification } from '@/lib/notifications'
 
 export const runtime = 'nodejs'
 
@@ -193,7 +194,17 @@ export async function POST(req: Request) {
     }
 
     const result = await callGemini(PROMPT(jobDescription, statement))
+
+    createNotification({
+      userId,
+      type:    'ats_complete',
+      title:   'ATS Simulation complete',
+      body:    `Your statement scored ${result.atsScore ?? '—'}% ATS compatibility. ${result.keywordsMissing?.length ?? 0} keywords missing.`,
+      linkUrl: '/dashboard/ats-simulator',
+    }).catch(() => {})
+
     return Response.json({ success: true, ...result })
+
   } catch (err: any) {
     console.error('[ats-simulator]', err)
     const isOverload = err.status === 503 || err.status === 429

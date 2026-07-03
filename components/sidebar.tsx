@@ -8,92 +8,122 @@ import {
   PenLine, ListChecks, Video, Settings,
   FolderOpen, Target, MapPin, Sparkles,
   ChevronLeft, ChevronRight, BarChart3,
-  FileText, MessageCircle, Lock, FlaskConical, Flame, Globe, History,
-  Mail, Zap, Bot, PoundSterling, Award, Shield, TrendingUp, Layers, Building, Radar, Map, Dna, ShoppingBag,
-  Star,
+  FileText, MessageCircle, Lock, FlaskConical,
+  Flame, Globe, History, Mail, Zap, Bot,
+  PoundSterling, Award, Shield, TrendingUp,
+  Layers, Building, Radar, Map, Dna,
+  ShoppingBag, Star, Search, BookOpen,
 } from "lucide-react"
 import { useState, useEffect } from "react"
 import { ThemeSwitcher } from "./theme-switcher"
 import { NotificationBell } from "./notification-bell"
+
+// ── Nav structure ─────────────────────────────────────────────────────────────
 
 const NAV_GROUPS = [
   {
     label: "Overview",
     items: [
       { href: "/dashboard",                label: "Dashboard",               icon: LayoutDashboard },
-      { href: "/dashboard/new-analysis",   label: "New Analysis",            icon: Plus            },
-      { href: "/dashboard/saved-analyses", label: "My Analyses",             icon: Files           },
-      { href: "/dashboard/intelligence",   label: "Intelligence History",    icon: History         },
+      { href: "/dashboard/new-analysis",   label: "New Analysis",            icon: Plus,           badge: "AI" },
+      { href: "/dashboard/saved-analyses", label: "My Analyses",             icon: Files },
+      { href: "/dashboard/intelligence",   label: "Intelligence History",    icon: History },
     ],
   },
   {
     label: "Apply",
     items: [
-      { href: "/dashboard/job-ready",      label: "Job Ready™",              icon: Zap,           badge: "NEW" },
-      { href: "/dashboard/jobs",           label: "NHS Jobs",                icon: Globe,         badge: "NEW" },
-      { href: "/dashboard/application",    label: "Personal Statement Builder", icon: PenLine                 },
-      { href: "/dashboard/ab-test",        label: "A/B Statement Test",      icon: FlaskConical,  badge: "NEW" },
-      { href: "/dashboard/cover-letter",   label: "Cover Letter AI",         icon: Mail,          badge: "NEW" },
-      { href: "/dashboard/applications",   label: "Track Applications",      icon: ListChecks                  },
+      { href: "/dashboard/job-ready",      label: "Job Ready™",              icon: Zap,            badge: "NEW" },
+      { href: "/dashboard/jobs",           label: "NHS Jobs",                icon: Globe,          badge: "LIVE" },
+      { href: "/dashboard/application",    label: "Statement Builder",       icon: PenLine },
+      { href: "/dashboard/ab-test",        label: "A/B Statement Test",      icon: FlaskConical,   badge: "NEW" },
+      { href: "/dashboard/cover-letter",   label: "Cover Letter AI",         icon: Mail,           badge: "AI" },
+      { href: "/dashboard/applications",   label: "Track Applications",      icon: ListChecks },
     ],
   },
   {
     label: "CV",
     items: [
-      { href: "/dashboard/cv-builder",     label: "CV Builder",              icon: FileText                    },
-      { href: "/dashboard/cv/templates",   label: "NHS CV Templates",        icon: Award,         badge: "NEW" },
+      { href: "/dashboard/cv-builder",     label: "CV Builder",              icon: FileText },
+      { href: "/dashboard/cv/templates",   label: "NHS CV Templates",        icon: Award,          badge: "NEW" },
     ],
   },
   {
     label: "Intelligence",
     items: [
-      { href: "/dashboard/criteria-explorer",     label: "Criteria Explorer™",      icon: Flame,    badge: "NEW" },
-      { href: "/dashboard/shortlist-probability",  label: "Shortlist Probability™",  icon: Target                 },
-      { href: "/dashboard/momentum",               label: "Momentum Score™",         icon: BarChart3              },
-      { href: "/dashboard/interview",              label: "Interview Simulator",     icon: Video,    badge: "AI", featureKey: "interview_simulator" },
-      { href: "/dashboard/interview-probability",  label: "Interview Probability™",  icon: Target,   featureKey: "interview_probability"          },
-      { href: "/dashboard/cos-navigator",          label: "COS Navigator™",          icon: Globe,    badge: "NEW" },
-      { href: "/dashboard/heatmap",                 label: "Application Heat Map™",   icon: Map,      badge: "NEW" },
+      { href: "/dashboard/criteria-explorer",     label: "Shortlist Intelligence™",  icon: Flame,    badge: "NEW" },
+      { href: "/dashboard/shortlist-probability", label: "Shortlist Probability™",   icon: Target },
+      { href: "/dashboard/momentum",              label: "Momentum Score™",           icon: BarChart3 },
+      { href: "/dashboard/interview",             label: "Interview Simulator",       icon: Video,    badge: "AI",  featureKey: "interview_simulator" },
+      { href: "/dashboard/interview-probability", label: "Interview Probability™",    icon: Target,               featureKey: "interview_probability" },
+      { href: "/dashboard/heatmap",               label: "Application Heat Map™",    icon: Map,      badge: "NEW" },
+      { href: "/dashboard/ats-simulator",         label: "NHS ATS Simulator™",       icon: Search,   badge: "NEW" },
+      { href: "/dashboard/cos-navigator",         label: "COS Navigator™",           icon: Globe,    badge: "NEW" },
     ],
   },
   {
     label: "Career",
     items: [
-      { href: "/dashboard/coach",          label: "AI Career Coach",         icon: Bot,           badge: "AI"  },
-      { href: "/dashboard/ats-simulator",  label: "ATS Simulator",           icon: Radar,  badge: "NEW" },
-      { href: "/dashboard/star-builder",   label: "Auto Star Builder",       icon: Star, badge: "NEW" },
-      { href: "/dashboard/cpd",    label: "CPD tracker",             icon: Building, badge: "NEW" },
-      { href: "/dashboard/salary",         label: "Salary Predictor",        icon: PoundSterling, badge: "NEW" },
-      { href: "/dashboard/career-gps",     label: "Career GPS™",             icon: MapPin,        featureKey: "career_gps" },
-      { href: "/dashboard/evidence-vault", label: "EvidenceVault™",          icon: FolderOpen                  },
-      { href: "/dashboard/evidence-vault/match", label: "Auto-Match Evidence", icon: Sparkles,    badge: "NEW" },
-      { href: "/dashboard/mentorship",     label: "Mentorship",              icon: MessageCircle, featureKey: "mentorship" },
-      { href: "/dashboard/career-twin",    label: "Omni Career Twin™",       icon: Dna,           badge: "NEW" },
-      { href: "/dashboard/evolution",      label: "Statement Evolution™",    icon: TrendingUp,    badge: "NEW" },
-      { href: "/dashboard/skills-passport",label: "Skills Passport™",        icon: Layers,        badge: "NEW" },
-      { href: "/dashboard/employer-intelligence", label: "Employer Intelligence™", icon: Building, badge: "NEW" },
-      { href: "/dashboard/radar",          label: "Opportunity Radar™",      icon: Radar,         badge: "NEW" },
-      { href: "/dashboard/marketplace",    label: "Career Marketplace™",     icon: ShoppingBag,   badge: "NEW" },
+      { href: "/dashboard/career-twin",          label: "Omni Career Twin™",        icon: Dna,          badge: "NEW", featureKey: "career_twin" },
+      { href: "/dashboard/coach",                label: "AI Career Coach",           icon: Bot,          badge: "AI" },
+      { href: "/dashboard/star-builder",         label: "Auto STAR Builder™",       icon: Star,         badge: "NEW" },
+      { href: "/dashboard/evolution",            label: "Statement Evolution™",     icon: TrendingUp,   badge: "NEW" },
+      { href: "/dashboard/skills-passport",      label: "Skills Passport™",         icon: Layers,       badge: "NEW" },
+      { href: "/dashboard/employer-intelligence",label: "Employer Intelligence™",   icon: Building,     badge: "NEW" },
+      { href: "/dashboard/radar",                label: "Opportunity Radar™",       icon: Radar,        badge: "NEW" },
+      { href: "/dashboard/career-gps",           label: "Career GPS™",              icon: MapPin,                   featureKey: "career_gps" },
+      { href: "/dashboard/salary",               label: "Salary Predictor",         icon: PoundSterling },
+    ],
+  },
+  {
+    label: "Vault & CPD",
+    items: [
+      { href: "/dashboard/evidence-vault",       label: "EvidenceVault™",           icon: FolderOpen },
+      { href: "/dashboard/evidence-vault/match", label: "Auto-Match Evidence",      icon: Sparkles,     badge: "NEW" },
+      { href: "/dashboard/cpd",                  label: "CPD Tracker",              icon: BookOpen,     badge: "NEW" },
+    ],
+  },
+  {
+    label: "Community",
+    items: [
+      { href: "/dashboard/mentorship",           label: "Mentorship",               icon: MessageCircle,            featureKey: "mentorship" },
+      { href: "/dashboard/marketplace",          label: "Career Marketplace™",      icon: ShoppingBag,  badge: "NEW" },
     ],
   },
   {
     label: "Account",
     items: [
-      { href: "/dashboard/settings",       label: "Settings",                icon: Settings },
+      { href: "/dashboard/settings",             label: "Settings",                 icon: Settings },
     ],
   },
 ]
 
 const TIER_RANK: Record<string, number> = { free: 0, pro: 1, elite: 2, premium: 3 }
+
+const TIER_STYLE: Record<string, string> = {
+  premium: "bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800",
+  elite:   "bg-amber-100  dark:bg-amber-950/50  text-amber-700  dark:text-amber-300  border border-amber-200  dark:border-amber-800",
+  pro:     "bg-blue-100   dark:bg-blue-950/50   text-blue-700   dark:text-blue-300   border border-blue-200   dark:border-blue-800",
+  free:    "bg-muted text-muted-foreground border border-border",
+}
+
+const BADGE_STYLE: Record<string, string> = {
+  AI:   "bg-violet-100 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300",
+  NEW:  "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300",
+  LIVE: "bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-300",
+}
+
 type FlagMap = Record<string, { minTier: string; enabled: boolean }>
 
+// ── Component ─────────────────────────────────────────────────────────────────
+
 export function Sidebar() {
-  const pathname  = usePathname()
+  const pathname = usePathname()
   const { data: session } = useSession()
-  const userTier  = (session?.user as any)?.tier  ?? "free"
-  const userRole  = (session?.user as any)?.role  ?? ""
-  const isAdmin   = userRole === "admin" || (session?.user as any)?.isAdmin === true
-  const userRank  = TIER_RANK[userTier] ?? 0
+  const userTier = (session?.user as any)?.tier    ?? "free"
+  const userRole = (session?.user as any)?.role    ?? ""
+  const isAdmin  = userRole === "admin" || (session?.user as any)?.isAdmin === true
+  const userRank = TIER_RANK[userTier] ?? 0
 
   const [isOpen,    setIsOpen]    = useState(false)
   const [collapsed, setCollapsed] = useState(false)
@@ -139,7 +169,7 @@ export function Sidebar() {
       {/* Mobile toggle */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed md:hidden bottom-5 right-5 z-50 p-3.5 rounded-2xl bg-gradient-to-br from-red-500 to-amber-500 text-white shadow-lg shadow-blue-500/30 active:scale-95 transition-transform"
+        className="fixed md:hidden bottom-20 right-5 z-50 p-3.5 rounded-2xl bg-gradient-to-br from-red-500 to-amber-500 text-white shadow-lg active:scale-95 transition-transform"
         aria-label="Toggle navigation"
       >
         {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -155,58 +185,64 @@ export function Sidebar() {
 
       {/* Sidebar */}
       <aside className={`fixed left-0 top-0 h-screen flex flex-col z-40 transition-all duration-300 md:translate-x-0
-        bg-card border-r border-border
-        ${isOpen ? "translate-x-0" : "-translate-x-full"}
-        ${collapsed ? "w-[72px]" : "w-[260px]"}`}
+        bg-card/95 backdrop-blur-xl border-r border-border/60
+        ${isOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"}
+        ${collapsed ? "w-[72px]" : "w-[265px]"}`}
       >
-        {/* ── Brand ─────────────────────────────────────────────────── */}
-        <div className={`h-[64px] flex items-center gap-3 border-b border-border shrink-0 ${collapsed ? "justify-center px-3" : "px-5"}`}>
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500 to-amber-500 flex items-center justify-center shrink-0 shadow-md shadow-blue-500/25">
-            <span className="text-white text-[9px] font-black tracking-tight">OJR</span>
+
+        {/* ── Brand ────────────────────────────────────────────────── */}
+        <div className={`h-[64px] flex items-center gap-3 border-b border-border/60 shrink-0 ${collapsed ? "justify-center px-3" : "px-4"}`}>
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-red-500 to-amber-500 flex items-center justify-center shrink-0 shadow-md shadow-red-500/25">
+            <span className="text-white text-[8px] font-black tracking-tight">OJR</span>
           </div>
           {!collapsed && (
             <div className="flex-1 min-w-0">
-              <p className="text-[14px] font-black text-foreground tracking-tight leading-none">OmniJobReady</p>
-              <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1 leading-none">
+              <p className="text-[13px] font-black text-foreground tracking-tight leading-none">OmniJobReady</p>
+              <div className="flex items-center gap-1 mt-1">
                 <Sparkles className="w-2.5 h-2.5 text-blue-500 shrink-0" />
-                <span>AI™ Platform</span>
-              </p>
+                <span className="text-[10px] text-muted-foreground leading-none">AI™ Platform</span>
+              </div>
             </div>
           )}
           {!collapsed && <div className="shrink-0"><NotificationBell /></div>}
         </div>
 
-        {/* ── Admin banner — only visible to admins ─────────────────── */}
+        {/* ── Admin banner ──────────────────────────────────────────── */}
         {isAdmin && (
           <Link
             href="/admin"
             onClick={() => setIsOpen(false)}
-            className={`flex items-center gap-2 bg-amber-500 hover:bg-amber-400 transition-colors shrink-0
-              ${collapsed ? "justify-center px-2 py-2.5" : "px-4 py-2.5"}`}
+            className={`flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 transition-all shrink-0 ${collapsed ? "justify-center px-2 py-2" : "px-4 py-2"}`}
           >
             <Shield className="w-3.5 h-3.5 text-white shrink-0" />
             {!collapsed && (
-              <span className="text-[11px] font-black text-white tracking-wide uppercase">Admin Panel</span>
+              <span className="text-[11px] font-black text-white tracking-widest uppercase">Admin Panel</span>
             )}
           </Link>
         )}
 
         {/* ── Nav ───────────────────────────────────────────────────── */}
-        <nav className="flex-1 overflow-y-auto py-3 space-y-5 scrollbar-thin">
-          {NAV_GROUPS.map((group) => (
-            <div key={group.label} className={collapsed ? "px-2" : "px-3"}>
-              {!collapsed && (
-                <p className="text-[10px] font-bold tracking-[0.15em] text-muted-foreground/50 uppercase px-2 mb-2">
-                  {group.label}
-                </p>
-              )}
-              {collapsed && <div className="h-px bg-border/60 mb-2" />}
+        <nav className="flex-1 overflow-y-auto py-2 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
+          {NAV_GROUPS.map((group, gi) => (
+            <div key={group.label} className={`${gi > 0 ? "mt-1" : ""}`}>
 
-              <div className="space-y-0.5">
+              {/* Group label */}
+              {!collapsed && (
+                <div className="flex items-center gap-2 px-4 pt-4 pb-1.5">
+                  <p className="text-[9px] font-black tracking-[0.18em] text-muted-foreground/40 uppercase">
+                    {group.label}
+                  </p>
+                  <div className="flex-1 h-px bg-border/40" />
+                </div>
+              )}
+              {collapsed && gi > 0 && <div className="h-px bg-border/40 mx-3 my-2" />}
+
+              <div className="space-y-0.5 px-2">
                 {group.items.map((item) => {
                   const Icon   = item.icon
                   const active = isActive(item.href)
                   const locked = isLocked((item as any).featureKey)
+                  const badge  = (item as any).badge as string | undefined
 
                   return (
                     <Link
@@ -214,46 +250,46 @@ export function Sidebar() {
                       href={item.href}
                       onClick={() => setIsOpen(false)}
                       title={collapsed ? item.label : undefined}
-                      className={`group relative flex items-center gap-2.5 rounded-lg text-[13px] font-medium transition-all duration-150
-                        ${collapsed ? "justify-center py-3 px-1" : "px-3 py-2"}
+                      className={`group relative flex items-center gap-2.5 rounded-xl text-[12.5px] font-medium transition-all duration-150
+                        ${collapsed ? "justify-center py-2.5 px-1" : "px-3 py-2"}
                         ${active
-                          ? "bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400"
+                          ? "bg-primary/10 dark:bg-primary/15 text-primary"
                           : locked
-                          ? "text-muted-foreground/35 hover:bg-muted/40 cursor-default"
-                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                          ? "text-muted-foreground/30 cursor-default"
+                          : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
                         }`}
                     >
-                      {/* Active bar */}
+                      {/* Active indicator */}
                       {active && !collapsed && (
-                        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-[18px] w-[3px] rounded-r-full bg-gradient-to-br from-red-500 to-amber-500" />
+                        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-gradient-to-b from-red-500 to-amber-500" />
                       )}
 
-                      <Icon className={`h-4 w-4 shrink-0 transition-all
-                        ${active ? "text-blue-600 dark:text-blue-400" : ""}
-                        ${!active && !locked ? "group-hover:scale-110" : ""}
+                      {/* Icon */}
+                      <Icon className={`h-[15px] w-[15px] shrink-0 transition-all
+                        ${active  ? "text-primary" : ""}
+                        ${!active && !locked ? "group-hover:scale-105 group-hover:text-foreground" : ""}
                       `} />
 
+                      {/* Label + badge + lock */}
                       {!collapsed && (
                         <>
                           <span className="flex-1 truncate">{item.label}</span>
-                          {locked ? (
-                            <Lock className="w-3 h-3 shrink-0 opacity-30" />
-                          ) : (item as any).badge ? (
-                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full shrink-0 tracking-wide ${
-                              (item as any).badge === "AI"
-                                ? "bg-violet-100 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300"
-                                : "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300"
-                            }`}>
-                              {(item as any).badge}
-                            </span>
-                          ) : null}
+                          {locked
+                            ? <Lock className="w-3 h-3 shrink-0 opacity-25" />
+                            : badge
+                            ? <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full shrink-0 tracking-wide ${BADGE_STYLE[badge] ?? BADGE_STYLE.NEW}`}>
+                                {badge}
+                              </span>
+                            : null
+                          }
                         </>
                       )}
 
                       {/* Collapsed badge dot */}
-                      {collapsed && !locked && (item as any).badge && (
+                      {collapsed && badge && !locked && (
                         <span className={`absolute top-1 right-1 w-1.5 h-1.5 rounded-full ${
-                          (item as any).badge === "AI" ? "bg-violet-400" : "bg-emerald-400"
+                          badge === "AI"   ? "bg-violet-400" :
+                          badge === "LIVE" ? "bg-blue-400"   : "bg-emerald-400"
                         }`} />
                       )}
                     </Link>
@@ -262,23 +298,22 @@ export function Sidebar() {
               </div>
             </div>
           ))}
+
+          {/* Bottom padding */}
+          <div className="h-4" />
         </nav>
 
         {/* ── Footer ────────────────────────────────────────────────── */}
-        <div className={`border-t border-border shrink-0 py-3 ${collapsed ? "px-2 flex flex-col items-center gap-2" : "px-3 space-y-2"}`}>
+        <div className={`border-t border-border/60 bg-muted/20 shrink-0 py-3 ${collapsed ? "px-2 flex flex-col items-center gap-2" : "px-3 space-y-2"}`}>
+
           {!collapsed ? (
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2">
-                <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full ${
-                  userTier === "premium" ? "bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800" :
-                  userTier === "elite" ? "bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800" :
-                  userTier === "pro"   ? "bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800" :
-                                         "bg-muted text-muted-foreground border border-border"
-                }`}>
+                <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full ${TIER_STYLE[userTier] ?? TIER_STYLE.free}`}>
                   {userTier}
                 </span>
-                {(userTier === "free" || userTier === "pro" || userTier === "elite") && (
-                  <Link href="/upgrade" className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline font-semibold">
+                {userTier !== "premium" && (
+                  <Link href="/upgrade" className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline font-bold transition-colors">
                     Upgrade
                   </Link>
                 )}
@@ -294,19 +329,18 @@ export function Sidebar() {
 
           <button
             onClick={toggleCollapsed}
-            className={`hidden md:flex items-center w-full rounded-lg text-[11px] text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors px-2 py-1.5 ${collapsed ? "justify-center" : "gap-2"}`}
+            className={`hidden md:flex items-center w-full rounded-xl text-[11px] text-muted-foreground/40 hover:text-foreground hover:bg-muted transition-all px-2 py-1.5 ${collapsed ? "justify-center" : "gap-2"}`}
           >
             {collapsed
               ? <ChevronRight className="w-3.5 h-3.5" />
-              : <><ChevronLeft className="w-3.5 h-3.5" /><span>Collapse</span></>
+              : <><ChevronLeft className="w-3.5 h-3.5" /><span>Collapse sidebar</span></>
             }
           </button>
         </div>
-
       </aside>
 
       {/* Desktop spacer */}
-      <div className={`hidden md:block shrink-0 transition-all duration-300 ${collapsed ? "w-[72px]" : "w-[260px]"}`} />
+      <div className={`hidden md:block shrink-0 transition-all duration-300 ${collapsed ? "w-[72px]" : "w-[265px]"}`} />
     </>
   )
 }

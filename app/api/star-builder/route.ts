@@ -1,5 +1,6 @@
 // app/api/star-builder/route.ts
 // Conversational STAR builder — one message at a time
+import { createNotification } from '@/lib/notifications'
 import { auth }               from '@/auth'
 import { getEffectiveUserId } from '@/lib/effective-user'
 import { getDb }              from '@/lib/db-router'
@@ -51,42 +52,48 @@ export async function POST(req: Request) {
   const systemPrompt = `You are a warm, expert NHS career coach helping a healthcare professional build a strong STAR evidence example${jobContext ? ` for the role: ${jobContext}` : ''}. You ask one precise question at a time to draw out specific, evidenced experience. Never write the answer for them — only ask questions until the polish stage.`
 
   // Polish stage — generate the final STAR + save to vault
- if (stage === 'polish') {
-  const fullConversation = [
-    { role: 'user', content: `I want to build a STAR example${jobContext ? ` for: ${jobContext}` : ''}.` },
-    ...messages,
-  ]
-  const raw = await callGemini(STAGE_PROMPTS.polish, fullConversation)
+  if (stage === 'polish') {
+    const fullConversation = [
+      { role: 'user', content: `I want to build a STAR example${jobContext ? ` for: ${jobContext}` : ''}.` },
+      ...messages,
+    ]
+    const raw = await callGemini(STAGE_PROMPTS.polish, fullConversation)
 
-  const titleMatch      = raw.match(/TITLE:\s*(.+)/i)
-  const competencyMatch = raw.match(/COMPETENCY:\s*(.+)/i)
-  const star = raw
-    .replace(/TITLE:.+/gi, '')
-    .replace(/COMPETENCY:.+/gi, '')
-    .trim()
-  const title      = titleMatch?.[1]?.trim()      ?? 'STAR Example'
-  const competency = competencyMatch?.[1]?.trim() ?? 'Clinical practice'
+    // Parse the result
+    const titleMatch     = raw.match(/TITLE:\s*(.+)/i)
+    const competencyMatch= raw.match(/COMPETENCY:\s*(.+)/i)
+    const star = raw
+      .replace(/TITLE:.+/gi, '')
+      .replace(/COMPETENCY:.+/gi, '')
+      .trim()
+    const title      = titleMatch?.[1]?.trim()     ?? 'STAR Example'
+    const competency = competencyMatch?.[1]?.trim() ?? 'Clinical practice'
 
-  try {
-    const saved = await db.evidenceEntry.create({
-      data: {
+    // Save to EvidenceVault
+    try {
+      const saved = await db.evidenceEntry.create({
+        data: {
+          userId,
+          title,
+          competency,
+          action: star, // store polished text in action field
+          situation: messages.find((m:any) => m._stage === 'situation')?.content ?? '',
+          task:      messages.find((m:any) => m._stage === 'task')?.content      ?? '',
+          result:    messages.find((m:any) => m._stage === 'result')?.content    ?? '',
+        },
+      })
+      createNotification({
         userId,
-        title,
-        category: competency,   // ✅ was `competency`, schema field is `category`
-        action: star,
-        situation: messages.find((m: any) => m._stage === 'situation')?.content ?? '',
-        task:      messages.find((m: any) => m._stage === 'task')?.content      ?? '',
-        result:    messages.find((m: any) => m._stage === 'result')?.content    ?? '',
-        skillTags: [],
-        nhsValueTags: [],
-      },
-    })
-    return Response.json({ success: true, done: true, star, title, competency, savedId: saved.id })
-  } catch (err) {
-    console.error('[star-builder] evidenceEntry.create failed:', err)
-    return Response.json({ success: true, done: true, star, title, competency, savedId: null, saveError: true })
+        type:    'star_saved',
+        title:   'STAR example saved',
+        body:    `"${title}" has been added to your EvidenceVault™.`,
+        linkUrl: '/dashboard/evidence-vault',
+      }).catch(() => {})
+      return Response.json({ success: true, done: true, star, title, competency, savedId: saved.id })
+    } catch {
+      return Response.json({ success: true, done: true, star, title, competency, savedId: null })
+    }
   }
-}
 
   // Normal conversation stage
   const reply = await callGemini(

@@ -1,21 +1,26 @@
 // app/api/webhooks/stripe/route.ts
+//
+// Detects tier from PRODUCT ID (permanent) not price ID (changes every price update).
+// Map:  STRIPE_PRO_PRODUCT_ID → 'pro'
+//       STRIPE_ELITE_PRODUCT_ID → 'elite'
+//       STRIPE_PREMIUM_PRODUCT_ID → 'premium'
 
 import { stripe }    from '@/lib/stripe'
 import { prisma }    from '@/lib/prisma'
 import { prisma2 }   from '@/lib/db-router'
 import { getDb }     from '@/lib/db-router'
-import { NextRequest } from 'next/server'
+import { NextRequest }        from 'next/server'
+import { createNotification } from '@/lib/notifications'
 
 export const runtime = 'nodejs'
 
-// ── Map Stripe Price ID → tier name ──────────────────────────────────────────
-// Add STRIPE_PREMIUM_PRICE_ID + STRIPE_ELITE_PRICE_ID to Vercel env vars.
-function tierFromPriceId(priceId: string | null | undefined): 'free' | 'pro' | 'elite' | 'premium' {
-  if (!priceId) return 'pro' // unknown price → safest fallback
-  if (priceId === process.env.STRIPE_PREMIUM_PRICE_ID) return 'premium'
-  if (priceId === process.env.STRIPE_ELITE_PRICE_ID)   return 'elite'
-  if (priceId === process.env.STRIPE_PRO_PRICE_ID)     return 'pro'
-  return 'pro' // unrecognised price ID → default to pro
+// Resolve tier from product ID — permanent mapping, survives any price change
+function tierFromProductId(productId: string | null | undefined): 'free' | 'pro' | 'elite' | 'premium' {
+  if (!productId) return 'pro'
+  if (productId === process.env.STRIPE_PREMIUM_PRODUCT_ID) return 'premium'
+  if (productId === process.env.STRIPE_ELITE_PRODUCT_ID)   return 'elite'
+  if (productId === process.env.STRIPE_PRO_PRODUCT_ID)     return 'pro'
+  return 'pro'
 }
 
 async function findUserByEmail(email: string) {
@@ -23,22 +28,37 @@ async function findUserByEmail(email: string) {
   return u ?? await prisma2.user.findUnique({ where: { email }, select: { id: true } }).catch(() => null)
 }
 
-// ── Resolve priceId from a checkout session ───────────────────────────────────
-// Stripe doesn't always include line_items inline — expand if needed.
-async function resolvePriceId(session: any): Promise<string | null> {
-  // 1. Try metadata (set in checkout route)
-  if (session.metadata?.priceId) return session.metadata.priceId
+async function resolveProductId(session: any): Promise<string | null> {
+  // 1. Check metadata tier (most reliable — set by our checkout route)
+  const tierFromMeta = session.metadata?.tier
+  if (tierFromMeta === 'premium') return process.env.STRIPE_PREMIUM_PRODUCT_ID ?? null
+  if (tierFromMeta === 'elite')   return process.env.STRIPE_ELITE_PRODUCT_ID   ?? null
+  if (tierFromMeta === 'pro')     return process.env.STRIPE_PRO_PRODUCT_ID     ?? null
 
-  // 2. Try inline line_items
-  const inline = session.line_items?.data?.[0]?.price?.id
+  // 2. Try inline line_items product
+  const inline = session.line_items?.data?.[0]?.price?.product
   if (inline) return inline
 
   // 3. Expand from Stripe API
   try {
     const expanded = await stripe.checkout.sessions.retrieve(session.id, {
-      expand: ['line_items'],
+      expand: ['line_items.data.price.product'],
     })
-    return expanded.line_items?.data?.[0]?.price?.id ?? null
+    return expanded.line_items?.data?.[0]?.price?.product as string ?? null
+  } catch {
+    return null
+  }
+}
+
+async function resolveProductIdFromSubscription(subscription: any): Promise<string | null> {
+  try {
+    const productId = subscription.items?.data?.[0]?.price?.product
+    if (typeof productId === 'string') return productId
+    // Expand if needed
+    const expanded  = await stripe.subscriptions.retrieve(subscription.id, {
+      expand: ['items.data.price.product'],
+    })
+    return expanded.items?.data?.[0]?.price?.product as string ?? null
   } catch {
     return null
   }
@@ -49,7 +69,6 @@ export async function POST(req: NextRequest) {
   const sig  = req.headers.get('stripe-signature')!
 
   let event
-
   try {
     event = stripe.webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET!)
   } catch (err: any) {
@@ -57,16 +76,17 @@ export async function POST(req: NextRequest) {
     return new Response(`Webhook Error: ${err.message}`, { status: 400 })
   }
 
-  // ── Checkout completed → upgrade ────────────────────────────────────────────
+  // ── Checkout completed → upgrade ─────────────────────────────────────────
   if (event.type === 'checkout.session.completed') {
-    const session = event.data.object as any
-    const email   = session.customer_email
-    const userId  = session.metadata?.userId
+    const session   = event.data.object as any
+    const email     = session.customer_email
+    const userId    = session.metadata?.userId
 
-    const priceId = await resolvePriceId(session)
-    const tier    = tierFromPriceId(priceId)
+    const productId = await resolveProductId(session)
+    const tier      = tierFromProductId(productId)
+    const limit     = tier === 'premium' || tier === 'elite' ? -1 : 999
 
-    console.log(`[webhook] checkout.session.completed — tier: ${tier}, priceId: ${priceId}`)
+    console.log(`[webhook] checkout.session.completed tier=${tier} product=${productId}`)
 
     if (userId) {
       const db = await getDb(userId)
@@ -74,29 +94,54 @@ export async function POST(req: NextRequest) {
         where: { id: userId },
         data:  {
           tier,
-          analysisLimit:        tier === 'premium' ? -1 : tier === 'elite' ? -1 : 999,
+          analysisLimit:        limit,
           stripeCustomerId:     session.customer     ?? undefined,
           stripeSubscriptionId: session.subscription ?? undefined,
         },
-      }).catch(err => console.error('[webhook] update failed:', err))
-      console.log(`✅ User ${userId} upgraded to ${tier}`)
+      }).catch(e => console.error('[webhook] update failed:', e))
+      console.log(`✅ User ${userId} → ${tier}`)
+      createNotification({
+        userId,
+        type:    'upgrade_welcome',
+        title:   `Welcome to ${tier.charAt(0).toUpperCase() + tier.slice(1)}!`,
+        body:    `Your account has been upgraded to ${tier.charAt(0).toUpperCase() + tier.slice(1)}. All ${tier} features are now unlocked.`,
+        linkUrl: '/dashboard',
+      }).catch(() => {})
     } else if (email) {
       const user = await findUserByEmail(email)
       if (user) {
         const db = await getDb(user.id)
         await db.user.update({
           where: { id: user.id },
-          data:  {
-            tier,
-            analysisLimit: tier === 'premium' ? -1 : tier === 'elite' ? -1 : 999,
-          },
-        }).catch(err => console.error('[webhook] email update failed:', err))
-        console.log(`✅ User ${email} upgraded to ${tier}`)
+          data:  { tier, analysisLimit: limit },
+        }).catch(e => console.error('[webhook] email update failed:', e))
+        console.log(`✅ User ${email} → ${tier}`)
       }
     }
   }
 
-  // ── Subscription cancelled → downgrade to free ──────────────────────────────
+  // ── Subscription updated → handle plan changes mid-cycle ─────────────────
+  if (event.type === 'customer.subscription.updated') {
+    const subscription = event.data.object as any
+    const productId    = await resolveProductIdFromSubscription(subscription)
+    const tier         = tierFromProductId(productId)
+    const limit        = tier === 'premium' || tier === 'elite' ? -1 : tier === 'pro' ? 999 : 1
+
+    try {
+      const customer = await stripe.customers.retrieve(subscription.customer as string) as any
+      const email    = customer?.email
+      if (email) {
+        const user = await findUserByEmail(email)
+        if (user) {
+          const db = await getDb(user.id)
+          await db.user.update({ where: { id: user.id }, data: { tier, analysisLimit: limit } })
+          console.log(`🔄 User ${email} plan updated → ${tier}`)
+        }
+      }
+    } catch (e) { console.error('[webhook] plan update failed:', e) }
+  }
+
+  // ── Subscription cancelled → downgrade to free ───────────────────────────
   if (event.type === 'customer.subscription.deleted') {
     const subscription = event.data.object as any
     try {
@@ -106,44 +151,11 @@ export async function POST(req: NextRequest) {
         const user = await findUserByEmail(email)
         if (user) {
           const db = await getDb(user.id)
-          await db.user.update({
-            where: { id: user.id },
-            data:  { tier: 'free', analysisLimit: 1 },
-          })
-          console.log(`⬇️ User ${email} downgraded to free (subscription cancelled)`)
+          await db.user.update({ where: { id: user.id }, data: { tier: 'free', analysisLimit: 1 } })
+          console.log(`⬇️ User ${email} cancelled → free`)
         }
       }
-    } catch (err) {
-      console.error('[webhook] downgrade failed:', err)
-    }
-  }
-
-  // ── Subscription updated → handle plan changes ──────────────────────────────
-  if (event.type === 'customer.subscription.updated') {
-    const subscription = event.data.object as any
-    const priceId      = subscription.items?.data?.[0]?.price?.id ?? null
-    const tier         = tierFromPriceId(priceId)
-
-    try {
-      const customer = await stripe.customers.retrieve(subscription.customer as string) as any
-      const email    = customer?.email
-      if (email) {
-        const user = await findUserByEmail(email)
-        if (user) {
-          const db = await getDb(user.id)
-          await db.user.update({
-            where: { id: user.id },
-            data:  {
-              tier,
-              analysisLimit: tier === 'premium' ? -1 : tier === 'elite' ? -1 : tier === 'pro' ? 999 : 1,
-            },
-          })
-          console.log(`🔄 User ${email} plan updated to ${tier}`)
-        }
-      }
-    } catch (err) {
-      console.error('[webhook] plan update failed:', err)
-    }
+    } catch (e) { console.error('[webhook] downgrade failed:', e) }
   }
 
   return new Response('ok', { status: 200 })

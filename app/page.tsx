@@ -215,7 +215,7 @@ export default function HomePage() {
                 Not Overlooked.
               </span>
             </h1>
-            <p className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+            <p className="text-lg sm:text-xl text-muted-foreground max-w-4xl mx-auto leading-relaxed">
               The AI platform built on NHS shortlisting methodology. Score your statement, find hidden criteria, match your evidence automatically, and know your sponsorship chances — before you submit.
             </p>
           </div>

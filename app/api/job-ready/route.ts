@@ -6,6 +6,7 @@
 //   - Application.notes    = 'job_ready'  (short exact-match marker, never truncated)
 //   - Application.parsedSpec = { jobReadyPackage: {...} }  (JSON column, no size limit)
 
+import { createNotification } from '@/lib/notifications'
 import { auth }   from '@/auth'
 import { getDb }  from '@/lib/db-router'
 import { prisma }  from '@/lib/prisma'
@@ -343,6 +344,14 @@ Generate the following JSON. Replace every value with real, specific, generated 
     } catch (cvErr: any) {
       console.error('[job-ready] CV profile save error (non-fatal):', cvErr)
     }
+
+    createNotification({
+      userId,
+      type:    'job_ready_complete',
+      title:   'Job Ready™ package ready',
+      body:    `Your full application package for "${result.jobTitle ?? 'this role'}" is ready — CV content, cover letter, interview prep and 7-day plan.`,
+      linkUrl: '/dashboard/job-ready',
+    }).catch(() => {})
 
     return Response.json({ success: true, result, applicationId, cvProfileId })
 

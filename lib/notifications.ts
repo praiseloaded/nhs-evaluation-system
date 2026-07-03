@@ -1,12 +1,10 @@
 // lib/notifications.ts
-//
-// Call createNotification() from anywhere a user-facing event happens
-// (mentorship reply, admin tier change, account suspended, etc). It
-// checks the recipient's mute preference for that type first, so muted
-// types never even get written — keeps the table from filling with
-// notifications nobody will see and avoids needing to filter on every read.
+// Call createNotification() from anywhere a user-facing event happens.
+// Uses getDb() for dual-shard support — notifications are written to
+// whichever shard the user lives on.
 
-import { prisma } from "@/lib/prisma"
+import { getDb } from '@/lib/db-router'
+import { prisma } from '@/lib/prisma'
 
 export type NotificationType =
   | 'mentorship_reply'
@@ -14,32 +12,44 @@ export type NotificationType =
   | 'account_tier_changed'
   | 'account_suspended'
   | 'account_unsuspended'
+  | 'analysis_complete'
+  | 'job_ready_complete'
+  | 'star_saved'
+  | 'radar_matches'
+  | 'cpd_milestone'
+  | 'skills_milestone'
+  | 'ats_complete'
+  | 'upgrade_welcome'
 
 export async function createNotification(params: {
-  userId: string
-  type: NotificationType
-  title: string
-  body?: string
+  userId:  string
+  type:    NotificationType
+  title:   string
+  body?:   string
   linkUrl?: string
 }) {
   try {
-    const pref = await prisma.notificationPreference.findUnique({
-      where: { userId_type: { userId: params.userId, type: params.type } },
-    })
-    if (pref?.muted) return null // respect mute, silently skip
+    // Route to correct shard
+    const db = await getDb(params.userId)
 
-    return await prisma.notification.create({
+    // Check mute preference (silently skip if muted)
+    const pref = await db.notificationPreference.findUnique({
+      where: { userId_type: { userId: params.userId, type: params.type } },
+    }).catch(() => null)
+    if (pref?.muted) return null
+
+    return await db.notification.create({
       data: {
-        userId: params.userId,
-        type: params.type,
-        title: params.title,
-        body: params.body,
-        linkUrl: params.linkUrl,
+        userId:  params.userId,
+        type:    params.type,
+        title:   params.title,
+        body:    params.body   ?? null,
+        linkUrl: params.linkUrl ?? null,
       },
     })
   } catch (err) {
-    // Notifications should never break the action that triggered them
-    console.error("CREATE_NOTIFICATION_FAILED:", err)
+    // Never let notification failures break the action that triggered them
+    console.error('CREATE_NOTIFICATION_FAILED:', err)
     return null
   }
 }

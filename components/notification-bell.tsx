@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { Bell, MessageCircle, Shield, CheckCheck, Loader2 } from 'lucide-react'
+import { Bell, MessageCircle, Shield, CheckCheck, Loader2, BarChart3, Zap, Star, Search, BookOpen, CreditCard } from 'lucide-react'
 
 interface NotificationRow {
   id: string; type: string; title: string; body: string | null
@@ -15,11 +15,31 @@ interface NotificationRow {
 }
 
 const ICON_BY_TYPE: Record<string, React.ElementType> = {
-  mentorship_reply: MessageCircle,
-  mentorship_thread_closed: MessageCircle,
-  account_tier_changed: Shield,
-  account_suspended: Shield,
-  account_unsuspended: Shield,
+  mentorship_reply:          MessageCircle,
+  mentorship_thread_closed:  MessageCircle,
+  account_tier_changed:      Shield,
+  account_suspended:         Shield,
+  account_unsuspended:       Shield,
+  analysis_complete:         BarChart3,
+  job_ready_complete:        Zap,
+  star_saved:                Star,
+  ats_complete:              Search,
+  radar_matches:             Bell,
+  cpd_milestone:             BookOpen,
+  skills_milestone:          Star,
+  upgrade_welcome:           CreditCard,
+}
+
+const COLOR_BY_TYPE: Record<string, string> = {
+  analysis_complete:         'text-blue-500',
+  job_ready_complete:        'text-amber-500',
+  star_saved:                'text-emerald-500',
+  ats_complete:              'text-violet-500',
+  upgrade_welcome:           'text-primary',
+  mentorship_reply:          'text-blue-500',
+  account_tier_changed:      'text-emerald-500',
+  account_suspended:         'text-red-500',
+  default:                   'text-muted-foreground',
 }
 
 function timeAgo(dateStr: string): string {
@@ -42,19 +62,11 @@ export function NotificationBell() {
   const ref = useRef<HTMLDivElement>(null)
 
   const load = async () => {
-    try {
-      const res = await fetch('/api/notifications')
-      if (!res.ok) { setLoading(false); return }
-      const text = await res.text()
-      if (!text) { setLoading(false); return }
-      const d = JSON.parse(text)
-      setNotifications(d.notifications ?? [])
-      setUnreadCount(d.unreadCount ?? 0)
-    } catch {
-      // silently fail — bell shows empty rather than crashing
-    } finally {
-      setLoading(false)
-    }
+    const res = await fetch('/api/notifications')
+    const d = await res.json()
+    setNotifications(d.notifications ?? [])
+    setUnreadCount(d.unreadCount ?? 0)
+    setLoading(false)
   }
 
   useEffect(() => {
@@ -72,13 +84,13 @@ export function NotificationBell() {
   }, [])
 
   const markRead = async (id: string) => {
-    await fetch('/api/notifications', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }).catch(() => {})
+    await fetch('/api/notifications/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
     setUnreadCount(c => Math.max(0, c - 1))
   }
 
   const markAllRead = async () => {
-    await fetch('/api/notifications', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }).catch(() => {})
+    await fetch('/api/notifications/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ all: true }) })
     setNotifications(prev => prev.map(n => ({ ...n, read: true })))
     setUnreadCount(0)
   }
@@ -112,11 +124,12 @@ export function NotificationBell() {
               <p className="text-center py-10 text-[13px] text-muted-foreground">No notifications yet.</p>
             ) : (
               notifications.map(n => {
-                const Icon = ICON_BY_TYPE[n.type] ?? Bell
+                const Icon  = ICON_BY_TYPE[n.type]  ?? Bell
+            const color = COLOR_BY_TYPE[n.type] ?? COLOR_BY_TYPE.default
                 const content = (
                   <div className={`flex items-start gap-3 px-4 py-3 transition-colors hover:bg-accent/40 ${!n.read ? 'bg-primary/5' : ''}`}>
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${!n.read ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                      <Icon className="w-4 h-4" />
+                      <Icon className={`w-4 h-4 ${COLOR_BY_TYPE[n.type] ?? COLOR_BY_TYPE.default}`} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className={`text-[12.5px] leading-snug ${!n.read ? 'font-semibold text-foreground' : 'text-foreground'}`}>{n.title}</p>
