@@ -167,14 +167,42 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Mobile toggle */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed md:hidden bottom-20 right-5 z-50 p-3.5 rounded-2xl bg-gradient-to-br from-red-500 to-amber-500 text-white shadow-lg active:scale-95 transition-transform"
-        aria-label="Toggle navigation"
-      >
-        {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-      </button>
+      {/* ── Mobile top bar (logo + menu toggle) ───────────────────── */}
+      <div className="fixed top-0 left-0 right-0 z-50 h-14 flex md:hidden items-center justify-between px-4
+        bg-card/95 backdrop-blur-xl border-b border-border/60">
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-2 min-w-0"
+          onClick={() => setIsOpen(false)}
+        >
+          <div className="relative w-8 h-8 shrink-0">
+            <Image
+              src="/logo.jpeg"
+              alt="OmniJobReady"
+              fill
+              priority
+              className="object-contain"
+            />
+          </div>
+          <span className="text-[13px] font-black text-foreground tracking-tight truncate">
+            OmniJobReady
+          </span>
+        </Link>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <NotificationBell />
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className="p-2 rounded-xl bg-gradient-to-br from-red-500 to-amber-500 text-white shadow-sm active:scale-95 transition-transform"
+            aria-label="Toggle navigation"
+          >
+            {isOpen ? <X className="h-4.5 w-4.5" /> : <Menu className="h-4.5 w-4.5" />}
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile spacer so page content isn't hidden under the fixed top bar */}
+      <div className="h-14 md:hidden" />
 
       {/* Overlay */}
       {isOpen && (
@@ -191,17 +219,17 @@ export function Sidebar() {
         ${collapsed ? "w-[72px]" : "w-[265px]"}`}
       >
 
-        {/* ── Brand ────────────────────────────────────────────────── */}
+        {/* ── Brand (desktop, and mobile drawer header) ──────────────── */}
         <div className={`h-[64px] flex items-center gap-3 border-b border-border/60 shrink-0 ${collapsed ? "justify-center px-3" : "px-4"}`}>
           <div className="relative w-12 h-12 shrink-0">
-  <Image
-    src="/logo.jpeg"
-    alt="OmniJobReady"
-    fill
-    priority
-    className="object-contain"
-  />
-</div>
+            <Image
+              src="/logo.jpeg"
+              alt="OmniJobReady"
+              fill
+              priority
+              className="object-contain"
+            />
+          </div>
           {!collapsed && (
             <div className="flex-1 min-w-0">
               <p className="text-[13px] font-black text-foreground tracking-tight leading-none">OmniJobReady</p>
@@ -211,7 +239,7 @@ export function Sidebar() {
               </div>
             </div>
           )}
-          {!collapsed && <div className="shrink-0"><NotificationBell /></div>}
+          {!collapsed && <div className="shrink-0 hidden md:block"><NotificationBell /></div>}
         </div>
 
         {/* ── Admin banner ──────────────────────────────────────────── */}
