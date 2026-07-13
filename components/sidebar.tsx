@@ -17,6 +17,7 @@ import {
 import { useState, useEffect } from "react"
 import { ThemeSwitcher } from "./theme-switcher"
 import { NotificationBell } from "./notification-bell"
+import Image from "next/image"
 
 // ── Nav structure ─────────────────────────────────────────────────────────────
 
@@ -192,9 +193,15 @@ export function Sidebar() {
 
         {/* ── Brand ────────────────────────────────────────────────── */}
         <div className={`h-[64px] flex items-center gap-3 border-b border-border/60 shrink-0 ${collapsed ? "justify-center px-3" : "px-4"}`}>
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-red-500 to-amber-500 flex items-center justify-center shrink-0 shadow-md shadow-red-500/25">
-            <span className="text-white text-[8px] font-black tracking-tight">OJR</span>
-          </div>
+          <div className="relative w-12 h-12 shrink-0">
+  <Image
+    src="/logo.jpeg"
+    alt="OmniJobReady"
+    fill
+    priority
+    className="object-contain"
+  />
+</div>
           {!collapsed && (
             <div className="flex-1 min-w-0">
               <p className="text-[13px] font-black text-foreground tracking-tight leading-none">OmniJobReady</p>

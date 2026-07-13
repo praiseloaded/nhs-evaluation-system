@@ -6,6 +6,7 @@ import { signOut, useSession } from "next-auth/react"
 import { ArrowRight, Search, Menu, X } from "lucide-react"
 import { useState } from "react"
 import { Button } from "./ui/button"
+import Image from "next/image"
 import { NotificationBell } from "./notification-bell"
 
 export function Navbar() {
@@ -25,20 +26,20 @@ export function Navbar() {
   const closeMobile = () => setMobileOpen(false)
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <nav className="main-nav sticky p-2 top-0 z-50 border-b border-border bg-background/100 backdrop-blur supports-[backdrop-filter]:bg-background/90">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-14 items-center justify-between">
 
           <Link href="/" className="flex items-center gap-2.5 shrink-0" onClick={closeMobile}>
-            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-red-500 to-amber-500 text-white flex items-center justify-center font-semibold text-[11px] tracking-wide select-none">
-              NHS
-            </div>
-            <span className="font-semibold text-[15px] text-foreground leading-none">
-              JobReady
-              <span className="ml-1.5 text-[10px] font-normal text-muted-foreground bg-accent dark:bg-slate-800 px-1.5 py-0.5 rounded border border-border align-middle">
-                AI
-              </span>
-            </span>
+           <div className="relative h-15 w-15 overflow-hidden rounded-lg">
+  <Image
+    src="/logo.jpeg"
+    alt="JobReady AI"
+    fill
+    className="object-contain"
+    priority
+  />
+</div>
           </Link>
 
           {/* ── Desktop nav ── */}
