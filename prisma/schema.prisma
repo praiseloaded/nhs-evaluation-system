@@ -582,3 +582,12 @@ model CriteriaExplorer {
   @@index([userId])
   @@index([createdAt])
 }
+
+
+model AdminStripeConfig {
+  id              String   @id @default(cuid())
+  tier            String   @unique
+  stripeProductId String?
+  stripePriceId   String?
+  updatedAt       DateTime @updatedAt
+}

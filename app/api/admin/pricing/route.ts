@@ -13,36 +13,54 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2025-07
 
 export const GET = withAdminAuth(async () => {
   try {
-    // Load pricing from DB (stored as TierLimit with key 'monthlyPrice')
     const prices = await prisma.tierLimit.findMany({
-      where: { key: { in: ['monthlyPrice', 'stripePriceId', 'stripeProductId'] } },
+      where: { key: 'monthlyPrice' },
     })
 
-    // Load active Stripe products for display
+    const stripeConfigs = await prisma.adminStripeConfig.findMany()
+
     let stripeProducts: any[] = []
     try {
       const products = await stripe.products.list({ active: true, limit: 10 })
       stripeProducts = products.data
     } catch {}
 
-    // Load recent Stripe subscriptions count
     let activeSubscriptions = 0
     try {
       const subs = await stripe.subscriptions.list({ status: 'active', limit: 1 })
       activeSubscriptions = subs.data.length
     } catch {}
 
-    return Response.json({ success: true, prices, stripeProducts, activeSubscriptions })
+    return Response.json({ success: true, prices, stripeConfigs, stripeProducts, activeSubscriptions })
   } catch (err: any) {
     return Response.json({ error: err.message }, { status: 500 })
   }
 })
 
-// ── PATCH: update price and sync to Stripe ───────────────────────────────────
+// ── PATCH: update price, sync to Stripe, optionally migrate existing subs ────
+//
+// Body:
+//   tier              string   required
+//   monthlyPrice      number   required (in GBP, e.g. 29.00)
+//   productName       string   optional
+//   description       string   optional
+//   migrateExisting   boolean  optional — if true, move current subscribers on
+//                              this tier onto the new price. Default false
+//                              (grandfather existing subs at their old price).
+//   prorationBehavior 'create_prorations' | 'none'  optional, default 'none'
+//                      'create_prorations' charges/credits the difference now.
+//                      'none' applies the new price starting next renewal.
 
 export const PATCH = withAdminAuth(async (req: Request) => {
   try {
-    const { tier, monthlyPrice, productName, description } = await req.json()
+    const {
+      tier,
+      monthlyPrice,
+      productName,
+      description,
+      migrateExisting = false,
+      prorationBehavior = 'none',
+    } = await req.json()
 
     if (!tier || monthlyPrice === undefined) {
       return Response.json({ error: 'tier and monthlyPrice required' }, { status: 400 })
@@ -55,40 +73,35 @@ export const PATCH = withAdminAuth(async (req: Request) => {
 
     let stripePriceId: string | null = null
     let stripeProductId: string | null = null
+    let migration: { attempted: number; migrated: number; failed: number; errors: string[] } | null = null
 
-    // Save price to DB
+    // Save numeric price to DB
     await prisma.tierLimit.upsert({
       where:  { tier_key: { tier, key: 'monthlyPrice' } },
       update: { value: priceInPence },
       create: { tier, key: 'monthlyPrice', value: priceInPence },
     })
 
-    // Sync to Stripe if price is > 0
     if (priceInPence > 0 && process.env.STRIPE_SECRET_KEY) {
       try {
-        // Find or create product
-        const existingProductRow = await prisma.tierLimit.findUnique({
-          where: { tier_key: { tier, key: 'stripeProductId' } },
+        const existingConfig = await prisma.adminStripeConfig.findUnique({
+          where: { tier },
         })
 
         let product: Stripe.Product
 
-        if (existingProductRow?.value) {
-          // Update existing product
+        if (existingConfig?.stripeProductId) {
           try {
-            product = await stripe.products.update(String(existingProductRow.value), {
+            product = await stripe.products.update(existingConfig.stripeProductId, {
               name:        productName ?? `OmniJobReady AI™ ${tier.charAt(0).toUpperCase() + tier.slice(1)}`,
               description: description ?? `${tier.charAt(0).toUpperCase() + tier.slice(1)} tier subscription`,
             })
-            stripeProductId = product.id
           } catch {
-            // Product not found, create new
             product = await stripe.products.create({
               name:        productName ?? `OmniJobReady AI™ ${tier.charAt(0).toUpperCase() + tier.slice(1)}`,
               description: description ?? `${tier.charAt(0).toUpperCase() + tier.slice(1)} tier subscription`,
               metadata:    { tier },
             })
-            stripeProductId = product.id
           }
         } else {
           product = await stripe.products.create({
@@ -96,55 +109,90 @@ export const PATCH = withAdminAuth(async (req: Request) => {
             description: description ?? `${tier.charAt(0).toUpperCase() + tier.slice(1)} tier subscription`,
             metadata:    { tier },
           })
-          stripeProductId = product.id
         }
+        stripeProductId = product.id
 
-        // Always create a new price (Stripe prices are immutable)
+        // Stripe prices are immutable — creating a new one is required, not optional
         const price = await stripe.prices.create({
-          product:    product.id,
+          product:     product.id,
           unit_amount: priceInPence,
-          currency:   'gbp',
-          recurring:  { interval: 'month' },
-          metadata:   { tier },
+          currency:    'gbp',
+          recurring:   { interval: 'month' },
+          metadata:    { tier },
         })
         stripePriceId = price.id
 
-        // Save Stripe IDs to DB
-        await Promise.all([
-          prisma.tierLimit.upsert({
-            where:  { tier_key: { tier, key: 'stripePriceId' } },
-            update: { value: 0 }, // Can't store string in Int — store in metadata JSON
-            create: { tier, key: 'stripePriceId', value: 0 },
-          }),
-          prisma.tierLimit.upsert({
-            where:  { tier_key: { tier, key: 'stripeProductId' } },
-            update: { value: 0 },
-            create: { tier, key: 'stripeProductId', value: 0 },
-          }),
-        ])
+        // Persist real string IDs (fixes prior Int-column placeholder bug)
+        await prisma.adminStripeConfig.upsert({
+          where:  { tier },
+          update: { stripeProductId, stripePriceId },
+          create: { tier, stripeProductId, stripePriceId },
+        })
 
-        // Store actual IDs in admin config (using description field workaround)
-        // In production use a dedicated AdminConfig table or env vars
-        console.log(`[pricing] Stripe price created: ${stripePriceId} for ${tier}`)
+        console.log(`[pricing] Stripe price created: ${stripePriceId} (product ${stripeProductId}) for ${tier}`)
+
+        // ── Optionally migrate existing subscribers onto the new price ──────
+        if (migrateExisting) {
+          const oldPriceId = existingConfig?.stripePriceId ?? null
+
+          const subscribers = await prisma.user.findMany({
+            where: {
+              tier,
+              stripeSubscriptionId: { not: null },
+            },
+            select: { id: true, email: true, stripeSubscriptionId: true },
+          })
+
+          migration = { attempted: subscribers.length, migrated: 0, failed: 0, errors: [] }
+
+          for (const u of subscribers) {
+            try {
+              const sub = await stripe.subscriptions.retrieve(u.stripeSubscriptionId!)
+              const item = sub.items.data[0]
+              if (!item) throw new Error('No subscription item found')
+
+              // Skip if already on the new price (avoid redundant updates)
+              if (item.price.id === stripePriceId) {
+                migration.migrated++
+                continue
+              }
+
+              await stripe.subscriptions.update(u.stripeSubscriptionId!, {
+                items: [{ id: item.id, price: stripePriceId! }],
+                proration_behavior: prorationBehavior === 'create_prorations' ? 'create_prorations' : 'none',
+              })
+
+              migration.migrated++
+            } catch (subErr: any) {
+              migration.failed++
+              migration.errors.push(`${u.email ?? u.id}: ${subErr.message}`)
+            }
+          }
+
+          console.log(
+            `[pricing] Migration for ${tier}: ${migration.migrated}/${migration.attempted} migrated, ${migration.failed} failed` +
+            (oldPriceId ? ` (from ${oldPriceId} to ${stripePriceId})` : '')
+          )
+        }
       } catch (stripeErr: any) {
         console.error('[pricing] Stripe sync failed:', stripeErr.message)
-        // Price saved to DB even if Stripe fails — don't block the save
         return Response.json({
-          success:     true,
+          success:      true,
           tier,
           monthlyPrice: priceInPence / 100,
-          stripeError: stripeErr.message,
-          warning:     'Price saved but Stripe sync failed. Check your Stripe key.',
+          stripeError:  stripeErr.message,
+          warning:      'Price saved but Stripe sync failed. Check your Stripe key.',
         })
       }
     }
 
     return Response.json({
-      success:        true,
+      success:      true,
       tier,
-      monthlyPrice:   priceInPence / 100,
+      monthlyPrice: priceInPence / 100,
       stripePriceId,
       stripeProductId,
+      migration,
     })
   } catch (err: any) {
     return Response.json({ error: err.message }, { status: 500 })
