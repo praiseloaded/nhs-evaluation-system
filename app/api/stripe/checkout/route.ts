@@ -1,12 +1,17 @@
 // app/api/stripe/checkout/route.ts
 //
-// Price is read from the database at checkout time using price_data.
-// Only three env vars needed — one Stripe Product ID per tier.
-// These are set ONCE and never change even when you update prices.
+// Product and price now come from AdminStripeConfig / TierLimit in the DB —
+// the same records the admin pricing panel writes to on every "Save & sync".
+// This removes the old failure mode where checkout used a hardcoded
+// STRIPE_*_PRODUCT_ID env var that could silently drift out of sync with
+// whatever product the admin panel actually created/updated in Stripe.
 //
-// STRIPE_PRO_PRODUCT_ID     = prod_xxx  (create in Stripe dashboard once)
-// STRIPE_ELITE_PRODUCT_ID   = prod_xxx
-// STRIPE_PREMIUM_PRODUCT_ID = prod_xxx
+// Env vars are kept ONLY as a last-resort fallback for a brand-new tier that
+// has never been saved from the admin panel yet.
+//
+// STRIPE_PRO_PRODUCT_ID     = prod_xxx  (fallback only)
+// STRIPE_ELITE_PRODUCT_ID   = prod_xxx  (fallback only)
+// STRIPE_PREMIUM_PRODUCT_ID = prod_xxx  (fallback only)
 // STRIPE_SECRET_KEY         = sk_live_xxx
 
 import { auth }    from '@/auth'
@@ -18,37 +23,57 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-07-30.basil' as any,
 })
 
-const PRODUCT_IDS: Record<string, string | undefined> = {
+const FALLBACK_PRODUCT_IDS: Record<string, string | undefined> = {
   pro:     process.env.STRIPE_PRO_PRODUCT_ID,
   elite:   process.env.STRIPE_ELITE_PRODUCT_ID,
   premium: process.env.STRIPE_PREMIUM_PRODUCT_ID,
 }
 
-// Read monthly price in pence from TierLimit table
-// Falls back to sensible defaults so checkout never breaks
 const PRICE_DEFAULTS: Record<string, number> = {
   pro: 900, elite: 2900, premium: 4900, // pence
 }
 
-async function getPriceInPence(tier: string): Promise<number> {
+// Tries the primary DB, falls back to the secondary one — same redundancy
+// pattern the rest of the app already uses.
+async function findFirst<T>(query: (client: typeof prisma) => Promise<T | null>): Promise<T | null> {
   try {
-    const row = await prisma.tierLimit.findFirst({
-      where: { tier, key: 'monthlyPrice' },
-      select: { value: true },
-    }).catch(() => null)
-      ?? await prisma2.tierLimit.findFirst({
-           where: { tier, key: 'monthlyPrice' },
-           select: { value: true },
-         }).catch(() => null)
-
-    if (!row) return PRICE_DEFAULTS[tier] ?? 900
-
-    // value stored as pounds (e.g. 9) → convert to pence
-    const raw = row.value
-    return raw < 100 ? Math.round(raw * 100) : raw
+    const result = await query(prisma)
+    if (result) return result
+  } catch {}
+  try {
+    return await query(prisma2 as unknown as typeof prisma)
   } catch {
-    return PRICE_DEFAULTS[tier] ?? 900
+    return null
   }
+}
+
+// Prefer the live Stripe Product ID the admin panel created/updated. This is
+// the single source of truth going forward — env vars are fallback only.
+async function getProductId(tier: string): Promise<string | null> {
+  const config = await findFirst(client =>
+    client.adminStripeConfig.findUnique({ where: { tier } })
+  )
+  if (config?.stripeProductId) return config.stripeProductId
+
+  return FALLBACK_PRODUCT_IDS[tier] ?? null
+}
+
+// Read monthly price in pence from TierLimit. Falls back to sensible
+// defaults so checkout never hard-fails just because pricing hasn't been
+// configured yet.
+async function getPriceInPence(tier: string): Promise<number> {
+  const row = await findFirst(client =>
+    client.tierLimit.findFirst({
+      where:  { tier, key: 'monthlyPrice' },
+      select: { value: true },
+    })
+  )
+
+  if (!row) return PRICE_DEFAULTS[tier] ?? 900
+
+  // value stored as pence already (route.ts writes Math.round(pounds * 100))
+  const raw = row.value
+  return raw < 100 ? Math.round(raw * 100) : raw
 }
 
 export async function POST(req: Request) {
@@ -64,15 +89,30 @@ export async function POST(req: Request) {
       return Response.json({ error: 'Invalid tier' }, { status: 400 })
     }
 
-    const productId = PRODUCT_IDS[tier]
+    const productId = await getProductId(tier)
     if (!productId) {
       return Response.json(
-        { error: `STRIPE_${tier.toUpperCase()}_PRODUCT_ID is not set in env vars` },
+        {
+          error: `No Stripe product found for tier "${tier}". Save a price for this tier in the admin pricing panel first, or set STRIPE_${tier.toUpperCase()}_PRODUCT_ID as a fallback.`,
+        },
         { status: 500 }
       )
     }
 
-    // Read current price from DB
+    // Defensive check: confirm the product actually exists in whichever
+    // Stripe mode/account this key points at, so we fail with a clear error
+    // instead of Stripe's generic "No such product" surfacing to the user.
+    try {
+      await stripe.products.retrieve(productId)
+    } catch {
+      return Response.json(
+        {
+          error: `Stripe product ${productId} was not found for tier "${tier}". This usually means the product was created in a different Stripe mode (test vs live) than the current STRIPE_SECRET_KEY, or it was deleted. Re-save the price for this tier in the admin pricing panel to recreate it.`,
+        },
+        { status: 500 }
+      )
+    }
+
     const unitAmount = await getPriceInPence(tier)
 
     const checkout = await stripe.checkout.sessions.create({
@@ -83,17 +123,16 @@ export async function POST(req: Request) {
         {
           quantity:   1,
           price_data: {
-            currency:   'gbp',
+            currency:    'gbp',
             unit_amount: unitAmount,
-            recurring:  { interval: 'month' },
-            product:    productId,  // permanent product ID — never changes
+            recurring:   { interval: 'month' },
+            product:     productId,
           },
         },
       ],
       metadata: {
-        userId: session.user.id,
+        userId:      session.user.id,
         tier,
-        // store amount for reference (webhook uses product ID for tier detection)
         amountPence: String(unitAmount),
       },
       success_url: `${process.env.NEXT_PUBLIC_APP_URL}/upgrade/success?session_id={CHECKOUT_SESSION_ID}`,
