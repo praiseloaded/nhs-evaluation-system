@@ -48,6 +48,19 @@ export async function POST(req: Request) {
     }
 
     const userId = session.user.id as string
+
+    const check = await prisma.user.findUnique({ where: { id: userId } })
+
+if (!check) {
+  return Response.json(
+    {
+      success: false,
+      error: `DEBUG: user ${userId} not found. DB host: ${new URL(process.env.DATABASE_URL!).host}`,
+    },
+    { status: 401 },
+  )
+}
+
     const body   = await req.json()
 
     // ───────────────────────────────
