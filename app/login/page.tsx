@@ -191,11 +191,11 @@ export default function LoginPage() {
           </div>
 
           {/* Divider */}
-          <div className="flex items-center gap-3">
+          {/* <div className="flex items-center gap-3">
             <div className="flex-1 h-px bg-zinc-100 dark:bg-zinc-800" />
             <span className="text-[11px] text-muted-foreground">or</span>
             <div className="flex-1 h-px bg-zinc-100 dark:bg-zinc-800" />
-          </div>
+          </div> */}
 
           {/* Google */}
           {/* <button onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
