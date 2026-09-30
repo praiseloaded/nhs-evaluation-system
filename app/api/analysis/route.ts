@@ -1,6 +1,6 @@
 // app/api/analysis/route.ts
 
-import { prisma }                from "@/lib/prisma"
+import { getDb }                 from "@/lib/db-router"
 import { getValidatedAIResult }  from "@/modules/ai/retry"
 import { getUserTier }           from "@/lib/billing/tier"
 import { sanitizeAnalysisForTier } from "@/lib/billing/sanitize-analysis"
@@ -49,19 +49,11 @@ export async function POST(req: Request) {
 
     const userId = session.user.id as string
 
-    const check = await prisma.user.findUnique({ where: { id: userId } })
+    // Route to the database (shard) that actually holds this user.
+    // Throws a clear error if the user isn't found in either shard.
+    const db = await getDb(userId)
 
-if (!check) {
-  return Response.json(
-    {
-      success: false,
-      error: `DEBUG: user ${userId} not found. DB host: ${new URL(process.env.DATABASE_URL!).host}`,
-    },
-    { status: 401 },
-  )
-}
-
-    const body   = await req.json()
+    const body = await req.json()
 
     // ───────────────────────────────
     // 1. TIER CHECK
@@ -71,7 +63,7 @@ if (!check) {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
-    const usageToday = await prisma.analysis.count({
+    const usageToday = await db.analysis.count({
       where: {
         userId,
         createdAt: { gte: today },
@@ -115,18 +107,17 @@ if (!check) {
       jobSpec: combinedJobSpec,
       cv,
       statement,
-      tier: userTier,
+  tier: userTier === "free" ? "free" : "paid",
     })
 
-
     const evidenceVault = await detectEvidenceVault({
-  cv,
-  statement,
-  jobDescription:    combinedJobSpec,
-  essentialCriteria: normalize(body.essentialCriteria),
-  desirableCriteria: normalize(body.desirableCriteria),
-  personSpec:        normalize(body.personSpec),
-})
+      cv,
+      statement,
+      jobDescription:    combinedJobSpec,
+      essentialCriteria: normalize(body.essentialCriteria),
+      desirableCriteria: normalize(body.desirableCriteria),
+      personSpec:        normalize(body.personSpec),
+    })
 
     // ───────────────────────────────
     // 4. ENGINE SCORING
@@ -136,13 +127,13 @@ if (!check) {
     const result = {
       ...aiResult,
       scoredBreakdown,
-        evidenceVault, 
+      evidenceVault,
     }
 
     // ───────────────────────────────
     // 5. SAVE
     // ───────────────────────────────
-    const saved = await prisma.analysis.create({
+    const saved = await db.analysis.create({
       data: {
         userId,
         jobTitle,

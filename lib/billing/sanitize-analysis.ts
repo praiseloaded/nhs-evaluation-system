@@ -1,10 +1,12 @@
 // lib/billing/sanitize-analysis.ts
 
-type Tier = 'free' | 'pro' | 'elite'
+import type { Tier } from '@/lib/billing/tier'
 
 export function sanitizeAnalysisForTier(result: any, tier: Tier): any {
   if (!result) return {}
-  if (tier === 'pro' || tier === 'elite') return result
+  if (tier === 'pro' || tier === 'elite' || tier === 'premium') return result
+
+
 
 
   // ── Free tier ─────────────────────────────────────────────────────────────
