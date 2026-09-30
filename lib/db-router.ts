@@ -50,17 +50,21 @@ export async function getDb(userId: string): Promise<PrismaClient> {
 }
 
 // ── getDbForNewUser — pick the shard with fewer users for load balancing ──────
-export async function getDbForNewUser(): Promise<PrismaClient> {
-  if (!process.env.DATABASE_URL_2) return prisma
+export async function getDbForNewUser(): Promise<{
+  client: PrismaClient
+  shard: 'primary' | 'secondary'
+}> {
+  if (!process.env.DATABASE_URL_2) return { client: prisma, shard: 'primary' }
 
   const [count1, count2] = await Promise.all([
     prisma.user.count().catch(() => 0),
     prisma2.user.count().catch(() => 0),
   ])
 
-  return count2 < count1 ? prisma2 : prisma
+  return count2 < count1
+    ? { client: prisma2, shard: 'secondary' }
+    : { client: prisma, shard: 'primary' }
 }
-
 // ── clearShardCache — call after user deletion or shard migration ─────────────
 export function clearShardCache(userId?: string) {
   if (userId) shardCache.delete(userId)

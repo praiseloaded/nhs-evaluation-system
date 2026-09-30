@@ -113,7 +113,7 @@ export function DashboardAssistant() {
           <div className="w-7 h-7 rounded-full bg-white/25 flex items-center justify-center">
             <Sparkles className="w-3.5 h-3.5 text-white" />
           </div>
-          <span className="text-sm font-black text-white tracking-tight">OmniJobReady AI</span>
+          {/* <span className="text-sm font-black text-white tracking-tight">OmniJobReady AI</span> */}
         </button>
       )}
 

@@ -45,15 +45,22 @@ function FileUploadZone({ label, hint, file, onFile, onClear }: {
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
+  const [fileError, setFileError] = useState<string | null>(null)
 
-  const ACCEPTED = [
-    'application/pdf',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'text/plain',
-  ]
+  const ACCEPTED_EXT = ['.pdf', '.doc', '.docx', '.odt', '.txt', '.md']
+  const MAX_BYTES = 3 * 1024 * 1024 // base64 adds ~33%; keeps you under Vercel's 4.5MB body limit
 
   const readFile = (f: File) => {
-    if (!ACCEPTED.includes(f.type) && !f.name.endsWith('.docx')) return
+    setFileError(null)
+    const ext = '.' + (f.name.split('.').pop() ?? '').toLowerCase()
+    if (!ACCEPTED_EXT.includes(ext)) {
+      setFileError(`Unsupported file type. Use: ${ACCEPTED_EXT.join(', ')}`)
+      return
+    }
+    if (f.size > MAX_BYTES) {
+      setFileError('File is too large (max 3MB).')
+      return
+    }
     const reader = new FileReader()
     reader.onload = () => {
       const result = reader.result as string

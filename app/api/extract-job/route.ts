@@ -1,8 +1,14 @@
-﻿import * as cheerio from "cheerio";
+﻿// app/api/extract-job/route.ts
+
+import * as cheerio from "cheerio";
 import { NextResponse } from "next/server";
 import { grokChatCompletion } from "@/lib/xai";
+import WordExtractor from "word-extractor";
+import { parseOffice } from "officeparser";
 
-// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+export const runtime = "nodejs";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface UploadedFile {
   name: string;
@@ -30,16 +36,25 @@ const EMPTY_JOB: ExtractedJob = {
   desirableCriteria: "",
 };
 
-// â”€â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Errors caused by the user's input (bad file type, unreadable file) -> HTTP 400
+class UserInputError extends Error {}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const SCRAPE_CHAR_LIMIT = 12_000;
+const FILE_TEXT_CHAR_LIMIT = 30_000;
 const FETCH_TIMEOUT_MS = 10_000;
 const ALLOWED_PROTOCOLS = ["https:", "http:"];
+const GEMINI_MODEL = "gemini-2.5-flash";
+const GEMINI_MAX_ATTEMPTS = 2;
+
+const DOCX_MIME =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 const SYSTEM_PROMPT = `
 You are an NHS job extraction engine. Analyse the provided content and extract structured job listing data.
 
-Return ONLY a valid JSON object with these exact keys â€” no markdown, no explanation, no preamble:
+Return ONLY a valid JSON object with these exact keys — no markdown, no explanation, no preamble:
 {
   "jobTitle": "string",
   "band": "string (e.g. Band 5, Band 7)",
@@ -53,7 +68,7 @@ Return ONLY a valid JSON object with these exact keys â€” no markdown, no e
 If a field cannot be found, return an empty string for that field.
 `.trim();
 
-// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function isValidUrl(raw: string): boolean {
   try {
@@ -114,7 +129,7 @@ function sanitiseJob(raw: unknown): ExtractedJob {
   return Object.fromEntries(
     Object.keys(EMPTY_JOB).map((key) => [
       key,
-      typeof obj[key] === "string" ? obj[key].trim() : "",
+      typeof obj[key] === "string" ? (obj[key] as string).trim() : "",
     ])
   ) as unknown as ExtractedJob;
 }
@@ -127,9 +142,80 @@ function parseJsonFromLLM(raw: string): ExtractedJob {
   return sanitiseJob(JSON.parse(cleaned));
 }
 
-// â”€â”€â”€ File-based extraction via Gemini â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-// â”€â”€â”€ File-based extraction via Gemini REST â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/**
+ * officeparser v5 returned a plain string; v6+ returns an AST with .toText().
+ * This handles both so the code works whichever version is installed.
+ */
+async function extractOfficeText(buffer: Buffer): Promise<string> {
+  const result: unknown = await parseOffice(buffer);
+  if (typeof result === "string") return result;
+  if (
+    result &&
+    typeof (result as { toText?: unknown }).toText === "function"
+  ) {
+    return (result as { toText: () => string }).toText();
+  }
+  return "";
+}
+
+// ─── File handling ────────────────────────────────────────────────────────────
+
+/**
+ * Turns an uploaded file into Gemini "parts".
+ * - PDF and DOCX are sent as files (MIME type set from the extension, not the browser).
+ * - DOC, ODT, TXT and MD are converted to text first, because Gemini
+ *   doesn't accept them as inline files.
+ */
+async function buildFileParts(file: UploadedFile, label: string): Promise<any[]> {
+  const ext = file.name.split(".").pop()?.toLowerCase();
+  const buffer = Buffer.from(file.base64, "base64");
+
+  if (ext === "pdf") {
+    return [
+      { inlineData: { mimeType: "application/pdf", data: file.base64 } },
+      { text: `The document above is the ${label}.` },
+    ];
+  }
+
+  if (ext === "docx") {
+    return [
+      { inlineData: { mimeType: DOCX_MIME, data: file.base64 } },
+      { text: `The document above is the ${label}.` },
+    ];
+  }
+
+  let text = "";
+  try {
+    if (ext === "doc") {
+      const doc = await new WordExtractor().extract(buffer);
+      text = doc.getBody();
+    } else if (ext === "odt") {
+      text = await extractOfficeText(buffer);
+    } else if (ext === "txt" || ext === "md") {
+      text = buffer.toString("utf-8");
+    } else {
+      throw new UserInputError(
+        `Unsupported file type: .${ext}. Use PDF, DOC, DOCX, ODT, TXT or MD.`
+      );
+    }
+  } catch (err: any) {
+    if (err instanceof UserInputError) throw err;
+    throw new UserInputError(
+      `Could not read "${file.name}". Try re-saving it as DOCX or PDF.`
+    );
+  }
+
+  text = text.trim();
+  if (!text) {
+    throw new UserInputError(`Could not find any text in "${file.name}".`);
+  }
+
+  return [{ text: `${label}:\n\n${text.slice(0, FILE_TEXT_CHAR_LIMIT)}` }];
+}
 
 async function extractFromFiles(
   jobDescFile?: UploadedFile,
@@ -144,48 +230,62 @@ async function extractFromFiles(
   ];
 
   if (jobDescFile) {
-    parts.push({
-      inlineData: { mimeType: jobDescFile.mimeType, data: jobDescFile.base64 },
-    });
-    parts.push({ text: "The document above is the Job Description." });
+    parts.push(...(await buildFileParts(jobDescFile, "Job Description")));
   }
-
   if (personSpecFile) {
-    parts.push({
-      inlineData: { mimeType: personSpecFile.mimeType, data: personSpecFile.base64 },
-    });
-    parts.push({ text: "The document above is the Person Specification." });
+    parts.push(...(await buildFileParts(personSpecFile, "Person Specification")));
   }
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts }],
-        generationConfig: {
-          temperature: 0,
-          maxOutputTokens: 4000,
-          thinkingConfig: { thinkingBudget: 0 },
+  const requestBody = JSON.stringify({
+    contents: [{ role: "user", parts }],
+    generationConfig: {
+      temperature: 0,
+      maxOutputTokens: 4000,
+      thinkingConfig: { thinkingBudget: 0 },
+    },
+  });
+
+  let lastError = "";
+
+  for (let attempt = 1; attempt <= GEMINI_MAX_ATTEMPTS; attempt++) {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": process.env.GEMINI_API_KEY,
         },
-      }),
-    }
-  );
+        body: requestBody,
+      }
+    );
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Gemini file extraction failed: ${err}`);
+    if (res.ok) {
+      const data = await res.json();
+      const text = (data?.candidates?.[0]?.content?.parts ?? [])
+        .map((p: any) => p?.text ?? "")
+        .join("")
+        .trim();
+
+      if (!text) throw new Error("Gemini returned an empty response");
+      return parseJsonFromLLM(text);
+    }
+
+    lastError = await res.text();
+
+    // Retry once on temporary errors
+    const retryable = [429, 500, 503].includes(res.status);
+    if (retryable && attempt < GEMINI_MAX_ATTEMPTS) {
+      await sleep(1500);
+      continue;
+    }
+    break;
   }
 
-  const data = await res.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-  if (!text) throw new Error("Gemini returned empty response for file extraction");
-
-  return parseJsonFromLLM(text);
+  throw new Error(`Gemini file extraction failed: ${lastError}`);
 }
 
-// â”€â”€â”€ Route Handler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Route Handler ────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
   // 1. Parse request body
@@ -217,19 +317,23 @@ export async function POST(req: Request) {
     );
   }
 
-  // 3a. File-based path â€” if files provided, use Gemini directly
+  // 3a. File-based path
   if (hasFiles) {
     let job: ExtractedJob;
     try {
       job = await extractFromFiles(jobDescFile, personSpecFile);
     } catch (err: any) {
+      console.error("[extract-job] file extraction error:", err);
+      if (err instanceof UserInputError) {
+        return NextResponse.json({ error: err.message }, { status: 400 });
+      }
       return NextResponse.json(
         { error: `File extraction failed: ${err.message}` },
         { status: 502 }
       );
     }
 
-    // If a URL was also given, scrape it and merge (files take priority for their fields)
+    // If a URL was also given, scrape it and merge (file fields win, URL fills gaps)
     if (hasUrl) {
       try {
         if (!isValidUrl(url!)) throw new Error("Invalid URL");
@@ -240,14 +344,13 @@ export async function POST(req: Request) {
         ]);
         const urlJob = parseJsonFromLLM(rawContent);
 
-        // Merge: file fields win; URL fills any gaps left empty
-        const merged: ExtractedJob = {} as ExtractedJob;
+        const merged = {} as ExtractedJob;
         for (const key of Object.keys(EMPTY_JOB) as (keyof ExtractedJob)[]) {
           merged[key] = job[key] || urlJob[key] || "";
         }
         return NextResponse.json(merged);
       } catch {
-        // URL scrape failed â€” just return what we got from files
+        // URL scrape failed: return what we got from the files
         return NextResponse.json(job);
       }
     }
@@ -255,7 +358,7 @@ export async function POST(req: Request) {
     return NextResponse.json(job);
   }
 
-  // 3b. URL-only path (original flow)
+  // 3b. URL-only path
   if (!isValidUrl(url!)) {
     return NextResponse.json(
       { error: "URL is not a valid http/https address" },
